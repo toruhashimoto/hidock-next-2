@@ -239,6 +239,8 @@ export interface UIStore {
   // 'dark' pin it. Persisted to localStorage (and mirrored to config).
   theme: ThemePreference
   setTheme: (theme: ThemePreference) => void
+  language: LanguagePreference
+  setLanguage: (language: LanguagePreference) => void
 }
 
 export type ThemePreference = 'light' | 'dark' | 'system'

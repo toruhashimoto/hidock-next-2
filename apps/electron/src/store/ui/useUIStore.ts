@@ -74,6 +74,9 @@ export const useUIStore = create<UIStore>()(
   // Theme preference — defaults to following the OS.
   theme: 'system',
 
+  // UI language preference — defaults to following the OS locale.
+  language: 'system',
+
   // Actions
   toggleSidebar: () => {
     set((state) => ({ sidebarOpen: !state.sidebarOpen }))
@@ -225,6 +228,11 @@ export const useUIStore = create<UIStore>()(
   setTheme: (theme) => {
     set({ theme })
   },
+
+  // Language actions — the active i18next language is reconciled by useLanguage().
+  setLanguage: (language) => {
+    set({ language })
+  },
     }),
     {
       name: 'hidock-ui-store',
@@ -240,6 +248,7 @@ export const useUIStore = create<UIStore>()(
         qaLogsEnabled: state.qaLogsEnabled,
         autoCaptureScreenshots: state.autoCaptureScreenshots, // persisted: user preference
         theme: state.theme, // persisted: user preference (also read pre-paint in main.tsx)
+        language: state.language, // persisted: user preference (also read pre-paint in main.tsx)
         operationsDockCollapsed: state.operationsDockCollapsed, // persisted: dock chrome pref
         activityLogExpanded: state.activityLogExpanded, // persisted: dock chrome pref
         // operationsOverlayOpen intentionally not persisted — transient overlay
@@ -291,6 +300,7 @@ export const useChatPosition = () => useUIStore((s) => s.chatPosition)
 export const useChatOpen = () => useUIStore((s) => s.chatOpen)
 export const useChatEmbeddedCollapsed = () => useUIStore((s) => s.chatEmbeddedCollapsed)
 export const useThemePreference = () => useUIStore((s) => s.theme)
+export const useLanguagePreference = () => useUIStore((s) => s.language)
 export const useOperationsDockCollapsed = () => useUIStore((s) => s.operationsDockCollapsed)
 export const useOperationsOverlayOpen = () => useUIStore((s) => s.operationsOverlayOpen)
 export const useActivityLogExpanded = () => useUIStore((s) => s.activityLogExpanded)
