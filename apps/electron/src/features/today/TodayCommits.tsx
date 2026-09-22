@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GitCommitHorizontal, GitBranch, Check, Copy } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -11,16 +12,17 @@ function formatTime(iso: string): string {
 
 /** Per-repo header: "N commits · branch". */
 function RepoHeader({ group }: { group: RepoCommitGroup }) {
+  const { t } = useTranslation()
   const n = group.commits.length
   return (
     <div className="flex items-center gap-2 px-1 text-xs">
       <span className="truncate font-semibold text-foreground">{group.repo}</span>
       <span className="text-muted-foreground">
-        · {n} {n === 1 ? 'commit' : 'commits'}
+        {t('today:commits.repoCommitCount', { count: n })}
       </span>
       {group.branch && (
         <span className="flex min-w-0 items-center gap-1 text-muted-foreground">
-          ·
+          {t('today:commits.branchSeparator')}
           <GitBranch className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
           <span className="truncate font-mono">{group.branch}</span>
         </span>
@@ -31,6 +33,7 @@ function RepoHeader({ group }: { group: RepoCommitGroup }) {
 
 /** One commit row: short hash (click to copy) + subject + time. */
 function CommitRow({ commit, index }: { commit: TodayCommit; index: number }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const time = formatTime(commit.authoredAt)
 
@@ -52,8 +55,8 @@ function CommitRow({ commit, index }: { commit: TodayCommit; index: number }) {
     >
       <button
         onClick={copyHash}
-        title={copied ? 'Copied' : `Copy ${commit.hash}`}
-        aria-label={copied ? 'Commit hash copied' : `Copy full hash for ${commit.shortHash}`}
+        title={copied ? t('today:commits.copiedTitle') : t('today:commits.copyHashTitle', { hash: commit.hash })}
+        aria-label={copied ? t('today:commits.hashCopiedAriaLabel') : t('today:commits.copyFullHashAriaLabel', { shortHash: commit.shortHash })}
         className={cn(
           'flex flex-shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground/70 transition-colors',
           'hover:bg-muted-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -81,6 +84,7 @@ function CommitRow({ commit, index }: { commit: TodayCommit; index: number }) {
  * @param repoPaths optional extra repo paths; defaults to the project repo.
  */
 export function TodayCommits({ repoPaths }: { repoPaths?: string[] } = {}) {
+  const { t } = useTranslation()
   const { groups, total } = useTodayCommits(repoPaths)
 
   if (total === 0) return null
@@ -91,10 +95,10 @@ export function TodayCommits({ repoPaths }: { repoPaths?: string[] } = {}) {
         <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2">
             <GitCommitHorizontal className="h-4 w-4 text-foreground/60" />
-            Commits today
+            {t('today:commits.title')}
           </span>
           <span className="text-xs font-normal text-muted-foreground">
-            {total} {total === 1 ? 'commit' : 'commits'}
+            {t('today:commits.totalCount', { count: total })}
           </span>
         </CardTitle>
       </CardHeader>

@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Layers, Image as ImageIcon, FileText, StickyNote, Braces, File, type LucideIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -27,6 +28,7 @@ function formatTime(d: Date): string {
  * today (no empty scaffolding), so it never competes with the agenda on quiet days.
  */
 export function TodayCaptures() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const captures = useTodayCaptures()
 
@@ -40,10 +42,10 @@ export function TodayCaptures() {
         <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2">
             <Layers className="h-4 w-4 text-foreground/60" />
-            Also captured today
+            {t('today:captures.title')}
           </span>
           <span className="text-xs font-normal text-muted-foreground">
-            {captures.length} {captures.length === 1 ? 'item' : 'items'}
+            {t('today:captures.items', { count: captures.length })}
           </span>
         </CardTitle>
       </CardHeader>

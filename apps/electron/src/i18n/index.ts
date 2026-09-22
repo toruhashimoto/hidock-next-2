@@ -22,6 +22,8 @@ import enSettings from './locales/en/settings.json'
 import jaSettings from './locales/ja/settings.json'
 import enDevice from './locales/en/device.json'
 import jaDevice from './locales/ja/device.json'
+import enToday from './locales/en/today.json'
+import jaToday from './locales/ja/today.json'
 
 export const SUPPORTED_LANGUAGES = ['en', 'ja'] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
@@ -29,8 +31,8 @@ export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 export const NAMESPACES = ['common', 'layout', 'library', 'device', 'settings', 'today'] as const
 
 const resources = {
-  en: { common: enCommon, layout: enLayout, settings: enSettings, device: enDevice },
-  ja: { common: jaCommon, layout: jaLayout, settings: jaSettings, device: jaDevice }
+  en: { common: enCommon, layout: enLayout, settings: enSettings, device: enDevice, today: enToday },
+  ja: { common: jaCommon, layout: jaLayout, settings: jaSettings, device: jaDevice, today: jaToday }
 }
 
 export function initI18n(lng: SupportedLanguage): typeof i18n {
