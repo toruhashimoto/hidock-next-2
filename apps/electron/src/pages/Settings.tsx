@@ -68,6 +68,9 @@ type SpeakerModelAccess = {
 const LANGUAGE_OPTIONS: ReadonlyArray<{ value: LanguagePreference; label: string }> = [
   { value: 'system', label: 'System' },
   { value: 'en', label: 'English' },
+  // A language's own name is conventionally written in that language, so this
+  // label is intentionally exempt from translation — it stays 日本語 in every
+  // locale. Do not move it into the settings catalogue.
   { value: 'ja', label: '日本語' }
 ]
 
@@ -778,6 +781,7 @@ export function Settings() {
             <FeaturesSettings />
           </div>
 
+          {/* Appearance — display language */}
           <LanguageSettingsCard />
 
           {/* Assistant — Chat Placement */}
