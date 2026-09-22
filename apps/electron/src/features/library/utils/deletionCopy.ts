@@ -2,54 +2,67 @@
  * Deletion-related copy (spec-005/F17 T5 §D2).
  *
  * Single source of truth for every delete/restore surface (SourceRow,
- * SourceReader, Library's confirm dialogs, DeletePermanentDialog) so the exact
- * strings can never drift between them. "Delete everywhere" and "Delete from
- * computer" are retired — every destructive item states its scope in the
- * menu itself via a muted second line (AC#1).
+ * SourceReader, Library's confirm dialogs, DeletePermanentDialog,
+ * Settings.tsx's legacy-graph disclosure) so the exact strings can never
+ * drift between them. "Delete everywhere" and "Delete from computer" are
+ * retired — every destructive item states its scope in the menu itself via
+ * a muted second line (AC#1).
  *
- * i18n note (Task 11c): every export here is a plain string constant or a
- * function returning a plain string — never a React component — so none of
- * them can call the `useTranslation()` hook. They resolve copy via the
- * shared `i18n` singleton (`i18n.t(...)`) instead (task brief "approach 2").
- * This module is also consumed by several already-committed Part A/B files
- * (SourceRow.tsx, SourceReader.tsx, SourceCard.tsx, Library.tsx) that import
- * these names directly and read the TITLE, LABEL and SCOPE constants as
- * plain values at render time — their call sites cannot be changed here, so
- * the exported shapes (plain `string`, not functions) are preserved exactly.
- * A known consequence: the module-scope constants below are resolved via
- * `i18n.t()` once, at module evaluation time (app startup) — unlike the
- * *functions* in this file (which call `i18n.t()` fresh on every invocation
- * and are therefore fully reactive to a live language switch), a constant's
- * value will not update until the app restarts/reloads after the user
- * switches language. This mirrors the task brief's explicitly sanctioned use
- * of "import the i18n instance" for "value needed at module scope", and is
- * the same shape as the `navItemVisibility()`/`describeDisableReason()`
- * precedent in Layout.tsx (documented limitation, not silently skipped) —
- * see task-11c-report.md for the full writeup. `ja/library.json` is still
- * `{}` at this stage of the project, so this has no observable effect yet.
+ * i18n note (Task 11c; reactivity fixed in Task 11d — see below): every
+ * export here is a plain string constant or a function returning a plain
+ * string — never a React component — so none of them can call the
+ * `useTranslation()` hook. They resolve copy via the shared `i18n` singleton
+ * (`i18n.t(...)`) instead (task brief "approach 2"). This module is also
+ * consumed by several already-committed Part A/B files (SourceRow.tsx,
+ * SourceReader.tsx, SourceCard.tsx, Library.tsx, DeletePermanentDialog.tsx,
+ * and Settings.tsx — which imports LEGACY_GRAPH_DISCLOSURE, see around line
+ * 1332) that import these names directly and read the TITLE, LABEL and
+ * SCOPE constants as plain values at render time — their call sites cannot
+ * be changed here, so the exported shapes (plain `string`, not functions)
+ * are preserved exactly.
+ *
+ * Task 11d fix — live on a language switch: the module-scope constants
+ * below are `let`, not `const`. Task 11c originally resolved each of them
+ * via `i18n.t()` exactly once, at module evaluation time, which froze them
+ * for the life of the process — switching language at runtime in Settings
+ * (whose own hint says "Changes apply immediately") left these particular
+ * strings in the old language until the app restarted, while everything
+ * else on screen switched. `loadDeletionCopy()` (bottom of this file)
+ * re-resolves every one of them from the CURRENT language; it is called
+ * once immediately (the initial value) and subscribed to i18n's
+ * `languageChanged` event (the live refresh), so the key list is written
+ * exactly once. This needs zero changes to any consumer: ES module named
+ * imports are *live bindings*, so reassigning the binding here is visible
+ * to every `import { LABEL_X } from './deletionCopy'` on its next read, and
+ * all six consumer files above already call `useTranslation()` for their
+ * own strings, so they already re-render on a language switch — that
+ * re-render is what reads the refreshed binding. `ja/library.json` is still
+ * `{}` at this stage of the project, so the fix has no observable effect
+ * yet (Task 14 fills it in).
  */
 
 import i18n from '@/i18n'
 
-// Menu item labels.
-export const LABEL_DELETE_FROM_DEVICE = i18n.t('library:deletionCopy.labelDeleteFromDevice')
-export const LABEL_MOVE_TO_TRASH = i18n.t('library:deletionCopy.labelMoveToTrash')
-export const LABEL_DELETE_PERMANENTLY = i18n.t('library:deletionCopy.labelDeletePermanently')
-export const LABEL_RESTORE = i18n.t('library:deletionCopy.labelRestore')
+// Menu item labels. (Assigned by loadDeletionCopy() at the bottom of this
+// file — see the file-level i18n note.)
+export let LABEL_DELETE_FROM_DEVICE: string
+export let LABEL_MOVE_TO_TRASH: string
+export let LABEL_DELETE_PERMANENTLY: string
+export let LABEL_RESTORE: string
 
 // Muted second-line scope text shown under each destructive/restorative item.
-export const SCOPE_DEVICE_DELETE = i18n.t('library:deletionCopy.scopeDeviceDelete')
-export const SCOPE_DEVICE_DELETE_SYNCED = i18n.t('library:deletionCopy.scopeDeviceDeleteSynced')
-export const SCOPE_DEVICE_NOT_CONNECTED = i18n.t('library:deletionCopy.scopeDeviceNotConnected')
-export const SCOPE_TRASH = i18n.t('library:deletionCopy.scopeTrash')
+export let SCOPE_DEVICE_DELETE: string
+export let SCOPE_DEVICE_DELETE_SYNCED: string
+export let SCOPE_DEVICE_NOT_CONNECTED: string
+export let SCOPE_TRASH: string
 // RE3-6 (round-3) — "all derived data" was absolute/false: legacy graph
 // contributions from recordings analyzed by an earlier version can't be removed
 // per-recording (see LEGACY_GRAPH_DISCLOSURE). This menu/aria scope text (used
 // in SourceRow + SourceReader, where the full caveat doesn't fit) is scoped to
 // "attributable" derived data so it's honest at every visible+accessible
 // surface; the dialog still carries the full disclosure.
-export const SCOPE_PERMANENT = i18n.t('library:deletionCopy.scopePermanent')
-export const SCOPE_RESTORE = i18n.t('library:deletionCopy.scopeRestore')
+export let SCOPE_PERMANENT: string
+export let SCOPE_RESTORE: string
 
 /** Load-bearing aria-label join: folds the muted second line into the item's accessible name. */
 export function ariaLabelWithScope(label: string, scope: string): string {
@@ -66,7 +79,7 @@ export function deviceDeleteConfirmDescription(filename: string): string {
 }
 
 // Trash-mode banner (§D1 step 8).
-export const TRASH_MODE_BANNER = i18n.t('library:deletionCopy.trashModeBanner')
+export let TRASH_MODE_BANNER: string
 
 /**
  * RE-3 (Codex adversarial re-review round 2, orchestrator ruling — ONE honest
@@ -81,7 +94,7 @@ export const TRASH_MODE_BANNER = i18n.t('library:deletionCopy.trashModeBanner')
  * ("...until permanently deleted") was INACCURATE — permanent delete cannot
  * remove those legacy facts — and is replaced by this.
  */
-export const LEGACY_GRAPH_DISCLOSURE = i18n.t('library:deletionCopy.legacyGraphDisclosure')
+export let LEGACY_GRAPH_DISCLOSURE: string
 
 // spec-005/F17 T5 — success/partial-summary toast TITLES for the
 // menu-triggered actions elsewhere in Library.tsx (soft delete, device-only
@@ -89,10 +102,10 @@ export const LEGACY_GRAPH_DISCLOSURE = i18n.t('library:deletionCopy.legacyGraphD
 // (single-use, interpolating the filename/counts directly) — only the
 // titles are shared copy. Phase-3 integration-review S1: these used to be
 // literals that bypassed this module despite its single-source claim.
-export const SUCCESS_MOVED_TO_TRASH_TITLE = i18n.t('library:deletionCopy.successMovedToTrashTitle')
-export const SUCCESS_REMOVED_FROM_DEVICE_TITLE = i18n.t('library:deletionCopy.successRemovedFromDeviceTitle')
-export const SUCCESS_RESTORED_TITLE = i18n.t('library:deletionCopy.successRestoredTitle')
-export const PARTIAL_DELETE_TITLE = i18n.t('library:deletionCopy.partialDeleteTitle')
+export let SUCCESS_MOVED_TO_TRASH_TITLE: string
+export let SUCCESS_REMOVED_FROM_DEVICE_TITLE: string
+export let SUCCESS_RESTORED_TITLE: string
+export let PARTIAL_DELETE_TITLE: string
 
 // =============================================================================
 // spec-006/F17 T6 — permanent-delete OUTCOME copy (D2/D3/D5/AR3-2/AR3-3c/AR3-6a).
@@ -105,11 +118,11 @@ export const PARTIAL_DELETE_TITLE = i18n.t('library:deletionCopy.partialDeleteTi
 /** D2 — shown in DeletePermanentDialog regardless of whether the graph
  *  estimate is known: documents the AR3-1 fail-closed guarantee in plain
  *  language, so a refusal never reads as a mysterious dead end. */
-export const GRAPH_CLEANUP_RETRY_SAFETY_LINE = i18n.t('library:deletionCopy.graphCleanupRetrySafetyLine')
+export let GRAPH_CLEANUP_RETRY_SAFETY_LINE: string
 
 // --- Failure (nothing deleted) ---------------------------------------------
 
-export const FAILURE_NOTHING_DELETED_TITLE = i18n.t('library:deletionCopy.failureNothingDeletedTitle')
+export let FAILURE_NOTHING_DELETED_TITLE: string
 
 /** AR3-1/AR3-3(a) — the local purge itself refused (fail-closed) because the
  *  graph cleanup seam is unavailable. Pairs with the AR3-3(c) escape-hatch
@@ -123,14 +136,14 @@ export function genericPermanentDeleteFailedBody(filename: string): string {
 }
 
 /** AR3-3(c) — the failure toast's explicit second-action label. */
-export const LABEL_DELETE_ANYWAY_SKIP_GRAPH = i18n.t('library:deletionCopy.labelDeleteAnywaySkipGraph')
+export let LABEL_DELETE_ANYWAY_SKIP_GRAPH: string
 
 // --- Partial (local purge succeeded, something else did not) ---------------
 
 /** D3 — device copy remains after a confirmed local purge (device delete
  *  failed OR AR3-6(a)'s TOCTOU re-check found the device no longer usable at
  *  execute time). Never the plain success toast in this case. */
-export const DEVICE_COPY_REMAINS_TITLE = i18n.t('library:deletionCopy.deviceCopyRemainsTitle')
+export let DEVICE_COPY_REMAINS_TITLE: string
 
 export function deviceCopyRemainsBody(filename: string): string {
   return i18n.t('library:deletionCopy.deviceCopyRemainsBody', { filename })
@@ -139,7 +152,7 @@ export function deviceCopyRemainsBody(filename: string): string {
 /** AR3-2 — one or more post-commit file-cleanup targets could not be
  *  confirmed removed; a bounded retry sweep will keep trying. Success is
  *  intentionally NOT claimed here. */
-export const FILES_PENDING_TITLE = i18n.t('library:deletionCopy.filesPendingTitle')
+export let FILES_PENDING_TITLE: string
 
 /** Resolves one cleanup "kind" (audio/wiki/artifact/vector, or a future
  *  unrecognized kind) to its display noun phrase. i18n.t() is called fresh
@@ -186,7 +199,7 @@ export function filesPendingBody(filename: string, kinds: string[]): string {
  *  targets (the ledger write itself failed), so they will NOT be auto-retried.
  *  This body deliberately does NOT promise an automatic retry — it tells the
  *  owner the file must be removed manually. */
-export const FILES_UNRECOVERABLE_TITLE = i18n.t('library:deletionCopy.filesUnrecoverableTitle')
+export let FILES_UNRECOVERABLE_TITLE: string
 
 export function filesUnrecoverableBody(filename: string, kinds: string[]): string {
   const unique = Array.from(new Set(kinds)).map((k) => cleanupKindLabel(k))
@@ -200,13 +213,13 @@ export function filesUnrecoverableBody(filename: string, kinds: string[]): strin
  *  the file until the next authoritative device scan corrects it. Appended
  *  as a small note to the (warning-variant) completion toast; never claims
  *  the view is already consistent. */
-export const VIEW_MAY_BE_STALE_NOTE = i18n.t('library:deletionCopy.viewMayBeStaleNote')
+export let VIEW_MAY_BE_STALE_NOTE: string
 
 /** CX-T6-3 (fix round) — BOTH partial outcomes at once: the device copy
  *  wasn't removed AND local file cleanup is still pending. One toast that
  *  enumerates both; never a body that claims full local removal while the
  *  pending-cleanup ledger is non-empty. */
-export const COMBINED_PARTIAL_TITLE = i18n.t('library:deletionCopy.combinedPartialTitle')
+export let COMBINED_PARTIAL_TITLE: string
 
 export function combinedPartialBody(filename: string, kinds: string[]): string {
   const unique = Array.from(new Set(kinds)).map((k) => cleanupKindLabel(k))
@@ -237,17 +250,17 @@ export function actualRemovalSummary(removed: ActualRemovedCounts | undefined, a
   return i18n.t('library:deletionCopy.removedSummary', { text: `${removedText}${deviceSuffix}` })
 }
 
-export const SUCCESS_DELETED_PERMANENTLY_TITLE = i18n.t('library:deletionCopy.successDeletedPermanentlyTitle')
+export let SUCCESS_DELETED_PERMANENTLY_TITLE: string
 
 /** ARF-4 — the skipGraphCleanup escape hatch was used, so the knowledge-graph
  *  residue is DEFERRED to an automatic retry sweep rather than removed now.
  *  This must NEVER surface as the plain "Deleted permanently" success toast —
  *  the plain success claim is honest only when no cleanup remains pending. */
-export const GRAPH_CLEANUP_DEFERRED_TITLE = i18n.t('library:deletionCopy.graphCleanupDeferredTitle')
+export let GRAPH_CLEANUP_DEFERRED_TITLE: string
 
 /** Appended to whichever completion body fires when graph cleanup was
  *  deferred, so no branch overclaims that the graph was fully cleaned. */
-export const GRAPH_CLEANUP_DEFERRED_NOTE = i18n.t('library:deletionCopy.graphCleanupDeferredNote')
+export let GRAPH_CLEANUP_DEFERRED_NOTE: string
 
 export function graphCleanupDeferredBody(filename: string, alsoDeviceRemoved: boolean): string {
   const deviceSuffix = alsoDeviceRemoved ? i18n.t('library:deletionCopy.deviceCopySuffix') : ''
@@ -370,3 +383,55 @@ export function selectCompletionToast(inputs: CompletionToastInputs): Completion
     body: actualRemovalSummary(removed, deviceOutcome === 'success')
   }
 }
+
+// =============================================================================
+// Task 11d — live re-resolution on language switch (see the file-level i18n
+// note above).
+// =============================================================================
+
+/**
+ * Re-resolves every module-scope deletion-copy constant from the CURRENT
+ * language. Also supplies the INITIAL value (called once, immediately
+ * below), so the i18n key list exists in exactly one place rather than once
+ * as an initializer per constant and again in a refresh handler. Subscribed
+ * to i18n's `languageChanged` event so a live language switch in Settings
+ * updates every consumer on its next render.
+ */
+function loadDeletionCopy(): void {
+  LABEL_DELETE_FROM_DEVICE = i18n.t('library:deletionCopy.labelDeleteFromDevice')
+  LABEL_MOVE_TO_TRASH = i18n.t('library:deletionCopy.labelMoveToTrash')
+  LABEL_DELETE_PERMANENTLY = i18n.t('library:deletionCopy.labelDeletePermanently')
+  LABEL_RESTORE = i18n.t('library:deletionCopy.labelRestore')
+
+  SCOPE_DEVICE_DELETE = i18n.t('library:deletionCopy.scopeDeviceDelete')
+  SCOPE_DEVICE_DELETE_SYNCED = i18n.t('library:deletionCopy.scopeDeviceDeleteSynced')
+  SCOPE_DEVICE_NOT_CONNECTED = i18n.t('library:deletionCopy.scopeDeviceNotConnected')
+  SCOPE_TRASH = i18n.t('library:deletionCopy.scopeTrash')
+  SCOPE_PERMANENT = i18n.t('library:deletionCopy.scopePermanent')
+  SCOPE_RESTORE = i18n.t('library:deletionCopy.scopeRestore')
+
+  TRASH_MODE_BANNER = i18n.t('library:deletionCopy.trashModeBanner')
+  LEGACY_GRAPH_DISCLOSURE = i18n.t('library:deletionCopy.legacyGraphDisclosure')
+
+  SUCCESS_MOVED_TO_TRASH_TITLE = i18n.t('library:deletionCopy.successMovedToTrashTitle')
+  SUCCESS_REMOVED_FROM_DEVICE_TITLE = i18n.t('library:deletionCopy.successRemovedFromDeviceTitle')
+  SUCCESS_RESTORED_TITLE = i18n.t('library:deletionCopy.successRestoredTitle')
+  PARTIAL_DELETE_TITLE = i18n.t('library:deletionCopy.partialDeleteTitle')
+
+  GRAPH_CLEANUP_RETRY_SAFETY_LINE = i18n.t('library:deletionCopy.graphCleanupRetrySafetyLine')
+  FAILURE_NOTHING_DELETED_TITLE = i18n.t('library:deletionCopy.failureNothingDeletedTitle')
+  LABEL_DELETE_ANYWAY_SKIP_GRAPH = i18n.t('library:deletionCopy.labelDeleteAnywaySkipGraph')
+
+  DEVICE_COPY_REMAINS_TITLE = i18n.t('library:deletionCopy.deviceCopyRemainsTitle')
+  FILES_PENDING_TITLE = i18n.t('library:deletionCopy.filesPendingTitle')
+  FILES_UNRECOVERABLE_TITLE = i18n.t('library:deletionCopy.filesUnrecoverableTitle')
+  VIEW_MAY_BE_STALE_NOTE = i18n.t('library:deletionCopy.viewMayBeStaleNote')
+  COMBINED_PARTIAL_TITLE = i18n.t('library:deletionCopy.combinedPartialTitle')
+
+  SUCCESS_DELETED_PERMANENTLY_TITLE = i18n.t('library:deletionCopy.successDeletedPermanentlyTitle')
+  GRAPH_CLEANUP_DEFERRED_TITLE = i18n.t('library:deletionCopy.graphCleanupDeferredTitle')
+  GRAPH_CLEANUP_DEFERRED_NOTE = i18n.t('library:deletionCopy.graphCleanupDeferredNote')
+}
+
+loadDeletionCopy()
+i18n.on('languageChanged', loadDeletionCopy)
