@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { getHiDockDeviceService } from '@/services/hidock-device'
 import { useAppStore } from '@/store/useAppStore'
 import { useFeatureStore } from '@/store/useFeatureStore'
@@ -281,6 +282,7 @@ export function cancelDownloadsComplete(): void {
 }
 
 export function useDownloadOrchestrator() {
+  const { t } = useTranslation()
   const deviceService = getHiDockDeviceService()
   const isProcessingDownloads = useRef(false)
   const downloadAbortControllerRef = useRef<AbortController | null>(null)
@@ -356,8 +358,8 @@ export function useDownloadOrchestrator() {
         removeFromDownloadQueue(item.filename)
         deviceService.log('error', 'Download failed', `${item.filename}: USB transfer failed`)
         toast({
-          title: 'Download failed',
-          description: `Failed to download ${item.filename}`,
+          title: t('device:fileList.downloadFailedShort'),
+          description: t('device:fileList.downloadFailedToast', { filename: item.filename }),
           variant: 'error'
         })
         return false
@@ -386,8 +388,8 @@ export function useDownloadOrchestrator() {
       } else {
         deviceService.log('error', 'Download save failed', `${item.filename}: ${result.error}`)
         toast({
-          title: 'Save failed',
-          description: `Failed to save ${item.filename}: ${result.error}`,
+          title: t('device:sync.saveFailedToastTitle'),
+          description: t('device:sync.saveFailedToastDescription', { filename: item.filename, error: result.error }),
           variant: 'error'
         })
         return false
@@ -429,13 +431,13 @@ export function useDownloadOrchestrator() {
       deviceService.log('error', 'Download failed', `${item.filename}: ${libraryError.message}`)
       removeFromDownloadQueue(item.filename)
       toast({
-        title: 'Download error',
+        title: t('device:sync.downloadErrorToastTitle'),
         description: getErrorMessage(libraryError.type),
         variant: 'error'
       })
       return false
     }
-  }, [deviceService, addToDownloadQueue, updateDownloadProgress, removeFromDownloadQueue])
+  }, [deviceService, addToDownloadQueue, updateDownloadProgress, removeFromDownloadQueue, t])
 
   // ---- Queue processing ----
 
@@ -645,17 +647,20 @@ export function useDownloadOrchestrator() {
     }
 
     if (completed > 0 || failed > 0 || aborted) {
+      // Both `!== 1` ternaries below are the standard i18next English plural rule
+      // (singular at 1, plural at 0 and 2+), so the real counts drive `_one`/`_other`
+      // resolution directly — no fake-count trick needed here.
       toast({
         title: gateStopped
-          ? 'Device Sync turned off'
-          : aborted ? 'Sync cancelled' : (failed === 0 ? 'Sync complete' : 'Sync completed with errors'),
+          ? t('device:sync.toastTitleGateStopped')
+          : aborted ? t('device:sync.toastTitleCancelled') : (failed === 0 ? t('device:sync.toastTitleComplete') : t('device:sync.toastTitleCompleteWithErrors')),
         description: gateStopped
-          ? `Downloaded ${completed} of ${pendingItems.length}; the rest stay queued until Device Sync is back on (restart required)`
+          ? t('device:sync.toastDescriptionGateStopped', { completed, total: pendingItems.length })
           : aborted
-            ? `Downloaded ${completed} of ${pendingItems.length} file${pendingItems.length !== 1 ? 's' : ''}`
+            ? t('device:sync.toastDescriptionAborted', { completed, count: pendingItems.length })
             : (failed === 0
-              ? `Downloaded ${completed} file${completed !== 1 ? 's' : ''}`
-              : `Downloaded ${completed}, failed ${failed}`),
+              ? t('device:sync.toastDescriptionSuccess', { count: completed })
+              : t('device:sync.toastDescriptionWithFailures', { completed, failed })),
         variant: aborted ? 'default' : (failed === 0 ? 'success' : 'warning')
       })
 
@@ -666,7 +671,7 @@ export function useDownloadOrchestrator() {
         // Notification is non-critical, fail silently
       }
     }
-  }, [deviceService, processDownload, setDeviceSyncState, clearDeviceSyncState])
+  }, [deviceService, processDownload, setDeviceSyncState, clearDeviceSyncState, t])
 
   // DL-11: Use a ref for processDownloadQueue so the effect below doesn't
   // re-subscribe all listeners when processDownloadQueue is recreated

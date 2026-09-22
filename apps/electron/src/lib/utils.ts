@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import i18n from '@/i18n'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -96,10 +97,10 @@ export function getRelativeTime(date: Date | string): string {
   const diffHours = Math.floor(diffMs / 3600000)
   const diffDays = Math.floor(diffMs / 86400000)
 
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
+  if (diffMins < 1) return i18n.t('common:relativeTime.justNow')
+  if (diffMins < 60) return i18n.t('common:relativeTime.minutesAgo', { n: diffMins })
+  if (diffHours < 24) return i18n.t('common:relativeTime.hoursAgo', { n: diffHours })
+  if (diffDays < 7) return i18n.t('common:relativeTime.daysAgo', { n: diffDays })
   return formatDate(d)
 }
 

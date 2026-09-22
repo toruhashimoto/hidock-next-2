@@ -7,6 +7,8 @@
  * meeting to highlight — the one currently running, or the next one to start.
  */
 
+import i18n from '@/i18n'
+
 export type MeetingTimingState = 'cancelled' | 'all_day' | 'past' | 'ran_over' | 'in_progress' | 'upcoming'
 
 /**
@@ -189,29 +191,35 @@ export function classifyMeetingTimings<T extends TimeableMeeting>(
 
 /** Compact "in 4 min" / "in 1 h 20 min" label for an upcoming meeting. */
 export function formatMinutesUntil(minutes: number): string {
-  if (minutes <= 0) return 'starting now'
-  if (minutes < 60) return `in ${minutes} min`
+  if (minutes <= 0) return i18n.t('common:meetingTiming.startingNow')
+  if (minutes < 60) return i18n.t('common:meetingTiming.inMinutes', { n: minutes })
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  return m === 0 ? `in ${h} h` : `in ${h} h ${m} min`
+  return m === 0
+    ? i18n.t('common:meetingTiming.inHours', { n: h })
+    : i18n.t('common:meetingTiming.inHoursMinutes', { h, m })
 }
 
 /** "ended 6 min ago" label for a meeting that just ran over. */
 export function formatMinutesSinceEnd(minutes: number): string {
-  if (minutes <= 0) return 'just ended'
-  if (minutes < 60) return `ended ${minutes} min ago`
+  if (minutes <= 0) return i18n.t('common:meetingTiming.justEnded')
+  if (minutes < 60) return i18n.t('common:meetingTiming.endedMinutesAgo', { n: minutes })
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  return m === 0 ? `ended ${h} h ago` : `ended ${h} h ${m} min ago`
+  return m === 0
+    ? i18n.t('common:meetingTiming.endedHoursAgo', { n: h })
+    : i18n.t('common:meetingTiming.endedHoursMinutesAgo', { h, m })
 }
 
 /** "Now · 12 min left" label for a meeting in progress. */
 export function formatMinutesLeft(minutes: number): string {
-  if (minutes <= 0) return 'Now · wrapping up'
-  if (minutes < 60) return `Now · ${minutes} min left`
+  if (minutes <= 0) return i18n.t('common:meetingTiming.nowWrappingUp')
+  if (minutes < 60) return i18n.t('common:meetingTiming.nowMinutesLeft', { n: minutes })
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  return m === 0 ? `Now · ${h} h left` : `Now · ${h} h ${m} min left`
+  return m === 0
+    ? i18n.t('common:meetingTiming.nowHoursLeft', { n: h })
+    : i18n.t('common:meetingTiming.nowHoursMinutesLeft', { h, m })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -260,9 +268,9 @@ export function meetingZone(m: { start_time: string; end_time: string }, now: Da
 /** Time-of-day label for a grouped block of earlier meetings. */
 export function dayPartLabel(d: Date): string {
   const h = d.getHours()
-  if (h < 12) return 'Morning'
-  if (h < 18) return 'Afternoon'
-  return 'Evening'
+  if (h < 12) return i18n.t('common:meetingTiming.dayPartMorning')
+  if (h < 18) return i18n.t('common:meetingTiming.dayPartAfternoon')
+  return i18n.t('common:meetingTiming.dayPartEvening')
 }
 
 export interface EarlierGroup<T> {
@@ -307,15 +315,22 @@ export function groupEarlierMeetings<T extends { start_time: string; end_time: s
 
 export type MeetingCategory = 'recurring' | 'one_on_one' | 'external' | 'personal' | 'general'
 
-/** Human labels for the ribbon legend. */
+/**
+ * Human labels for the ribbon legend. Defined with GETTERS (not plain string
+ * values) so each lookup re-resolves through i18n at read time — a plain
+ * module-scope object would freeze at import time and never follow a runtime
+ * language switch (see CLAUDE.md pattern on module-scope i18n constants).
+ * Consumers (Today.tsx, CalendarLegend.tsx) only ever do a single bracket
+ * read (`MEETING_CATEGORY_LABELS[cat]`), which getters support transparently.
+ */
 export const MEETING_CATEGORY_LABELS: Record<MeetingCategory, string> = {
-  recurring: 'Recurring / team',
-  one_on_one: '1:1',
-  external: 'Client / external',
-  personal: 'Personal',
+  get recurring() { return i18n.t('common:meetingTiming.categoryRecurring') },
+  get one_on_one() { return i18n.t('common:meetingTiming.categoryOneOnOne') },
+  get external() { return i18n.t('common:meetingTiming.categoryExternal') },
+  get personal() { return i18n.t('common:meetingTiming.categoryPersonal') },
   // Neutral fallback when a category can't be confidently derived — reads as
   // "just a meeting", not a mystery color.
-  general: 'Meeting'
+  get general() { return i18n.t('common:meetingTiming.categoryGeneral') }
 }
 
 /**

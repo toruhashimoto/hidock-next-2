@@ -7,6 +7,7 @@
 
 import { create } from 'zustand'
 import type { Person } from '@/types/knowledge'
+import i18n from '@/i18n'
 
 interface ContactsState {
   // State
@@ -69,12 +70,12 @@ export const useContactsStore = create<ContactsState>((set, get) => ({
         }))
         set({ contacts: mapped, total: result.data.total, loading: false })
       } else {
-        const msg = (result as any).error?.message || 'Failed to load contacts'
+        const msg = (result as any).error?.message || i18n.t('common:contacts.loadFailedFallback')
         set({ error: msg, loading: false })
       }
     } catch (err) {
       console.error('ContactsStore: Failed to load contacts:', err)
-      set({ error: err instanceof Error ? err.message : 'Failed to load contacts', loading: false })
+      set({ error: err instanceof Error ? err.message : i18n.t('common:contacts.loadFailedFallback'), loading: false })
     }
   },
 
@@ -100,11 +101,11 @@ export const useContactsStore = create<ContactsState>((set, get) => ({
         }
         set({ selectedContact: person, loading: false })
       } else {
-        set({ error: 'Contact not found', loading: false })
+        set({ error: i18n.t('common:contacts.notFound'), loading: false })
       }
     } catch (err) {
       console.error('ContactsStore: Failed to select contact:', err)
-      set({ error: err instanceof Error ? err.message : 'Failed to load contact', loading: false })
+      set({ error: err instanceof Error ? err.message : i18n.t('common:contacts.loadOneFailedFallback'), loading: false })
     }
   },
 
@@ -119,12 +120,12 @@ export const useContactsStore = create<ContactsState>((set, get) => ({
           await state.selectContact(id)
         }
       } else {
-        const msg = (result as any).error?.message || 'Failed to update contact'
+        const msg = (result as any).error?.message || i18n.t('common:contacts.updateFailedFallback')
         set({ error: msg })
       }
     } catch (err) {
       console.error('ContactsStore: Failed to update contact:', err)
-      set({ error: err instanceof Error ? err.message : 'Failed to update contact' })
+      set({ error: err instanceof Error ? err.message : i18n.t('common:contacts.updateFailedFallback') })
     }
   },
 
@@ -139,12 +140,12 @@ export const useContactsStore = create<ContactsState>((set, get) => ({
           total: state.total - 1
         })
       } else {
-        const msg = (result as any).error?.message || 'Failed to delete contact'
+        const msg = (result as any).error?.message || i18n.t('common:contacts.deleteFailedFallback')
         set({ error: msg })
       }
     } catch (err) {
       console.error('ContactsStore: Failed to delete contact:', err)
-      set({ error: err instanceof Error ? err.message : 'Failed to delete contact' })
+      set({ error: err instanceof Error ? err.message : i18n.t('common:contacts.deleteFailedFallback') })
     }
   },
 

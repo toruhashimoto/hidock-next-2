@@ -7,6 +7,7 @@
 
 import { create } from 'zustand'
 import type { Project } from '@/types/knowledge'
+import i18n from '@/i18n'
 
 interface ProjectsState {
   // State
@@ -61,12 +62,12 @@ export const useProjectsStore = create<ProjectsState>((set, _get) => ({
         }))
         set({ projects: mapped, total: result.data.total, loading: false })
       } else {
-        const msg = (result as any).error?.message || 'Failed to load projects'
+        const msg = (result as any).error?.message || i18n.t('common:projects.loadFailedFallback')
         set({ error: msg, loading: false })
       }
     } catch (err) {
       console.error('ProjectsStore: Failed to load projects:', err)
-      set({ error: err instanceof Error ? err.message : 'Failed to load projects', loading: false })
+      set({ error: err instanceof Error ? err.message : i18n.t('common:projects.loadFailedFallback'), loading: false })
     }
   },
 
@@ -87,11 +88,11 @@ export const useProjectsStore = create<ProjectsState>((set, _get) => ({
         }
         set({ selectedProject: project, loading: false })
       } else {
-        set({ error: 'Project not found', loading: false })
+        set({ error: i18n.t('common:projects.notFound'), loading: false })
       }
     } catch (err) {
       console.error('ProjectsStore: Failed to select project:', err)
-      set({ error: err instanceof Error ? err.message : 'Failed to load project', loading: false })
+      set({ error: err instanceof Error ? err.message : i18n.t('common:projects.loadOneFailedFallback'), loading: false })
     }
   },
 
@@ -113,13 +114,13 @@ export const useProjectsStore = create<ProjectsState>((set, _get) => ({
         }))
         return project
       } else {
-        const msg = (result as any).error?.message || 'Failed to create project'
+        const msg = (result as any).error?.message || i18n.t('common:projects.createFailedFallback')
         set({ error: msg })
         return null
       }
     } catch (err) {
       console.error('ProjectsStore: Failed to create project:', err)
-      set({ error: err instanceof Error ? err.message : 'Failed to create project' })
+      set({ error: err instanceof Error ? err.message : i18n.t('common:projects.createFailedFallback') })
       return null
     }
   },
@@ -141,12 +142,12 @@ export const useProjectsStore = create<ProjectsState>((set, _get) => ({
           selectedProject: state.selectedProject?.id === id ? updated : state.selectedProject
         }))
       } else {
-        const msg = (result as any).error?.message || 'Failed to update project'
+        const msg = (result as any).error?.message || i18n.t('common:projects.updateFailedFallback')
         set({ error: msg })
       }
     } catch (err) {
       console.error('ProjectsStore: Failed to update project:', err)
-      set({ error: err instanceof Error ? err.message : 'Failed to update project' })
+      set({ error: err instanceof Error ? err.message : i18n.t('common:projects.updateFailedFallback') })
     }
   },
 
@@ -160,12 +161,12 @@ export const useProjectsStore = create<ProjectsState>((set, _get) => ({
           total: state.total - 1
         }))
       } else {
-        const msg = (result as any).error?.message || 'Failed to delete project'
+        const msg = (result as any).error?.message || i18n.t('common:projects.deleteFailedFallback')
         set({ error: msg })
       }
     } catch (err) {
       console.error('ProjectsStore: Failed to delete project:', err)
-      set({ error: err instanceof Error ? err.message : 'Failed to delete project' })
+      set({ error: err instanceof Error ? err.message : i18n.t('common:projects.deleteFailedFallback') })
     }
   },
 

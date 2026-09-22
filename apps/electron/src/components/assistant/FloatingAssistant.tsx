@@ -16,6 +16,7 @@
  */
 
 import { useEffect, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Sparkles, Pin, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore, useChatOpen, useChatPosition } from '@/store/ui/useUIStore'
@@ -23,11 +24,13 @@ import { useUIStore, useChatOpen, useChatPosition } from '@/store/ui/useUIStore'
 interface FloatingAssistantProps {
   /** The assistant chat content to host inside the overlay. */
   children: ReactNode
-  /** Overlay/title label. */
+  /** Overlay/title label. Defaults to the translated "Assistant" when omitted. */
   title?: string
 }
 
-export function FloatingAssistant({ children, title = 'Assistant' }: FloatingAssistantProps) {
+export function FloatingAssistant({ children, title }: FloatingAssistantProps) {
+  const { t } = useTranslation()
+  const resolvedTitle = title ?? t('layout:assistant.title')
   const position = useChatPosition()
   const open = useChatOpen()
   const setChatOpen = useUIStore((s) => s.setChatOpen)
@@ -54,7 +57,7 @@ export function FloatingAssistant({ children, title = 'Assistant' }: FloatingAss
         <button
           type="button"
           onClick={() => setChatOpen(true)}
-          aria-label="Open AI assistant"
+          aria-label={t('layout:floatingAssistant.openAriaLabel')}
           aria-expanded={false}
           data-testid="floating-assistant-button"
           className={cn(
@@ -65,7 +68,7 @@ export function FloatingAssistant({ children, title = 'Assistant' }: FloatingAss
         >
           <Sparkles className="h-5 w-5 shrink-0" aria-hidden="true" />
           <span className="hidden whitespace-nowrap text-sm font-medium sm:inline">
-            AI<span className="hidden xl:inline"> Assistant</span>
+            {t('layout:floatingAssistant.bubbleShort')}<span className="hidden xl:inline">{t('layout:floatingAssistant.bubbleSuffix')}</span>
           </span>
         </button>
       )}
@@ -82,7 +85,7 @@ export function FloatingAssistant({ children, title = 'Assistant' }: FloatingAss
           />
           <div
             role="dialog"
-            aria-label="AI Assistant"
+            aria-label={t('layout:floatingAssistant.dialogAriaLabel')}
             aria-modal="false"
             data-testid="floating-assistant-overlay"
             className={cn(
@@ -93,14 +96,14 @@ export function FloatingAssistant({ children, title = 'Assistant' }: FloatingAss
             <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/40 px-3 py-2">
               <div className="flex min-w-0 items-center gap-2">
                 <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-                <h3 className="truncate text-sm font-semibold text-foreground">{title}</h3>
+                <h3 className="truncate text-sm font-semibold text-foreground">{resolvedTitle}</h3>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
                 <button
                   type="button"
                   onClick={() => setChatPlacement('embedded')}
-                  aria-label="Pin assistant (embed as a docked pane)"
-                  title="Pin — embed the assistant as a docked pane"
+                  aria-label={t('layout:floatingAssistant.pinAriaLabel')}
+                  title={t('layout:floatingAssistant.pinTitle')}
                   className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Pin className="h-4 w-4" aria-hidden="true" />
@@ -108,8 +111,8 @@ export function FloatingAssistant({ children, title = 'Assistant' }: FloatingAss
                 <button
                   type="button"
                   onClick={() => setChatOpen(false)}
-                  aria-label="Close assistant"
-                  title="Close the assistant"
+                  aria-label={t('layout:floatingAssistant.closeAriaLabel')}
+                  title={t('layout:floatingAssistant.closeTitle')}
                   className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />

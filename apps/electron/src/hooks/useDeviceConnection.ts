@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useDeviceState, useConnectionStatus } from '@/store/useAppStore'
 import { getHiDockDeviceService } from '@/services/hidock-device'
 import { toast } from '@/components/ui/toaster'
@@ -62,6 +63,7 @@ export function useDeviceConnection(
   options: UseDeviceConnectionOptions = {}
 ): UseDeviceConnection {
   const { toastErrors = true } = options
+  const { t } = useTranslation()
   const deviceState = useDeviceState()
   const connectionStatus = useConnectionStatus()
 
@@ -89,23 +91,23 @@ export function useDeviceConnection(
 
   const failedHint = isFailed
     ? connectionStatus.devicePresent
-      ? 'Device may be busy (recording?)'
-      : 'Could not reach the HiDock'
+      ? t('layout:deviceConnection.hintDeviceBusy')
+      : t('layout:deviceConnection.hintUnreachable')
     : null
 
   const deviceModel = isConnected
     ? deviceState.model && deviceState.model !== 'unknown'
       ? deviceState.model.replace('hidock-', '').toUpperCase()
-      : 'Device'
+      : t('layout:toast.deviceConnectedFallbackModel')
     : null
 
   const label = isConnected
-    ? deviceModel ?? 'Device'
+    ? deviceModel ?? t('layout:toast.deviceConnectedFallbackModel')
     : isConnecting
-      ? 'Connecting…'
+      ? t('layout:deviceConnection.connectingLabel')
       : isFailed
-        ? 'Connection failed — retry'
-        : 'Connect device'
+        ? t('layout:deviceConnection.connectionFailedLabel')
+        : t('layout:titleBar.connectDevice')
 
   const connect = useCallback(async (): Promise<boolean> => {
     const service = getHiDockDeviceService()
@@ -120,9 +122,8 @@ export function useDeviceConnection(
       const success = await service.connect()
       if (!success && toastErrors) {
         toast({
-          title: 'Connection failed',
-          description:
-            'Could not connect to the HiDock. Check that it is plugged in via USB and not in use by another app.',
+          title: t('layout:deviceConnection.connectFailedToastTitle'),
+          description: t('layout:deviceConnection.connectFailedToastDescription'),
           variant: 'error'
         })
       }
@@ -130,8 +131,8 @@ export function useDeviceConnection(
     } catch (e) {
       if (toastErrors) {
         toast({
-          title: 'Connection failed',
-          description: e instanceof Error ? e.message : 'Unknown error',
+          title: t('layout:deviceConnection.connectFailedToastTitle'),
+          description: e instanceof Error ? e.message : t('common:errors.unknown'),
           variant: 'error'
         })
       }
@@ -141,7 +142,7 @@ export function useDeviceConnection(
       pendingRef.current = false
       setPending(false)
     }
-  }, [toastErrors])
+  }, [toastErrors, t])
 
   const disconnect = useCallback(async (): Promise<void> => {
     try {
@@ -149,13 +150,13 @@ export function useDeviceConnection(
     } catch (e) {
       if (toastErrors) {
         toast({
-          title: 'Disconnect failed',
-          description: e instanceof Error ? e.message : 'Unknown error',
+          title: t('layout:deviceConnection.disconnectFailedToastTitle'),
+          description: e instanceof Error ? e.message : t('common:errors.unknown'),
           variant: 'error'
         })
       }
     }
-  }, [toastErrors])
+  }, [toastErrors, t])
 
   return {
     status,
