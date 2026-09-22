@@ -1,5 +1,6 @@
 import { useEffect, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Layout } from '@/components/layout/Layout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { SecurityWarningBanner } from '@/components/SecurityWarningBanner'
@@ -47,6 +48,7 @@ const ContextGraph = lazyWithRetry(() => import('@/pages/ContextGraph'))
  * open, so the Chat is not initialized until the user actually opens the bubble.
  */
 export function GlobalAssistant(): React.ReactElement | null {
+  const { t } = useTranslation()
   const location = useLocation()
   // Library owns its assistant (TriPaneLayout) in both placement modes, and the
   // dedicated /assistant page IS the assistant — a floating bubble there could
@@ -57,8 +59,8 @@ export function GlobalAssistant(): React.ReactElement | null {
   if (path === '/library' || path === '/assistant') return null
   return (
     <AssistantGate>
-      <FloatingAssistant title="Assistant">
-        <Suspense fallback={<LoadingSpinner message="Loading assistant..." />}>
+      <FloatingAssistant title={t('layout:assistant.title')}>
+        <Suspense fallback={<LoadingSpinner message={t('layout:assistant.loading')} />}>
           <Chat />
         </Suspense>
       </FloatingAssistant>
@@ -102,6 +104,7 @@ function RootRedirect(): React.ReactElement {
 }
 
 function App(): React.ReactElement {
+  const { t } = useTranslation()
   // Keep the applied theme reconciled with the persisted preference + OS.
   useTheme()
   useLanguage()
@@ -166,7 +169,7 @@ function App(): React.ReactElement {
             element={
               <ErrorBoundary>
                 <FeatureRoute feature="today">
-                  <Suspense fallback={<LoadingSpinner message="Loading your day..." />}>
+                  <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingToday')} />}>
                     <Today />
                   </Suspense>
                 </FeatureRoute>
@@ -178,7 +181,7 @@ function App(): React.ReactElement {
             element={
               <ErrorBoundary>
                 <FeatureRoute feature="calendar">
-                  <Suspense fallback={<LoadingSpinner message="Loading calendar..." />}>
+                  <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingCalendar')} />}>
                     <Calendar />
                   </Suspense>
                 </FeatureRoute>
@@ -190,7 +193,7 @@ function App(): React.ReactElement {
             element={
               <ErrorBoundary>
                 <FeatureRoute feature="calendar">
-                  <Suspense fallback={<LoadingSpinner message="Loading meeting..." />}>
+                  <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingMeeting')} />}>
                     <MeetingDetail />
                   </Suspense>
                 </FeatureRoute>
@@ -202,7 +205,7 @@ function App(): React.ReactElement {
             element={
               <ErrorBoundary>
                 <FeatureRoute feature="assistant">
-                  <Suspense fallback={<LoadingSpinner message="Loading assistant..." />}>
+                  <Suspense fallback={<LoadingSpinner message={t('layout:assistant.loading')} />}>
                     <Chat />
                   </Suspense>
                 </FeatureRoute>
@@ -214,7 +217,7 @@ function App(): React.ReactElement {
             element={
               <ErrorBoundary>
                 <FeatureRoute feature="explore">
-                  <Suspense fallback={<LoadingSpinner message="Loading explore..." />}>
+                  <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingExplore')} />}>
                     <Explore />
                   </Suspense>
                 </FeatureRoute>
@@ -226,7 +229,7 @@ function App(): React.ReactElement {
             element={
               <ErrorBoundary>
                 <FeatureRoute feature="device-sync">
-                  <Suspense fallback={<LoadingSpinner message="Loading device sync..." />}>
+                  <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingDeviceSync')} />}>
                     <Device />
                   </Suspense>
                 </FeatureRoute>
@@ -237,7 +240,7 @@ function App(): React.ReactElement {
             path="/library"
             element={
               <ErrorBoundary>
-                <Suspense fallback={<LoadingSpinner message="Loading library..." />}>
+                <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingLibrary')} />}>
                   <Library />
                 </Suspense>
               </ErrorBoundary>
@@ -248,7 +251,7 @@ function App(): React.ReactElement {
             element={
               <ErrorBoundary>
                 <FeatureRoute feature="people-projects">
-                  <Suspense fallback={<LoadingSpinner message="Loading people..." />}>
+                  <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingPeople')} />}>
                     <People />
                   </Suspense>
                 </FeatureRoute>
@@ -260,7 +263,7 @@ function App(): React.ReactElement {
             element={
               <ErrorBoundary>
                 <FeatureRoute feature="people-projects">
-                  <Suspense fallback={<LoadingSpinner message="Loading person details..." />}>
+                  <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingPersonDetails')} />}>
                     <PersonDetail />
                   </Suspense>
                 </FeatureRoute>
@@ -272,7 +275,7 @@ function App(): React.ReactElement {
             element={
               <ErrorBoundary>
                 <FeatureRoute feature="people-projects">
-                  <Suspense fallback={<LoadingSpinner message="Loading projects..." />}>
+                  <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingProjects')} />}>
                     <Projects />
                   </Suspense>
                 </FeatureRoute>
@@ -284,7 +287,7 @@ function App(): React.ReactElement {
             element={
               <ErrorBoundary>
                 <FeatureRoute feature="meeting-intelligence">
-                  <Suspense fallback={<LoadingSpinner message="Loading actionables..." />}>
+                  <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingActionables')} />}>
                     <Actionables />
                   </Suspense>
                 </FeatureRoute>
@@ -295,7 +298,7 @@ function App(): React.ReactElement {
             path="/settings"
             element={
               <ErrorBoundary>
-                <Suspense fallback={<LoadingSpinner message="Loading settings..." />}>
+                <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingSettings')} />}>
                   <Settings />
                 </Suspense>
               </ErrorBoundary>
@@ -306,7 +309,7 @@ function App(): React.ReactElement {
             element={
               <ErrorBoundary>
                 <FeatureRoute feature="context-graph">
-                  <Suspense fallback={<LoadingSpinner message="Loading context graph..." />}>
+                  <Suspense fallback={<LoadingSpinner message={t('layout:app.loadingContextGraph')} />}>
                     <ContextGraph />
                   </Suspense>
                 </FeatureRoute>

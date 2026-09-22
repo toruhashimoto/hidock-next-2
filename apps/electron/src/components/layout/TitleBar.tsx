@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Search,
   CheckCircle2,
@@ -85,6 +86,7 @@ interface TitleBarProps {
 }
 
 export function TitleBar({ sidebarOpen, dividerMode = BRAND_DIVIDER_MODE }: TitleBarProps) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   // Shared with the Device Sync page — same status source, same connect action.
   const { status, label: connectionLabel, failedHint, connect, disconnect } = useDeviceConnection()
@@ -174,8 +176,8 @@ export function TitleBar({ sidebarOpen, dividerMode = BRAND_DIVIDER_MODE }: Titl
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search knowledge, people, projects…"
-              aria-label="Search knowledge, people and projects"
+              placeholder={t('layout:titleBar.searchPlaceholder')}
+              aria-label={t('layout:titleBar.searchAriaLabel')}
               aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'}
               className="h-7 w-full select-text rounded-md border border-slate-700 bg-slate-800/80 pl-8 pr-12 text-xs text-slate-100 placeholder:text-slate-500 focus-visible:border-sky-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
             />
@@ -203,8 +205,8 @@ export function TitleBar({ sidebarOpen, dividerMode = BRAND_DIVIDER_MODE }: Titl
             <button
               type="button"
               onClick={() => navigate('/settings')}
-              aria-label="Settings"
-              title="Settings"
+              aria-label={t('layout:titleBar.settings')}
+              title={t('layout:titleBar.settings')}
               className="titlebar-no-drag flex h-7 w-7 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
             >
               <SettingsIcon className="h-4 w-4" />
@@ -263,6 +265,7 @@ interface ConnectionControlProps {
  *                   than disconnecting, so it can't be hit by accident.
  */
 function ConnectionControl({ status, label, failedHint, recording, onConnect, onDisconnect, onGoToSync }: ConnectionControlProps) {
+  const { t } = useTranslation()
   // Restart confirm dialog is driven by state (rather than nesting an
   // AlertDialogTrigger inside a DropdownMenuItem, which is finicky): the menu item
   // opens it, and the AlertDialog is rendered controlled, outside the menu.
@@ -271,7 +274,7 @@ function ConnectionControl({ status, label, failedHint, recording, onConnect, on
   const restartMenuItem = (
     <DropdownMenuItem onSelect={() => setRestartOpen(true)}>
       <RotateCcw className="mr-2 h-4 w-4" />
-      Restart app
+      {t('layout:titleBar.restartApp')}
     </DropdownMenuItem>
   )
 
@@ -283,7 +286,7 @@ function ConnectionControl({ status, label, failedHint, recording, onConnect, on
         <button
           type="button"
           disabled
-          title="Connecting to device…"
+          title={t('layout:titleBar.connectingToDevice')}
           className={cn(PILL_BASE, 'cursor-wait border-amber-700/50 bg-amber-900/40 text-amber-300')}
         >
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -298,7 +301,7 @@ function ConnectionControl({ status, label, failedHint, recording, onConnect, on
         <button
           type="button"
           onClick={onConnect}
-          title="Connect device"
+          title={t('layout:titleBar.connectDevice')}
           className={cn(PILL_BASE, 'border-slate-700 bg-slate-800/70 text-slate-400 hover:bg-slate-700 hover:text-slate-200')}
         >
           <Usb className="h-3.5 w-3.5" />
@@ -307,7 +310,7 @@ function ConnectionControl({ status, label, failedHint, recording, onConnect, on
         <MoreMenu>
           <DropdownMenuItem onSelect={onConnect}>
             <Usb className="mr-2 h-4 w-4" />
-            Connect device
+            {t('layout:titleBar.connectDevice')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {restartMenuItem}
@@ -320,7 +323,7 @@ function ConnectionControl({ status, label, failedHint, recording, onConnect, on
         <button
           type="button"
           onClick={onConnect}
-          title={failedHint ? `${failedHint} — click to retry` : 'Connection failed — click to retry'}
+          title={failedHint ? t('layout:titleBar.failedHintSuffix', { hint: failedHint }) : t('layout:titleBar.connectionFailedRetry')}
           className={cn(PILL_BASE, 'border-amber-700/50 bg-amber-900/40 text-amber-300 hover:bg-amber-900/60')}
         >
           <AlertTriangle className="h-3.5 w-3.5" />
@@ -329,7 +332,7 @@ function ConnectionControl({ status, label, failedHint, recording, onConnect, on
         <MoreMenu>
           <DropdownMenuItem onSelect={onConnect}>
             <RotateCcw className="mr-2 h-4 w-4" />
-            Retry connection
+            {t('layout:titleBar.retryConnection')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {restartMenuItem}
@@ -344,7 +347,7 @@ function ConnectionControl({ status, label, failedHint, recording, onConnect, on
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            title={recording ? `Recording — ${label}` : `Device connected: ${label}`}
+            title={recording ? t('layout:titleBar.recordingWithLabel', { label }) : t('layout:titleBar.connectedWithLabel', { label })}
             className={cn(
               PILL_BASE,
               recording
@@ -355,19 +358,19 @@ function ConnectionControl({ status, label, failedHint, recording, onConnect, on
             {recording ? (
               <span
                 className="h-2 w-2 rounded-full bg-red-500 animate-pulse motion-reduce:animate-none"
-                aria-label="Recording in progress"
+                aria-label={t('layout:titleBar.recordingInProgress')}
               />
             ) : (
               <CheckCircle2 className="h-3.5 w-3.5" />
             )}
-            <span className="hidden md:inline">{recording ? 'Recording' : label}</span>
+            <span className="hidden md:inline">{recording ? t('layout:titleBar.recordingText') : label}</span>
             <ChevronDown className="h-3 w-3 opacity-70" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="titlebar-no-drag w-44">
           <DropdownMenuItem onSelect={onGoToSync}>
             <ArrowRight className="mr-2 h-4 w-4" />
-            Go to Sync
+            {t('layout:titleBar.goToSync')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -375,7 +378,7 @@ function ConnectionControl({ status, label, failedHint, recording, onConnect, on
             className="text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
           >
             <LogOut className="mr-2 h-4 w-4" />
-            Disconnect
+            {t('layout:titleBar.disconnect')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {/* Restart lives here now (moved out of the sidebar). onSelect just flips
@@ -393,16 +396,15 @@ function ConnectionControl({ status, label, failedHint, recording, onConnect, on
       <AlertDialog open={restartOpen} onOpenChange={setRestartOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Restart the app?</AlertDialogTitle>
+            <AlertDialogTitle>{t('layout:titleBar.restartConfirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This fully restarts the app and reconnects the device. Any in-progress
-              downloads or transcriptions will be interrupted.
+              {t('layout:titleBar.restartConfirmDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('layout:titleBar.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => window.electronAPI?.app?.restart()}>
-              Restart
+              {t('layout:titleBar.restartConfirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -417,13 +419,14 @@ function ConnectionControl({ status, label, failedHint, recording, onConnect, on
  * menu content is passed as children.
  */
 function MoreMenu({ children }: { children: ReactNode }) {
+  const { t } = useTranslation()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="Device options"
-          title="Device options"
+          aria-label={t('layout:titleBar.deviceOptions')}
+          title={t('layout:titleBar.deviceOptions')}
           className={cn(
             PILL_BASE,
             'px-1.5 border-slate-700 bg-slate-800/70 text-slate-400 hover:bg-slate-700 hover:text-slate-200 data-[state=open]:bg-slate-700'

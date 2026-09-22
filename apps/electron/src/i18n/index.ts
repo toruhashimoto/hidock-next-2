@@ -16,6 +16,8 @@ import { initReactI18next } from 'react-i18next'
 
 import enCommon from './locales/en/common.json'
 import jaCommon from './locales/ja/common.json'
+import enLayout from './locales/en/layout.json'
+import jaLayout from './locales/ja/layout.json'
 
 export const SUPPORTED_LANGUAGES = ['en', 'ja'] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
@@ -23,8 +25,8 @@ export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 export const NAMESPACES = ['common', 'layout', 'library', 'device', 'settings', 'today'] as const
 
 const resources = {
-  en: { common: enCommon },
-  ja: { common: jaCommon }
+  en: { common: enCommon, layout: enLayout },
+  ja: { common: jaCommon, layout: jaLayout }
 }
 
 export function initI18n(lng: SupportedLanguage): typeof i18n {
