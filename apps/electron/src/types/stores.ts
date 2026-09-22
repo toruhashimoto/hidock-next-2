@@ -243,6 +243,12 @@ export interface UIStore {
 
 export type ThemePreference = 'light' | 'dark' | 'system'
 
+// Language preference. 'system' follows the OS/app locale; 'en'/'ja' pin it.
+// Persisted to localStorage. Canonical home for this type — lib/language.ts
+// re-exports it rather than declaring its own, the way ThemePreference is
+// (separately) declared in both this file and lib/theme.ts.
+export type LanguagePreference = 'en' | 'ja' | 'system'
+
 // =============================================================================
 // Recordings Store (existing, but typed)
 // =============================================================================
