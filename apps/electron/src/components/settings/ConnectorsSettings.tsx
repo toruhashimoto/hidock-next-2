@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   RefreshCw,
   Plug,
@@ -26,22 +28,32 @@ import type {
   SourceContainer,
 } from '@hidock/connectors'
 
-const STATUS_META: Record<ConnectorStatusState, { label: string; className: string }> = {
-  disconnected: { label: 'Disconnected', className: 'border-border bg-muted text-muted-foreground' },
-  connecting: { label: 'Connecting…', className: 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
-  'auth-needed': { label: 'Sign-in needed', className: 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
-  connected: { label: 'Connected', className: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
-  syncing: { label: 'Syncing…', className: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300' },
-  error: { label: 'Error', className: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300' },
+function statusMeta(t: TFunction, state: ConnectorStatusState): { label: string; className: string } {
+  switch (state) {
+    case 'disconnected':
+      return { label: t('settings:connectors.statusDisconnected'), className: 'border-border bg-muted text-muted-foreground' }
+    case 'connecting':
+      return { label: t('settings:connectors.statusConnecting'), className: 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300' }
+    case 'auth-needed':
+      return { label: t('settings:connectors.statusAuthNeeded'), className: 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300' }
+    case 'connected':
+      return { label: t('settings:connectors.statusConnected'), className: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' }
+    case 'syncing':
+      return { label: t('settings:connectors.statusSyncing'), className: 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300' }
+    case 'error':
+      return { label: t('settings:connectors.statusError'), className: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300' }
+  }
 }
 
 function StatusBadge({ status }: { status: ConnectorStatus }) {
-  const meta = STATUS_META[status.state] ?? STATUS_META.disconnected
+  const { t } = useTranslation()
+  const meta = statusMeta(t, status.state) ?? statusMeta(t, 'disconnected')
   return <Badge className={meta.className}>{meta.label}</Badge>
 }
 
 /** The device-code sign-in prompt, surfaced from status.detail while connecting. */
 function DeviceCodePrompt({ status }: { status: ConnectorStatus }) {
+  const { t } = useTranslation()
   const detail = status.detail as
     | { mode?: string; verificationUri?: string; userCode?: string; fullMessage?: string }
     | undefined
@@ -56,7 +68,7 @@ function DeviceCodePrompt({ status }: { status: ConnectorStatus }) {
   return (
     <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
       <p className="mb-2 text-amber-800 dark:text-amber-200">
-        To finish signing in, open the link and enter the code:
+        {t('settings:connectors.deviceCodeInstructions')}
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <a
@@ -72,7 +84,7 @@ function DeviceCodePrompt({ status }: { status: ConnectorStatus }) {
           type="button"
           onClick={copy}
           className="inline-flex items-center gap-1.5 rounded border border-border bg-background px-2 py-1 font-mono text-base tracking-widest"
-          aria-label="Copy device code"
+          aria-label={t('settings:connectors.copyDeviceCodeAriaLabel')}
         >
           {detail.userCode}
           {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -84,13 +96,14 @@ function DeviceCodePrompt({ status }: { status: ConnectorStatus }) {
 
 /** The browser (auth-code) prompt — shown while the system browser is opened. */
 function AuthCodePrompt({ status }: { status: ConnectorStatus }) {
+  const { t } = useTranslation()
   const detail = status.detail as { mode?: string; authUrl?: string; fullMessage?: string } | undefined
   if (detail?.mode !== 'auth-code' || !detail.authUrl) return null
   return (
     <div className="rounded-md border border-blue-500/30 bg-blue-500/10 p-3 text-sm">
       <p className="mb-2 inline-flex items-center gap-1.5 text-blue-800 dark:text-blue-200">
         <Globe className="h-4 w-4" aria-hidden="true" />
-        We opened your browser to sign in to Microsoft. Approve access there, then return here.
+        {t('settings:connectors.authCodeInstructions')}
       </p>
       <a
         href={detail.authUrl}
@@ -98,7 +111,7 @@ function AuthCodePrompt({ status }: { status: ConnectorStatus }) {
         rel="noreferrer"
         className="inline-flex items-center gap-1 font-medium text-primary underline"
       >
-        Didn’t see it? Open the sign-in page
+        {t('settings:connectors.authCodeRetryLink')}
         <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
       </a>
     </div>
@@ -106,6 +119,7 @@ function AuthCodePrompt({ status }: { status: ConnectorStatus }) {
 }
 
 function SetupSteps({ steps, docsUrl }: { steps: string[]; docsUrl?: string }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   return (
     <div className="rounded-md border border-border bg-muted/40">
@@ -116,7 +130,7 @@ function SetupSteps({ steps, docsUrl }: { steps: string[]; docsUrl?: string }) {
         aria-expanded={open}
       >
         {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        App registration steps ({steps.length})
+        {t('settings:connectors.setupStepsToggle', { count: steps.length })}
       </button>
       {open && (
         <ol className="list-decimal space-y-1.5 px-8 pb-3 text-sm text-muted-foreground">
@@ -126,7 +140,7 @@ function SetupSteps({ steps, docsUrl }: { steps: string[]; docsUrl?: string }) {
           {docsUrl && (
             <li>
               <a href={docsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary underline">
-                Microsoft app-registration docs <ExternalLink className="h-3 w-3" />
+                {t('settings:connectors.setupStepsDocsLink')} <ExternalLink className="h-3 w-3" />
               </a>
             </li>
           )}
@@ -149,6 +163,7 @@ function AccountBlock({
   onChanged: (s: ConnectorSummary) => void
   onRemoved?: (instanceId: string) => void
 }) {
+  const { t } = useTranslation()
   const { descriptor, status, instanceId } = summary
   const [values, setValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {}
@@ -194,9 +209,9 @@ function AccountBlock({
         for (const f of descriptor.configFields) if (f.secret) cleared[f.key] = ''
         return cleared
       })
-      toast.success(`${summary.label} settings saved`)
+      toast.success(t('settings:connectors.accountSettingsSaved', { label: summary.label }))
     } catch (e) {
-      toast.error(`Save failed: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(t('settings:connectors.accountSaveFailed', { message: e instanceof Error ? e.message : String(e) }))
     } finally {
       setBusy(null)
     }
@@ -208,7 +223,7 @@ function AccountBlock({
       const next = await window.electronAPI.connectors.connect(instanceId, authMode)
       onChanged(next)
     } catch (e) {
-      toast.error(`Connect failed: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(t('settings:connectors.accountConnectFailed', { message: e instanceof Error ? e.message : String(e) }))
     } finally {
       setBusy(null)
     }
@@ -230,9 +245,9 @@ function AccountBlock({
     try {
       await window.electronAPI.connectors.removeInstance(instanceId)
       onRemoved?.(instanceId)
-      toast.success(`${summary.label} removed`)
+      toast.success(t('settings:connectors.accountRemoved', { label: summary.label }))
     } catch (e) {
-      toast.error(`Remove failed: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(t('settings:connectors.accountRemoveFailed', { message: e instanceof Error ? e.message : String(e) }))
     } finally {
       setBusy(null)
     }
@@ -275,10 +290,15 @@ function AccountBlock({
       const outcome = await window.electronAPI.connectors.sync(instanceId)
       onChanged(await window.electronAPI.connectors.get(instanceId))
       toast.success(
-        `${summary.label} synced — ${outcome.meetings} meetings, ${outcome.contacts} contacts, ${outcome.artifacts} files`
+        t('settings:connectors.accountSynced', {
+          label: summary.label,
+          meetings: outcome.meetings,
+          contacts: outcome.contacts,
+          artifacts: outcome.artifacts
+        })
       )
     } catch (e) {
-      toast.error(`Sync failed: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(t('settings:connectors.accountSyncFailed', { message: e instanceof Error ? e.message : String(e) }))
     } finally {
       setBusy(null)
     }
@@ -317,7 +337,7 @@ function AccountBlock({
                   }
                 }}
                 className="h-7 w-56"
-                aria-label="Account label"
+                aria-label={t('settings:connectors.accountLabelAriaLabel')}
               />
             ) : (
               <button
@@ -325,7 +345,7 @@ function AccountBlock({
                 className="truncate font-semibold text-left hover:underline disabled:no-underline"
                 onClick={() => summary.multiInstance && setEditingLabel(true)}
                 disabled={!summary.multiInstance}
-                title={summary.multiInstance ? 'Rename account' : undefined}
+                title={summary.multiInstance ? t('settings:connectors.renameAccountTitle') : undefined}
               >
                 {summary.label}
               </button>
@@ -339,7 +359,7 @@ function AccountBlock({
             size="sm"
             onClick={remove}
             disabled={busy !== null}
-            aria-label={`Remove ${summary.label}`}
+            aria-label={t('settings:connectors.removeAccountAriaLabel', { label: summary.label })}
             className="text-muted-foreground hover:text-red-600"
           >
             <Trash2 className="h-4 w-4" />
@@ -363,7 +383,7 @@ function AccountBlock({
           aria-expanded={showAdvanced}
         >
           <Settings2 className="h-3.5 w-3.5" />
-          Use your own app registration (advanced)
+          {t('settings:connectors.useOwnAppRegistration')}
           {showAdvanced ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </button>
       )}
@@ -379,7 +399,7 @@ function AccountBlock({
         <div className="space-y-3">
           {visibleFields.map((field) => {
             const view = summary.fields.find((f) => f.key === field.key)
-            const placeholder = field.secret && view?.hasValue ? '•••••••• (saved)' : field.placeholder
+            const placeholder = field.secret && view?.hasValue ? t('settings:connectors.savedFieldPlaceholder') : field.placeholder
             return (
               <div key={field.key}>
                 <label htmlFor={`${instanceId}-${field.key}`} className="text-sm font-medium">
@@ -405,7 +425,7 @@ function AccountBlock({
 
       {containers.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium">Sources to sync</p>
+          <p className="text-sm font-medium">{t('settings:connectors.sourcesHeading')}</p>
           {containers.map((c) => {
             const persisted = sourceState.get(c.externalId)
             const enabled = persisted ? persisted.enabled : true
@@ -416,11 +436,11 @@ function AccountBlock({
                   <span className="ml-2 text-xs text-muted-foreground">{c.kind}</span>
                   {persisted?.lastSyncAt && (
                     <span className="ml-2 text-xs text-muted-foreground">
-                      · last {new Date(persisted.lastSyncAt).toLocaleString()}
+                      {t('settings:connectors.sourceLastSyncPrefix')}{new Date(persisted.lastSyncAt).toLocaleString()}
                     </span>
                   )}
                 </div>
-                <Switch checked={enabled} onCheckedChange={(v) => toggleSource(c.externalId, v)} aria-label={`Sync ${c.name}`} />
+                <Switch checked={enabled} onCheckedChange={(v) => toggleSource(c.externalId, v)} aria-label={t('settings:connectors.syncSourceAriaLabel', { name: c.name })} />
               </div>
             )
           })}
@@ -430,17 +450,17 @@ function AccountBlock({
       <div className="flex flex-wrap items-center gap-2">
         {visibleFields.length > 0 && (
           <Button onClick={save} disabled={busy !== null || !dirty} size="sm">
-            {busy === 'save' ? 'Saving…' : dirty ? 'Save' : 'Saved'}
+            {busy === 'save' ? t('settings:connectors.accountSaving') : dirty ? t('settings:connectors.accountSave') : t('settings:connectors.accountSaved')}
           </Button>
         )}
         {isConnected ? (
           <Button variant="outline" size="sm" onClick={disconnect} disabled={busy !== null}>
-            <PlugZap className="mr-1.5 h-4 w-4" /> Disconnect
+            <PlugZap className="mr-1.5 h-4 w-4" /> {t('settings:connectors.disconnect')}
           </Button>
         ) : (
           <>
             <Button size="sm" onClick={() => connect('auth-code')} disabled={busy !== null}>
-              <Plug className="mr-1.5 h-4 w-4" /> {busy === 'connect' ? 'Connecting…' : 'Connect'}
+              <Plug className="mr-1.5 h-4 w-4" /> {busy === 'connect' ? t('settings:connectors.accountConnecting') : t('settings:connectors.accountConnect')}
             </Button>
             {interactiveAuth && (
               <button
@@ -449,18 +469,18 @@ function AccountBlock({
                 disabled={busy !== null}
                 className="text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
               >
-                Use a code instead
+                {t('settings:connectors.useCodeInstead')}
               </button>
             )}
           </>
         )}
         {isConnected && descriptor.capabilityKinds.includes('sources') && (
           <Button variant="outline" size="sm" onClick={sync} disabled={busy !== null}>
-            <RefreshCw className={`mr-1.5 h-4 w-4 ${busy === 'sync' ? 'animate-spin' : ''}`} /> Sync now
+            <RefreshCw className={`mr-1.5 h-4 w-4 ${busy === 'sync' ? 'animate-spin' : ''}`} /> {t('settings:connectors.syncNow')}
           </Button>
         )}
         {status.lastSyncAt && (
-          <span className="text-xs text-muted-foreground">Last synced {new Date(status.lastSyncAt).toLocaleString()}</span>
+          <span className="text-xs text-muted-foreground">{t('settings:connectors.lastSyncedPrefix')}{new Date(status.lastSyncAt).toLocaleString()}</span>
         )}
       </div>
     </div>
@@ -484,6 +504,7 @@ function ConnectorTypeCard({
   onAdded: (s: ConnectorSummary) => void
   onRemoved: (instanceId: string) => void
 }) {
+  const { t } = useTranslation()
   const descriptor = accounts[0]?.descriptor
   const multi = accounts[0]?.multiInstance ?? false
   const [adding, setAdding] = useState(false)
@@ -494,7 +515,7 @@ function ConnectorTypeCard({
       const created = await window.electronAPI.connectors.addInstance(descriptorId)
       onAdded(created)
     } catch (e) {
-      toast.error(`Add account failed: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(t('settings:connectors.addAccountFailed', { message: e instanceof Error ? e.message : String(e) }))
     } finally {
       setAdding(false)
     }
@@ -511,7 +532,7 @@ function ConnectorTypeCard({
         </div>
         {multi && (
           <Button variant="outline" size="sm" onClick={addAccount} disabled={adding}>
-            <Plus className="mr-1.5 h-4 w-4" /> {adding ? 'Adding…' : 'Add account'}
+            <Plus className="mr-1.5 h-4 w-4" /> {adding ? t('settings:connectors.addingAccount') : t('settings:connectors.addAccount')}
           </Button>
         )}
       </div>
@@ -532,6 +553,7 @@ function ConnectorTypeCard({
 }
 
 export function ConnectorsSettings() {
+  const { t } = useTranslation()
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -572,9 +594,9 @@ export function ConnectorsSettings() {
   const groups = useMemo(() => {
     const map = new Map<string, ConnectorSummary[]>()
     for (const c of connectors) {
-      const t = c.descriptor.id
-      if (!map.has(t)) map.set(t, [])
-      map.get(t)!.push(c)
+      const descriptorId = c.descriptor.id
+      if (!map.has(descriptorId)) map.set(descriptorId, [])
+      map.get(descriptorId)!.push(c)
     }
     return [...map.entries()]
   }, [connectors])
@@ -582,17 +604,16 @@ export function ConnectorsSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Connectors</CardTitle>
+        <CardTitle>{t('settings:connectors.title')}</CardTitle>
         <CardDescription>
-          Connect external systems — Microsoft 365 (calendar + contacts) and Slack — to feed meetings, people, and
-          knowledge into your library. Microsoft 365 supports multiple accounts (e.g. personal + work).
+          {t('settings:connectors.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading connectors…</p>
+          <p className="text-sm text-muted-foreground">{t('settings:connectors.loading')}</p>
         ) : groups.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No connectors available.</p>
+          <p className="text-sm text-muted-foreground">{t('settings:connectors.empty')}</p>
         ) : (
           groups.map(([type, accounts]) => (
             <ConnectorTypeCard

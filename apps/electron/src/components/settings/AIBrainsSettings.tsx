@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -13,12 +15,19 @@ import type {
 } from '../../../electron/preload/index'
 
 /** Human labels for capability chips (spec §D: generate/chat/embed/audio/agentic). */
-const CAPABILITY_LABEL: Record<BrainCapability, string> = {
-  generate: 'Generate',
-  chat: 'Chat',
-  embed: 'Embed',
-  analyzeAudio: 'Audio',
-  agentic: 'Agentic',
+function capabilityLabel(t: TFunction, cap: BrainCapability): string {
+  switch (cap) {
+    case 'generate':
+      return t('settings:aiBrains.capabilityGenerate')
+    case 'chat':
+      return t('settings:aiBrains.capabilityChat')
+    case 'embed':
+      return t('settings:aiBrains.capabilityEmbed')
+    case 'analyzeAudio':
+      return t('settings:aiBrains.capabilityAudio')
+    case 'agentic':
+      return t('settings:aiBrains.capabilityAgentic')
+  }
 }
 
 /**
@@ -27,13 +36,13 @@ const CAPABILITY_LABEL: Record<BrainCapability, string> = {
  * present, falling back to a generic label keyed on the auth method. Green when
  * configured, muted otherwise (spec §D).
  */
-function authBadge(auth: BrainAuthStatus): { text: string; ok: boolean } {
+function authBadge(t: TFunction, auth: BrainAuthStatus): { text: string; ok: boolean } {
   if (auth.configured) {
     const generic =
-      auth.method === 'api-key' ? 'Key set' : auth.method === 'cli-login' ? 'Logged in' : 'Connected'
+      auth.method === 'api-key' ? t('settings:aiBrains.authKeySet') : auth.method === 'cli-login' ? t('settings:aiBrains.authLoggedIn') : t('settings:aiBrains.authConnected')
     return { text: auth.detail || generic, ok: true }
   }
-  const generic = auth.method === 'cli-login' || auth.method === 'oauth' ? 'Needs login' : 'Not configured'
+  const generic = auth.method === 'cli-login' || auth.method === 'oauth' ? t('settings:aiBrains.authNeedsLogin') : t('settings:aiBrains.authNotConfigured')
   return { text: auth.detail || generic, ok: false }
 }
 
@@ -41,7 +50,8 @@ const OK_BADGE = 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:
 const MUTED_BADGE = 'border-border bg-muted text-muted-foreground'
 
 function AuthBadge({ auth }: { auth: BrainAuthStatus }) {
-  const { text, ok } = authBadge(auth)
+  const { t } = useTranslation()
+  const { text, ok } = authBadge(t, auth)
   return (
     <Badge className={ok ? OK_BADGE : MUTED_BADGE} title={auth.detail}>
       <span
@@ -61,6 +71,7 @@ function BrainRow({
   brain: BrainListItem
   onToggle: (id: BrainId, enabled: boolean) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="rounded-lg border border-border p-4 flex flex-wrap items-center justify-between gap-4">
       <div className="min-w-0 space-y-2">
@@ -71,7 +82,7 @@ function BrainRow({
         <div className="flex flex-wrap gap-1.5">
           {brain.capabilities.map((cap) => (
             <Badge key={cap} variant="neutral">
-              {CAPABILITY_LABEL[cap] ?? cap}
+              {capabilityLabel(t, cap) ?? cap}
             </Badge>
           ))}
         </div>
@@ -79,16 +90,16 @@ function BrainRow({
 
       <div className="flex items-center gap-6 shrink-0">
         <label className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
-          <span>Enabled</span>
+          <span>{t('settings:aiBrains.enabledLabel')}</span>
           <Switch
             checked={brain.enabled}
             onCheckedChange={(v) => onToggle(brain.id, v)}
-            aria-label={`Enable ${brain.label}`}
+            aria-label={t('settings:aiBrains.enableAriaLabel', { label: brain.label })}
           />
         </label>
         <label className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
-          <span>Default</span>
-          <RadioGroupItem value={brain.id} aria-label={`Set ${brain.label} as default brain`} />
+          <span>{t('settings:aiBrains.defaultLabel')}</span>
+          <RadioGroupItem value={brain.id} aria-label={t('settings:aiBrains.setDefaultAriaLabel', { label: brain.label })} />
         </label>
       </div>
     </div>
@@ -102,6 +113,7 @@ function BrainRow({
  * each brain, pick the global default, and see its live auth status.
  */
 export function AIBrainsSettings() {
+  const { t } = useTranslation()
   const [brains, setBrains] = useState<BrainListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [embedRoute, setEmbedRoute] = useState<string>('auto')
@@ -141,17 +153,17 @@ export function AIBrainsSettings() {
         }
         toast.success(
           value === 'auto'
-            ? 'Embedding provider set to auto.'
-            : 'Embedding provider switched — re-indexing starts in the background; the previous index stays as a backup.'
+            ? t('settings:aiBrains.embedRouteSetAuto')
+            : t('settings:aiBrains.embedRouteSwitched')
         )
         void load()
       } catch (e) {
         setEmbedRoute(previous)
-        toast.error(`Couldn't switch embedding provider: ${e instanceof Error ? e.message : String(e)}`)
+        toast.error(t('settings:aiBrains.embedRouteErrorToast', { message: e instanceof Error ? e.message : String(e) }))
         void load()
       }
     },
-    [embedRoute, load]
+    [embedRoute, load, t]
   )
 
   const defaultId = brains.find((b) => b.isDefault)?.id ?? ''
@@ -163,11 +175,11 @@ export function AIBrainsSettings() {
       try {
         await window.electronAPI.brains.setEnabled({ id, enabled })
       } catch (e) {
-        toast.error(`Couldn't update brain: ${e instanceof Error ? e.message : String(e)}`)
+        toast.error(t('settings:aiBrains.updateBrainErrorToast', { message: e instanceof Error ? e.message : String(e) }))
         void load()
       }
     },
-    [load]
+    [load, t]
   )
 
   const handleDefault = useCallback(
@@ -177,29 +189,29 @@ export function AIBrainsSettings() {
       try {
         await window.electronAPI.brains.setDefault({ id: brainId })
       } catch (e) {
-        toast.error(`Couldn't set default brain: ${e instanceof Error ? e.message : String(e)}`)
+        toast.error(t('settings:aiBrains.setDefaultErrorToast', { message: e instanceof Error ? e.message : String(e) }))
         void load()
       }
     },
-    [load]
+    [load, t]
   )
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>AI Brains</CardTitle>
-        <CardDescription>Choose which AI provider powers analysis, chat, and outputs.</CardDescription>
+        <CardTitle>{t('settings:aiBrains.title')}</CardTitle>
+        <CardDescription>{t('settings:aiBrains.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading brains…</p>
+          <p className="text-sm text-muted-foreground">{t('settings:aiBrains.loading')}</p>
         ) : brains.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No AI brains available.</p>
+          <p className="text-sm text-muted-foreground">{t('settings:aiBrains.empty')}</p>
         ) : (
           <RadioGroup
             value={defaultId}
             onValueChange={handleDefault}
-            aria-label="Default AI brain"
+            aria-label={t('settings:aiBrains.defaultBrainAriaLabel')}
             className="gap-3"
           >
             {brains.map((brain) => (
@@ -211,22 +223,21 @@ export function AIBrainsSettings() {
         {!loading && embedBrains.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
             <div className="min-w-0">
-              <p className="text-sm font-medium">Embedding provider</p>
+              <p className="text-sm font-medium">{t('settings:aiBrains.embedProviderLabel')}</p>
               <p className="text-xs text-muted-foreground">
-                Which model powers semantic search. Switching re-indexes in the background — the
-                previous provider&apos;s chunks stay as an instant backup.
+                {t('settings:aiBrains.embedProviderHint')}
               </p>
             </div>
             <Select value={embedRoute} onValueChange={handleEmbedRoute}>
-              <SelectTrigger className="w-64" aria-label="Embedding provider">
+              <SelectTrigger className="w-64" aria-label={t('settings:aiBrains.embedProviderLabel')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="auto">Auto (Gemini when configured)</SelectItem>
+                <SelectItem value="auto">{t('settings:aiBrains.embedAutoOption')}</SelectItem>
                 {embedBrains.map((b) => (
                   <SelectItem key={b.id} value={b.id} disabled={!b.auth.configured}>
                     {b.label}
-                    {!b.auth.configured ? ' — not ready' : ''}
+                    {!b.auth.configured ? t('settings:aiBrains.notReadySuffix') : ''}
                   </SelectItem>
                 ))}
               </SelectContent>
