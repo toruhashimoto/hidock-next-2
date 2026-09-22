@@ -1112,16 +1112,18 @@ export function Library() {
     // SOFT delete = Move to Trash: hidden + excluded from AI, RESTORABLE.
     // Nothing is erased from disk and device copies stay (device-only rows
     // are the exception — those are deleted from the hardware since the row
-    // has no local existence at all). The base sentence and its suffix are each
-    // complete, independent keys (never concatenated at the t() level) so
-    // Japanese can reorder either independently; only the plain '+=' join of
-    // two complete sentences happens in code, same as the permanent-delete
-    // dialog description above.
-    const description = `${t('confirm.moveToTrashDescriptionBase', { count: selectedRecordings.length })}${
+    // has no local existence at all). Fix round 1: the base sentence and its
+    // suffix used to be two separately-selected t() calls spliced together
+    // (`${t(base)}${t(suffix)}`) — a rule-1 violation even though each half
+    // was already "complete," because Japanese can't reorder the halves
+    // relative to each other. Merged into one complete key per branch so a
+    // translator sees and controls the whole sentence.
+    const description = t(
       hasLocalFiles && hasDeviceFiles
-        ? t('confirm.moveToTrashBothSuffix')
-        : t('confirm.moveToTrashDefaultSuffix')
-    }`
+        ? 'confirm.moveToTrashDescriptionBothFiles'
+        : 'confirm.moveToTrashDescriptionDefault',
+      { count: selectedRecordings.length }
+    )
 
     setConfirmDialog({
       open: true,
@@ -1187,17 +1189,17 @@ export function Library() {
       }),
       { transcripts: 0, actionItems: 0, embeddings: 0, captures: 0, artifacts: 0 }
     )
-    // Each entry is a complete, independently-pluralized clause; ', ' is plain
-    // structural list-join glue (not a fixed two-field separator — rule 5 targets
-    // the latter), same treatment as the diagnostic-line joins Task 11a used for
-    // ProcessingRunChips.
+    // Each entry is a complete, independently-pluralized clause; the join glue
+    // itself is a locale-sensitive separator (rule 5: a Japanese list uses "、"
+    // not ", "), so it is catalogued too (fix round 1) even though the array
+    // items it joins are independent facts, not fragments of one sentence.
     const impactSummary = [
       impactTotals.transcripts > 0 ? t('toast.impactTranscripts', { count: impactTotals.transcripts }) : '',
       impactTotals.actionItems > 0 ? t('toast.impactActionItems', { count: impactTotals.actionItems }) : '',
       impactTotals.embeddings > 0 ? t('toast.impactEmbeddings', { count: impactTotals.embeddings }) : '',
       impactTotals.captures > 0 ? t('toast.impactCaptures', { count: impactTotals.captures }) : '',
       impactTotals.artifacts > 0 ? t('toast.impactArtifacts', { count: impactTotals.artifacts }) : '',
-    ].filter(Boolean).join(', ')
+    ].filter(Boolean).join(t('page.impactSeparator'))
 
     const execute = async (alsoDeleteFromDevice: boolean) => {
       setBulkProcessing(true)
@@ -1323,7 +1325,8 @@ export function Library() {
 
         const removed = localPurged + deviceOnlyDeleted
         // As with impactSummary above: each entry is a complete, independent
-        // clause (own pluralization), '; ' is structural list-join glue.
+        // clause (own pluralization); the '; ' join glue is catalogued (fix
+        // round 1) since a locale can change a list separator.
         const issues = [
           failures.length > 0
             ? (failures.length > 1
@@ -1340,9 +1343,6 @@ export function Library() {
             ? t('toast.deviceRemainsMessage', { count: deviceRemains })
             : '',
         ].filter(Boolean)
-        const deviceNote = deviceDeleted > 0
-          ? t('toast.deviceDeletedNote', { count: deviceDeleted })
-          : ''
 
         if (issues.length > 0) {
           const oneFailedDeviceOnly =
@@ -1361,15 +1361,29 @@ export function Library() {
               { action: { label: t('toast.retryActionLabel'), onClick: () => { void execute(true) } } }
             )
           } else {
+            // Fix round 1: previously `${t(itemsMsg)} ${issues.join('; ')}.${deviceNote}`
+            // spliced three independently-selected t() results end to end. The
+            // issues list itself stays a structural join (issueSeparator,
+            // catalogued above), but its joined text is now passed as an
+            // opaque {{issuesText}} value into ONE of three complete keys —
+            // the item count drives the standard _one/_other split, and the
+            // device-copy count's own singular/plural (a second, independent
+            // axis) is picked by key name, same technique as the permanent-
+            // delete dialog description above.
+            const issuesText = issues.join(t('page.issueSeparator'))
             toast.warning(
               t('toast.permanentDeletionCompletedWithIssuesTitle'),
-              `${t('toast.itemsPermanentlyDeletedMessage', { removed, count: selectedRecordings.length })} ${issues.join('; ')}.${deviceNote}`
+              deviceDeleted > 0
+                ? t(`toast.itemsPermanentlyDeletedMessageWithDeviceNote${deviceDeleted === 1 ? 'Singular' : 'Plural'}`, { removed, count: selectedRecordings.length, issuesText, deviceCount: deviceDeleted })
+                : t('toast.itemsPermanentlyDeletedMessageWithIssues', { removed, count: selectedRecordings.length, issuesText })
             )
           }
         } else {
           toast.success(
             t('toast.permanentlyDeletedTitle', { count: removed }),
-            `${t('toast.allLocalDataErasedMessage')}${deviceNote}`
+            deviceDeleted > 0
+              ? t('toast.allLocalDataErasedWithDeviceNote', { count: deviceDeleted })
+              : t('toast.allLocalDataErasedMessage')
           )
         }
       } finally {
@@ -1380,12 +1394,26 @@ export function Library() {
     }
 
     bulkPurgeFromDeviceRef.current = true
+    // Fix round 1: this used to splice a separately-selected device-copy
+    // suffix onto the impact-based sentence (`${A}${cond ? t(suffix) : ''}`).
+    // When deviceCopyCount is 0 there is nothing to splice — the impact-only
+    // key already IS the complete sentence, so that branch calls it directly.
+    // When deviceCopyCount > 0, the two independent plural axes (item count,
+    // device-copy count) are merged into one of 8 complete keys: i18next's
+    // `count` option drives the standard _one/_other split for the item
+    // count, while the device-copy count's own singular/plural is picked by
+    // key name (mirrors Task 11a's labelKey pattern) since one t() call can
+    // only auto-pluralize on a single `count`.
     const permanentDeleteDescription = allDeviceOnly
       ? t('confirm.erasePermanentDialogDescriptionDeviceOnly', { count: selectedRecordings.length })
-      : `${impactSummary
+      : deviceCopyCount > 0
+        ? t(
+            `confirm.deletePermanentDialogDescription${impactSummary ? 'WithImpact' : 'NoImpact'}DeviceCopy${deviceCopyCount === 1 ? 'Singular' : 'Plural'}`,
+            { count: selectedRecordings.length, impact: impactSummary, devCount: deviceCopyCount }
+          )
+        : impactSummary
           ? t('confirm.deletePermanentDialogDescriptionWithImpact', { count: selectedRecordings.length, impact: impactSummary })
           : t('confirm.deletePermanentDialogDescriptionNoImpact', { count: selectedRecordings.length })
-        }${deviceCopyCount > 0 ? t('confirm.deletePermanentDialogDeviceCopySuffix', { count: deviceCopyCount }) : ''}`
     setConfirmDialog({
       open: true,
       title: allDeviceOnly ? t('confirm.eraseFromDeviceTitle') : t('confirm.deletePermanentlyTitle'),
