@@ -43,8 +43,11 @@ export function initI18n(lng: SupportedLanguage): typeof i18n {
     // double-encodes apostrophes and ampersands in the English catalogue.
     interpolation: { escapeValue: false },
     // A key with no translation renders the English string (fallbackLng). In
-    // development we also want to know about it.
-    saveMissing: false,
+    // development we also want to know about it. i18next only invokes
+    // missingKeyHandler when saveMissing is truthy (it gates the call site,
+    // not just the "save to backend" behaviour) — saveMissing: false here
+    // would silently make the handler below dead code in every environment.
+    saveMissing: import.meta.env.DEV,
     missingKeyHandler: import.meta.env.DEV
       ? (_lngs, ns, key) => console.warn(`[i18n] missing key: ${ns}:${key}`)
       : undefined,
