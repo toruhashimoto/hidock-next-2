@@ -18,6 +18,7 @@
   "ribbon.currentTimeAriaLabel": "Current time",
   "ribbon.nowLabel": "Now",
   "ribbon.firstMeetingLabel": "First meeting",
+  "ribbon.firstMeetingSeparator": " · ",
   "ribbon.dayOverTitle": "That's a wrap for today",
   "ribbon.dayOverSummary_one": "{{count}} meeting · {{recorded}} recorded",
   "ribbon.dayOverSummary_other": "{{count}} meetings · {{recorded}} recorded",

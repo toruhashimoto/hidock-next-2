@@ -339,6 +339,13 @@ export function Today() {
     } finally {
       setLoading(false)
     }
+    // `t` intentionally excluded: `load` is depended on by two other effects
+    // (initial mount, calendar-sync resubscribe below) and must stay
+    // reference-stable across language switches, or both would re-fire on
+    // every change — including an unwanted extra briefing re-fetch. The only
+    // cost is that an in-flight error's fallback text keeps the language it
+    // was set in until the next load() call, which is an acceptable trade-off
+    // for an error-path-only string.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -662,7 +669,7 @@ export function Today() {
             )}
           >
             {formatTime(m.start_time)}
-            <span className="mx-0.5 opacity-50">–</span>
+            <span className="mx-0.5 opacity-50">{t('today:ribbon.timeRangeSeparator')}</span>
             {formatTime(m.end_time)}
           </span>
           <div className="min-w-0 flex-1">
@@ -1104,7 +1111,7 @@ export function Today() {
                           {formatMinutesUntil(firstUpcomingTiming?.minutes ?? 0).replace(/^in /, '')}
                         </div>
                         <div className="mt-1 text-sm text-foreground/70">
-                          {firstUpcoming.subject} · {formatTime(firstUpcoming.start_time)}
+                          {firstUpcoming.subject}{t('today:ribbon.firstMeetingSeparator')}{formatTime(firstUpcoming.start_time)}
                         </div>
                       </div>
                     </div>
