@@ -1,7 +1,7 @@
 {
-  "header.greetingMorning": "Good morning, Sebastián",
-  "header.greetingAfternoon": "Good afternoon, Sebastián",
-  "header.greetingEvening": "Good evening, Sebastián",
+  "header.greetingMorning": "Good morning",
+  "header.greetingAfternoon": "Good afternoon",
+  "header.greetingEvening": "Good evening",
   "header.stats": "<0>{{transcribed}}</0> meetings in your knowledge base · <2>{{indexed}}</2> memory chunks indexed · <4>{{pending}}</4> pending actions",
   "header.refreshButton": "Refresh",
 
