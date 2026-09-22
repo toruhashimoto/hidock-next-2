@@ -111,7 +111,7 @@ export function buildRemovesText(impact?: DeletePermanentDialogImpact): string {
 
   if (parts.length === 0) return FALLBACK
   if (parts.length === 1) return parts[0]
-  return `${parts.slice(0, -1).join(', ')}${i18n.t('library:deletePermanentDialog.listConjunction')}${parts[parts.length - 1]}`
+  return `${parts.slice(0, -1).join(i18n.t('library:deletePermanentDialog.listSeparator'))}${i18n.t('library:deletePermanentDialog.listConjunction')}${parts[parts.length - 1]}`
 }
 
 export function DeletePermanentDialog({

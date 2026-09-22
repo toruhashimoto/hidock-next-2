@@ -185,7 +185,7 @@ function cleanupKindLabel(kind: string): string {
 function joinParts(parts: string[]): string {
   if (parts.length === 0) return ''
   if (parts.length === 1) return parts[0]
-  return `${parts.slice(0, -1).join(', ')}${i18n.t('library:deletionCopy.listConjunction')}${parts[parts.length - 1]}`
+  return `${parts.slice(0, -1).join(i18n.t('library:deletionCopy.listSeparator'))}${i18n.t('library:deletionCopy.listConjunction')}${parts[parts.length - 1]}`
 }
 
 export function filesPendingBody(filename: string, kinds: string[]): string {
