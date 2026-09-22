@@ -41,6 +41,7 @@ import {
   classifyMeetingTimings,
   formatMinutesLeft,
   formatMinutesUntil,
+  formatMinutesUntilBare,
   formatMinutesSinceEnd,
   recordingOverlapsMeeting,
   allDayMeetingOnLocalDate,
@@ -1108,7 +1109,7 @@ export function Today() {
                       <div className="rounded-xl border border-primary/30 bg-primary/[0.04] p-5 shadow-sm">
                         <div className="text-xs font-medium uppercase tracking-wide text-primary/70">{t('today:ribbon.firstMeetingLabel')}</div>
                         <div className="mt-1 text-2xl font-bold tracking-tight text-foreground">
-                          {formatMinutesUntil(firstUpcomingTiming?.minutes ?? 0).replace(/^in /, '')}
+                          {formatMinutesUntilBare(firstUpcomingTiming?.minutes ?? 0)}
                         </div>
                         <div className="mt-1 text-sm text-foreground/70">
                           {firstUpcoming.subject}{t('today:ribbon.firstMeetingSeparator')}{formatTime(firstUpcoming.start_time)}

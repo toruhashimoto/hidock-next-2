@@ -200,6 +200,28 @@ export function formatMinutesUntil(minutes: number): string {
     : i18n.t('common:meetingTiming.inHoursMinutes', { h, m })
 }
 
+/**
+ * Bare "4 min" / "1 h 20 min" duration — same value as {@link formatMinutesUntil}
+ * without the leading connector word, for a hero/large-number display that
+ * supplies its own "next meeting" framing in surrounding text. A translated
+ * string is never safe to post-process with an English-only regex (e.g. the
+ * former `formatMinutesUntil(...).replace(/^in /, '')`): the Japanese value
+ * has no "in " prefix to strip, so the strip silently becomes a no-op and the
+ * connector word leaks into what is meant to be a bare number. This mirrors
+ * formatMinutesUntil's branch structure exactly, including returning the same
+ * `startingNow` copy at `minutes <= 0` (the old regex left "starting now"
+ * untouched too, since it doesn't start with "in ").
+ */
+export function formatMinutesUntilBare(minutes: number): string {
+  if (minutes <= 0) return i18n.t('common:meetingTiming.startingNow')
+  if (minutes < 60) return i18n.t('common:meetingTiming.bareMinutes', { n: minutes })
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m === 0
+    ? i18n.t('common:meetingTiming.bareHours', { n: h })
+    : i18n.t('common:meetingTiming.bareHoursMinutes', { h, m })
+}
+
 /** "ended 6 min ago" label for a meeting that just ran over. */
 export function formatMinutesSinceEnd(minutes: number): string {
   if (minutes <= 0) return i18n.t('common:meetingTiming.justEnded')
