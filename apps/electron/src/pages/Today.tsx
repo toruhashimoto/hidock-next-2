@@ -1272,7 +1272,7 @@ export function Today() {
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium">{a.title}</div>
                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          {a.type.replace(/_/g, ' ')}
+                          {t(`domain:actionableType.${a.type}.rawLabel`, { defaultValue: a.type.replace(/_/g, ' ') })}
                         </div>
                       </div>
                       <Button

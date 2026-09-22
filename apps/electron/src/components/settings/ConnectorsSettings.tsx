@@ -28,6 +28,38 @@ import type {
   SourceContainer,
 } from '@hidock/connectors'
 
+/**
+ * i18n note (Task 16-C): `descriptor.displayName`/`.description` and each
+ * `configFields[].label`/`.help` are plain English strings sent as-is by main
+ * (electron/main/services/connectors/m365/m365-connector.ts) — main has no
+ * i18n of its own (see Task 16-C's report for why that stays main's job).
+ * `help` in particular has no sub-id of its own: main picks one of two
+ * English strings for `clientId`'s help server-side (`HAS_DEFAULT_APP`) before
+ * it ever reaches the renderer, so an id-keyed lookup on `field.key` alone
+ * cannot distinguish them. Keying this map by the exact English text main
+ * currently sends sidesteps that — and gives the same graceful degradation an
+ * id-keyed lookup would: a string that changes on the main side (or a future
+ * connector's field that happens not to be catalogued) simply falls back to
+ * rendering that raw English, never a blank or a raw i18n key.
+ */
+const CONNECTOR_TEXT_KEYS: Record<string, string> = {
+  'Microsoft 365': 'connector.m365.displayName',
+  'Sync Outlook calendar events (with attendee emails) and contacts from Microsoft 365 via Microsoft Graph. Feeds meetings and the identity resolver.':
+    'connector.m365.description',
+  'Application (client) ID': 'connector.m365.field.clientId.label',
+  'Directory (tenant)': 'connector.m365.field.tenant.label',
+  'Optional. Leave blank to use the built-in HiDock app. Paste your own Entra app’s client ID to use your own registration.':
+    'connector.m365.field.clientId.helpDefault',
+  'From your Entra app registration → Overview.': 'connector.m365.field.clientId.helpNoDefault',
+  "Use 'common' for personal + work/school accounts, or your tenant ID / domain (e.g. contoso.onmicrosoft.com).":
+    'connector.m365.field.tenant.help'
+}
+
+function translateConnectorText(t: TFunction, raw: string): string {
+  const key = CONNECTOR_TEXT_KEYS[raw]
+  return key ? t(`domain:${key}`, { defaultValue: raw }) : raw
+}
+
 function statusMeta(t: TFunction, state: ConnectorStatusState): { label: string; className: string } {
   switch (state) {
     case 'disconnected':
@@ -403,7 +435,7 @@ function AccountBlock({
             return (
               <div key={field.key}>
                 <label htmlFor={`${instanceId}-${field.key}`} className="text-sm font-medium">
-                  {field.label}
+                  {translateConnectorText(t, field.label)}
                   {field.required && <span className="text-red-500"> *</span>}
                 </label>
                 <Input
@@ -416,7 +448,7 @@ function AccountBlock({
                   className="mt-1"
                   autoComplete="off"
                 />
-                {field.help && <p className="mt-1 text-xs text-muted-foreground">{field.help}</p>}
+                {field.help && <p className="mt-1 text-xs text-muted-foreground">{translateConnectorText(t, field.help)}</p>}
               </div>
             )
           })}
@@ -527,8 +559,8 @@ function ConnectorTypeCard({
     <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold">{descriptor.displayName}</h3>
-          <p className="mt-0.5 text-sm text-muted-foreground">{descriptor.description}</p>
+          <h3 className="font-semibold">{translateConnectorText(t, descriptor.displayName)}</h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">{translateConnectorText(t, descriptor.description)}</p>
         </div>
         {multi && (
           <Button variant="outline" size="sm" onClick={addAccount} disabled={adding}>

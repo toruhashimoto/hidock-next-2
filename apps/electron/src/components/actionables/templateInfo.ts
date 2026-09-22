@@ -7,7 +7,24 @@
  *
  * Dogfood B7 — evidence at the decision point: an "Approve & Generate" button is
  * only decidable if the user can see WHAT will be generated and WHERE it goes.
+ *
+ * i18n note (Task 16-C): `TEMPLATE_INFO` below is independent renderer-authored
+ * copy — its wording already differs from main's own `name`/`description`
+ * (that's the "plain-language" rewrite the comment above describes), so it is
+ * NOT translated here; doing so is a separate, larger task (ordinary UI-copy
+ * translation), not the "main sent English, renderer prints it raw" bug this
+ * task fixes. `ACTIONABLE_TYPE_LABELS`/`humanizeActionableType()` below ARE in
+ * scope: main sends only the actionable's `type` id (no label at all), the
+ * renderer invents the wording, and that renderer-invented English is what
+ * showed up untranslated on the Actionables page and (via a second, ad hoc
+ * humanization in `Today.tsx`) the Today screen's 次のアクション card. Both call
+ * sites are translated via the `domain` catalogue's `actionableType.<id>.*`
+ * keys, each keyed so its OWN pre-existing English fallback is preserved
+ * unchanged (see `domain.json` and `Today.tsx` for why the two sites use
+ * different key suffixes for the same id).
  */
+
+import i18n from '@/i18n'
 
 /** Where every generated output lands, regardless of template. */
 export const OUTPUT_DESTINATION =
@@ -94,7 +111,7 @@ const ACTIONABLE_TYPE_LABELS: Record<string, string> = {
 export function humanizeActionableType(type?: string | null): string {
   if (!type) return 'Suggestion'
   const known = ACTIONABLE_TYPE_LABELS[type]
-  if (known) return known
+  if (known) return i18n.t(`domain:actionableType.${type}.label`, { defaultValue: known })
   const words = type.replace(/_/g, ' ').trim()
   return words.charAt(0).toUpperCase() + words.slice(1)
 }

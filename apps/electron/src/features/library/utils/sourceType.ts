@@ -137,7 +137,26 @@ export function normalizeArtifactTypeDescriptors(
               get label() { return noteLabel() },
               get pluralLabel() { return notePluralLabel() }
             }
-          : { ...descriptor, extensions: [...descriptor.extensions], capabilities: [...descriptor.capabilities] }
+          : {
+              // Main (electron/main/services/artifact-types.ts,
+              // artifact-handlers.ts) has no i18n of its own and sends
+              // `label`/`pluralLabel` as plain English strings — see the
+              // file-level i18n note. A bare `{ ...descriptor }` here would
+              // bake that English string in permanently (same spread-bakes-
+              // getters hazard as the 'note' branch above). Look the id up in
+              // the `domain` catalogue instead; a type main adds later that
+              // isn't catalogued yet still renders, just in main's English,
+              // via the `defaultValue` fallback.
+              ...descriptor,
+              extensions: [...descriptor.extensions],
+              capabilities: [...descriptor.capabilities],
+              get label() {
+                return i18n.t(`domain:artifactType.${id}.label`, { defaultValue: descriptor.label })
+              },
+              get pluralLabel() {
+                return i18n.t(`domain:artifactType.${id}.pluralLabel`, { defaultValue: descriptor.pluralLabel })
+              }
+            }
       )
     }
   }

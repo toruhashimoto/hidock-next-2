@@ -30,7 +30,7 @@ describe('initI18n', () => {
 
   it('exposes the supported languages and namespaces', () => {
     expect(SUPPORTED_LANGUAGES).toEqual(['en', 'ja'])
-    expect(NAMESPACES).toEqual(['common', 'layout', 'library', 'device', 'settings', 'today'])
+    expect(NAMESPACES).toEqual(['common', 'layout', 'library', 'device', 'settings', 'today', 'domain'])
   })
 
   it('warns via console.warn when a key is missing from every catalogue (DEV only)', () => {

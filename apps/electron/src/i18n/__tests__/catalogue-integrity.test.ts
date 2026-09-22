@@ -42,6 +42,8 @@ import enSettings from '../locales/en/settings.json'
 import jaSettings from '../locales/ja/settings.json'
 import enToday from '../locales/en/today.json'
 import jaToday from '../locales/ja/today.json'
+import enDomain from '../locales/en/domain.json'
+import jaDomain from '../locales/ja/domain.json'
 
 const CATALOGUES: Record<string, { en: Record<string, string>; ja: Record<string, string> }> = {
   common: { en: enCommon, ja: jaCommon },
@@ -49,7 +51,8 @@ const CATALOGUES: Record<string, { en: Record<string, string>; ja: Record<string
   library: { en: enLibrary, ja: jaLibrary },
   device: { en: enDevice, ja: jaDevice },
   settings: { en: enSettings, ja: jaSettings },
-  today: { en: enToday, ja: jaToday }
+  today: { en: enToday, ja: jaToday },
+  domain: { en: enDomain, ja: jaDomain }
 }
 
 /** The set of `{{name}}` interpolation placeholders used in an i18next value. */

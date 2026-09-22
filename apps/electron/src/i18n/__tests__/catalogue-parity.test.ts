@@ -22,6 +22,8 @@ import enSettings from '../locales/en/settings.json'
 import jaSettings from '../locales/ja/settings.json'
 import enToday from '../locales/en/today.json'
 import jaToday from '../locales/ja/today.json'
+import enDomain from '../locales/en/domain.json'
+import jaDomain from '../locales/ja/domain.json'
 
 const CATALOGUES: Record<string, { en: object; ja: object }> = {
   common: { en: enCommon, ja: jaCommon },
@@ -29,7 +31,8 @@ const CATALOGUES: Record<string, { en: object; ja: object }> = {
   library: { en: enLibrary, ja: jaLibrary },
   device: { en: enDevice, ja: jaDevice },
   settings: { en: enSettings, ja: jaSettings },
-  today: { en: enToday, ja: jaToday }
+  today: { en: enToday, ja: jaToday },
+  domain: { en: enDomain, ja: jaDomain }
 }
 
 /**
