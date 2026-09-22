@@ -2,7 +2,7 @@
   "header.greetingMorning": "Sebastiánさん、おはようございます",
   "header.greetingAfternoon": "Sebastiánさん、こんにちは",
   "header.greetingEvening": "Sebastiánさん、こんばんは",
-  "header.stats": "ナレッジベースの会議<0>{{transcribed}}</0>件 · インデックス済みのメモリチャンク<2>{{indexed}}</2>件 · 保留中のアクション<4>{{pending}}</4>件",
+  "header.stats": "ナレッジベースの会議<0>{{transcribed}}</0>件 · インデックス済みのメモリチャンク<2>{{indexed}}</2>個 · 保留中のアクション<4>{{pending}}</4>件",
   "header.refreshButton": "更新",
 
   "errors.loadBriefingFailedFallback": "ブリーフィングの読み込みに失敗しました",
