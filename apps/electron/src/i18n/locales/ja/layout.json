@@ -3,7 +3,6 @@
   "brand.next": "Next",
   "brand.goHome": "ホームに戻る",
   "brand.goHomeTitle": "HiDock Next — ホームに戻る",
-
   "titleBar.searchPlaceholder": "ナレッジ、人物、プロジェクトを検索…",
   "titleBar.searchAriaLabel": "ナレッジ、人物、プロジェクトを検索",
   "titleBar.settings": "設定",
@@ -24,7 +23,6 @@
   "titleBar.cancel": "キャンセル",
   "titleBar.restartConfirm": "再起動",
   "titleBar.deviceOptions": "デバイスオプション",
-
   "sidebar.knowledge": "ナレッジ",
   "sidebar.organization": "組織",
   "sidebar.actions": "アクション",
@@ -46,7 +44,6 @@
   "sidebar.countActionables_other": "未処理のアクションアイテム{{count}}件",
   "sidebar.countSync_other": "同期待ちのファイル{{count}}件",
   "sidebar.countGeneric": "{{count}}件",
-
   "toast.deviceConnectedTitle": "デバイスに接続しました",
   "toast.deviceConnectedDescription": "{{model}} を使用できます",
   "toast.deviceConnectedFallbackModel": "デバイス",
@@ -54,7 +51,6 @@
   "toast.deviceDisconnectedDescription": "HiDock との接続が切断されました",
   "toast.connectionErrorTitle": "接続エラー",
   "toast.connectionErrorFallback": "デバイスへの接続に失敗しました",
-
   "userMenu.themeLight": "ライト",
   "userMenu.themeDark": "ダーク",
   "userMenu.themeSystem": "システム",
@@ -72,7 +68,6 @@
   "userMenu.versionUnknown": "不明",
   "userMenu.platform": "プラットフォーム",
   "userMenu.repository": "リポジトリ",
-
   "status.queued": "キュー待ち",
   "status.transcribing": "文字起こし中…",
   "status.done": "完了",
@@ -81,7 +76,6 @@
   "status.cancelled": "キャンセル済み",
   "status.downloadingProgress": "ダウンロード中… {{progress}}%",
   "status.startingDownload": "ダウンロードを開始しています…",
-
   "operations.title": "処理状況",
   "operations.openDetailAriaLabel": "処理の詳細を開く",
   "operations.detailDialogAriaLabel": "処理の詳細",
@@ -106,9 +100,9 @@
   "operations.close": "閉じる",
   "operations.noActiveOperations": "実行中の処理はありません。",
   "operations.downloadsHeading": "ダウンロード",
-  "operations.viewSource": "ソースを表示",
-  "operations.sourceUnavailable": "ソースが利用できません",
-  "operations.sourceUnavailableInLibrary": "このソースはライブラリに存在しません。",
+  "operations.viewSource": "項目を表示",
+  "operations.sourceUnavailable": "項目が利用できません",
+  "operations.sourceUnavailableInLibrary": "この項目はライブラリに存在しません。",
   "operations.fileUnavailableInLibrary": "このファイルはライブラリで利用できません。",
   "operations.finishedDownloadsCleared": "完了したダウンロードをクリアしました",
   "operations.dismiss": "閉じる",
@@ -135,7 +129,6 @@
   "operations.copyErrorFor": "{{filename}} のエラーをコピー",
   "operations.copied": "コピーしました",
   "operations.copyError": "エラーをコピー",
-
   "notifications.title": "通知",
   "notifications.triggerTitle": "通知と処理状況",
   "notifications.ariaLabelActive_other": "通知: 実行中の処理{{count}}件",
@@ -146,7 +139,6 @@
   "notifications.summaryFailed": "失敗{{errors}}件",
   "notifications.cancelDownloadTitle": "ダウンロードをキャンセル",
   "notifications.viewAllInOperations": "「処理状況」ですべて表示",
-
   "activityLogButton.title": "アクティビティログ",
   "activityLogButton.countAriaLabel_other": "アクティビティログ: {{count}}件",
   "activityLogButton.countAriaLabelWithErrors_other": "アクティビティログ: {{count}}件、エラーまたは警告あり",
@@ -156,12 +148,9 @@
   "activityLogButton.close": "閉じる",
   "activityLogButton.noActivity": "アクティビティはありません。",
   "activityLogButton.detailsSeparator": "— ",
-
   "dialog.close": "閉じる",
-
   "assistant.title": "アシスタント",
   "assistant.loading": "アシスタントを読み込み中…",
-
   "app.loadingToday": "今日の予定を読み込み中…",
   "app.loadingCalendar": "カレンダーを読み込み中…",
   "app.loadingMeeting": "会議を読み込み中…",
