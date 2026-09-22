@@ -1,6 +1,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { vi } from 'vitest'
+import { initI18n } from '@/i18n'
 
 // NOTE: the D3 better-sqlite3 dual-ABI shim is intentionally NOT here. It is
 // scoped to the `main-db` vitest project via src/test/setup-db.ts so that
@@ -155,4 +156,11 @@ if (typeof window !== 'undefined') {
     window.HTMLElement.prototype.releasePointerCapture = vi.fn()
   }
 }
+
+// i18n — every suite runs in English. The existing 814 getByText()/findByText()
+// assertions across 64 files assert the English strings verbatim, so they double
+// as proof that the extraction into catalogues did not change a single rendered
+// string. A test that wants Japanese calls initI18n('ja') itself and restores
+// 'en' afterwards.
+initI18n('en')
 
