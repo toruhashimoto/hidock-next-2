@@ -1,6 +1,7 @@
 import { memo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertCircle, Download, Trash2, Wand2, Sparkles, FileText, RefreshCw, AudioLines, MoreHorizontal, Calendar, EyeOff, Eye, TrendingDown, Ban, RotateCcw, ArchiveRestore } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -48,13 +49,14 @@ import {
  * consumer) rather than mounting its own.
  */
 function ValueBadge({ recording }: { recording: UnifiedRecording }) {
+  const { t } = useTranslation('library')
   if (recording.quality !== 'low-value' && recording.quality !== 'garbage') return null
 
   const isGarbage = recording.quality === 'garbage'
   const Icon = isGarbage ? Ban : TrendingDown
-  const label = isGarbage ? 'Garbage' : 'Low value'
+  const label = isGarbage ? t('sourceRow.valueBadgeGarbageLabel') : t('sourceRow.valueBadgeLowValueLabel')
   const reasonsText = formatValueReasons(recording.qualityReasons)
-  const secondLine = reasonsText || (recording.qualitySource === 'user' ? 'Set by you' : 'AI-assessed')
+  const secondLine = reasonsText || (recording.qualitySource === 'user' ? t('sourceRow.valueBadgeSetByYouFallback') : t('sourceRow.valueBadgeAiAssessedFallback'))
 
   return (
     <Tooltip>
@@ -129,7 +131,7 @@ export const SourceRow = memo(function SourceRow({
   isSelected = false,
   isActiveSource = false,
   isDeleting = false,
-  deletionLabel = 'Removing local data…',
+  deletionLabel,
   compact = false,
   searchQuery = '',
   onSelectionChange,
@@ -150,6 +152,8 @@ export const SourceRow = memo(function SourceRow({
   downloadStatus,
   deviceConnected = false
 }: SourceRowProps) {
+  const { t } = useTranslation('library')
+  const resolvedDeletionLabel = deletionLabel ?? t('sourceRow.defaultDeletionLabel')
   const error = useLibraryStore((state) => state.recordingErrors.get(recording.id))
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
   const [contextMenuAnchor, setContextMenuAnchor] = useState<{ x: number; y: number } | null>(null)
@@ -244,18 +248,18 @@ export const SourceRow = memo(function SourceRow({
                 <span
                   className="mt-[2px] inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
                   role="img"
-                  aria-label="Personal — excluded from AI processing"
-                  title="Personal — kept on disk but excluded from AI processing and default surfaces"
+                  aria-label={t('sourceRow.personalBadgeAriaLabel')}
+                  title={t('sourceRow.personalBadgeTitle')}
                 >
                   <EyeOff className="h-2.5 w-2.5" aria-hidden="true" />
-                  Personal
+                  {t('sourceRow.personalBadgeLabel')}
                 </span>
               )}
             </div>
             <p className="flex items-center gap-1 text-xs text-muted-foreground truncate leading-tight mt-0.5">
               <TypeIcon
                 className="h-3 w-3 shrink-0 text-muted-foreground/70"
-                aria-label={`${sourceTypeLabel(sourceType)} source`}
+                aria-label={t('sourceRow.typeSourceAriaLabel', { type: sourceTypeLabel(sourceType) })}
               />
               <span className="truncate" title={secondaryTitle}>
                 {searchQuery ? highlightText(secondaryText, searchQuery) : secondaryText}
@@ -275,7 +279,7 @@ export const SourceRow = memo(function SourceRow({
               aria-live="polite"
             >
               <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
-              <span className="truncate">{deletionLabel}</span>
+              <span className="truncate">{resolvedDeletionLabel}</span>
             </div>
           )}
           {/* Value badge (F16/spec-003) — icon-only, low-value/garbage only. Sits
@@ -290,13 +294,13 @@ export const SourceRow = memo(function SourceRow({
                 <span
                   className="inline-flex shrink-0 text-primary/70"
                   role="img"
-                  aria-label={`Linked to calendar meeting: ${meeting.subject}`}
+                  aria-label={t('sourceRow.linkedToMeetingAriaLabel', { subject: meeting.subject })}
                 >
                   <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
                 </span>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Linked to calendar meeting</p>
+                <p>{t('sourceRow.linkedToMeetingTooltip')}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(meeting.start_time)}</p>
               </TooltipContent>
             </Tooltip>
@@ -307,7 +311,7 @@ export const SourceRow = memo(function SourceRow({
           {!isDeleting && error && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" aria-label="Processing error" />
+                <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" aria-label={t('sourceRow.processingErrorAriaLabel')} />
               </TooltipTrigger>
               <TooltipContent>
                 <p>{error.message}</p>
@@ -325,12 +329,12 @@ export const SourceRow = memo(function SourceRow({
               />
               <span>
                 {downloadStatus === 'pending'
-                  ? 'Queued'
+                  ? t('sourceRow.downloadStatusQueued')
                   : downloadStatus === 'cancelling'
-                    ? 'Cancelling'
+                    ? t('sourceRow.downloadStatusCancelling')
                     : (downloadProgress ?? 0) > 0
-                      ? `${downloadProgress}%`
-                      : 'Starting'}
+                      ? t('sourceRow.downloadProgressPercent', { progress: downloadProgress })
+                      : t('sourceRow.downloadStatusStarting')}
               </span>
             </div>
           )}
@@ -362,7 +366,7 @@ export const SourceRow = memo(function SourceRow({
                         pointerEvents: 'none'
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      aria-label="More actions"
+                      aria-label={t('sourceRow.moreActionsAriaLabel')}
                     >
                       <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
@@ -376,7 +380,7 @@ export const SourceRow = memo(function SourceRow({
                       size="icon-sm"
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => e.stopPropagation()}
-                      aria-label="More actions"
+                      aria-label={t('sourceRow.moreActionsAriaLabel')}
                     >
                       <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
@@ -386,13 +390,13 @@ export const SourceRow = memo(function SourceRow({
               {onAskAssistant && (
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAskAssistant(); }}>
                   <Sparkles className="h-4 w-4" aria-hidden="true" />
-                  Ask Assistant
+                  {t('sourceRow.askAssistantMenuItem')}
                 </DropdownMenuItem>
               )}
               {onGenerateOutput && (
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onGenerateOutput(); }}>
                   <FileText className="h-4 w-4" aria-hidden="true" />
-                  Generate output
+                  {t('sourceRow.generateOutputMenuItem')}
                 </DropdownMenuItem>
               )}
               {hasLocalPath(recording) && recording.transcriptionStatus !== 'complete' && onTranscribe && (
@@ -403,9 +407,9 @@ export const SourceRow = memo(function SourceRow({
                   {recording.transcriptionStatus === 'processing'
                     ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
                     : <Wand2 className="h-4 w-4" aria-hidden="true" />}
-                  {recording.transcriptionStatus === 'pending' ? 'Transcription queued'
-                    : recording.transcriptionStatus === 'processing' ? 'Transcribing…'
-                      : 'Transcribe'}
+                  {recording.transcriptionStatus === 'pending' ? t('sourceRow.transcriptionQueuedMenuItem')
+                    : recording.transcriptionStatus === 'processing' ? t('sourceRow.transcribingMenuItem')
+                      : t('sourceRow.transcribeMenuItem')}
                 </DropdownMenuItem>
               )}
               {hasLocalPath(recording) && onReprocessVibeVoice && (
@@ -414,7 +418,7 @@ export const SourceRow = memo(function SourceRow({
                   disabled={recording.transcriptionStatus === 'pending' || recording.transcriptionStatus === 'processing'}
                 >
                   <AudioLines className="h-4 w-4" aria-hidden="true" />
-                  Re-transcribe (VibeVoice)
+                  {t('sourceRow.reprocessVibeVoiceMenuItem')}
                 </DropdownMenuItem>
               )}
               {recording.location === 'device-only' && onDownload && !isDownloading && (
@@ -424,8 +428,8 @@ export const SourceRow = memo(function SourceRow({
                 >
                   <Download className="h-4 w-4" aria-hidden="true" />
                   {deviceConnected
-                    ? (downloadStatus === 'pending' ? 'Start queued download' : 'Download to computer')
-                    : 'Device not connected'}
+                    ? (downloadStatus === 'pending' ? t('sourceRow.startQueuedDownloadMenuItem') : t('sourceRow.downloadToComputerMenuItem'))
+                    : t('sourceRow.deviceNotConnectedMenuItem')}
                 </DropdownMenuItem>
               )}
               {onMarkPersonal && recording.location !== 'device-only' && (
@@ -435,8 +439,8 @@ export const SourceRow = memo(function SourceRow({
                     onClick={(e) => { e.stopPropagation(); onMarkPersonal(); }}
                   >
                     {recording.personal
-                      ? <><Eye className="h-4 w-4" aria-hidden="true" />Unmark personal</>
-                      : <><EyeOff className="h-4 w-4" aria-hidden="true" />Mark personal (ignore)</>}
+                      ? <><Eye className="h-4 w-4" aria-hidden="true" />{t('sourceReader.unmarkPersonalMenuItem')}</>
+                      : <><EyeOff className="h-4 w-4" aria-hidden="true" />{t('sourceReader.markPersonalMenuItem')}</>}
                   </DropdownMenuItem>
                 </>
               )}
@@ -451,20 +455,20 @@ export const SourceRow = memo(function SourceRow({
                     onClick={(e) => { e.stopPropagation(); onSetValueRating('low-value'); }}
                   >
                     <TrendingDown className="h-4 w-4" aria-hidden="true" />
-                    Mark low-value
+                    {t('sourceRow.markLowValueMenuItem')}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={(e) => { e.stopPropagation(); onSetValueRating('garbage'); }}
                   >
                     <Ban className="h-4 w-4" aria-hidden="true" />
-                    Mark garbage
+                    {t('sourceRow.markGarbageMenuItem')}
                   </DropdownMenuItem>
                   {recording.quality && recording.quality !== 'unrated' && (
                     <DropdownMenuItem
                       onClick={(e) => { e.stopPropagation(); onSetValueRating('unrated'); }}
                     >
                       <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                      Clear rating
+                      {t('sourceRow.clearRatingMenuItem')}
                     </DropdownMenuItem>
                   )}
                 </>

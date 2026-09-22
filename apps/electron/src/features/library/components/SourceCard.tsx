@@ -15,6 +15,7 @@ import {
   EyeOff,
   Eye
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { AudioPlayer } from '@/components/AudioPlayer'
@@ -80,6 +81,7 @@ export const SourceCard = memo(function SourceCard({
   onToggleTranscript,
   onNavigateToMeeting
 }: SourceCardProps) {
+  const { t } = useTranslation('library')
   const canPlay = hasLocalPath(recording)
   const error = useLibraryStore((state) => state.recordingErrors.get(recording.id))
 
@@ -115,8 +117,8 @@ export const SourceCard = memo(function SourceCard({
               <CardTitle className="text-base">{recording.title || recording.filename}</CardTitle>
               <CardDescription>
                 {formatDateTime(recording.dateRecorded.toISOString())}
-                {recording.size && ` • ${formatBytes(recording.size)}`}
-                {recording.duration && ` • ${formatDuration(recording.duration)}`}
+                {recording.size && <>{t('sourceCard.metaSeparator')}{formatBytes(recording.size)}</>}
+                {recording.duration && <>{t('sourceCard.metaSeparator')}{formatDuration(recording.duration)}</>}
               </CardDescription>
             </div>
           </div>
@@ -136,11 +138,11 @@ export const SourceCard = memo(function SourceCard({
               </span>
             )}
 
-            <Button variant="ghost" size="icon" onClick={onAskAssistant} title="Ask Assistant about this capture">
+            <Button variant="ghost" size="icon" onClick={onAskAssistant} title={t('sourceCard.askAssistantTitle')}>
               <Mic className="h-4 w-4" />
             </Button>
 
-            <Button variant="ghost" size="icon" onClick={onGenerateOutput} title="Generate artifact from this capture">
+            <Button variant="ghost" size="icon" onClick={onGenerateOutput} title={t('sourceCard.generateArtifactTitle')}>
               <FileText className="h-4 w-4" />
             </Button>
 
@@ -152,9 +154,9 @@ export const SourceCard = memo(function SourceCard({
                 onClick={onTranscribe}
                 disabled={recording.transcriptionStatus === 'pending' || recording.transcriptionStatus === 'processing'}
                 title={
-                  recording.transcriptionStatus === 'pending' ? 'Transcription queued' :
-                  recording.transcriptionStatus === 'processing' ? 'Transcription in progress' :
-                  'Transcribe this capture'
+                  recording.transcriptionStatus === 'pending' ? t('sourceCard.transcriptionQueuedTitle') :
+                  recording.transcriptionStatus === 'processing' ? t('sourceCard.transcriptionInProgressTitle') :
+                  t('sourceCard.transcribeTitle')
                 }
               >
                 {recording.transcriptionStatus === 'processing' ? (
@@ -172,7 +174,7 @@ export const SourceCard = memo(function SourceCard({
                 size="icon"
                 onClick={onReprocessVibeVoice}
                 disabled={recording.transcriptionStatus === 'pending' || recording.transcriptionStatus === 'processing'}
-                title="Re-transcribe with VibeVoice (local, speaker-diarized)"
+                title={t('sourceCard.reprocessVibeVoiceTitle')}
               >
                 <AudioLines className="h-4 w-4" />
               </Button>
@@ -187,12 +189,12 @@ export const SourceCard = memo(function SourceCard({
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <RefreshCw className={`h-4 w-4 ${isDownloading ? 'animate-spin' : ''}`} />
                   {downloadStatus === 'pending'
-                    ? 'Queued'
+                    ? t('sourceCard.downloadStatusQueued')
                     : (downloadProgress ?? 0) > 0
-                      ? `${downloadProgress}%`
+                      ? t('sourceCard.downloadProgressPercent', { progress: downloadProgress })
                       : downloadStatus === 'cancelling'
-                        ? 'Cancelling'
-                        : 'Starting'}
+                        ? t('sourceCard.downloadStatusCancelling')
+                        : t('sourceCard.downloadStatusStarting')}
                 </div>
               ) : (
                 <Button
@@ -200,7 +202,7 @@ export const SourceCard = memo(function SourceCard({
                   size="icon"
                   onClick={onDownload}
                   disabled={!deviceConnected}
-                  title={deviceConnected ? 'Download to computer' : 'Device not connected'}
+                  title={deviceConnected ? t('sourceCard.downloadToComputerTitle') : t('sourceCard.deviceNotConnectedTitle')}
                 >
                   <Download className="h-4 w-4" />
                 </Button>
@@ -219,10 +221,10 @@ export const SourceCard = memo(function SourceCard({
                 disabled={!canPlay || error?.type === 'audio_not_found'}
                 title={
                   error?.type === 'audio_not_found'
-                    ? 'File missing'
+                    ? t('sourceCard.fileMissingTitle')
                     : canPlay
-                      ? 'Play capture'
-                      : 'Download to play'
+                      ? t('sourceCard.playCaptureTitle')
+                      : t('sourceCard.downloadToPlayTitle')
                 }
               >
                 <Play className="h-4 w-4" />
@@ -236,8 +238,8 @@ export const SourceCard = memo(function SourceCard({
                 size="icon"
                 className="text-muted-foreground hover:text-foreground"
                 onClick={onMarkPersonal}
-                title={recording.personal ? 'Unmark personal' : 'Mark personal — exclude from AI processing'}
-                aria-label={recording.personal ? 'Unmark personal' : 'Mark personal'}
+                title={recording.personal ? t('sourceCard.unmarkPersonalLabel') : t('sourceCard.markPersonalTitle')}
+                aria-label={recording.personal ? t('sourceCard.unmarkPersonalLabel') : t('sourceCard.markPersonalAriaLabel')}
               >
                 {recording.personal ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               </Button>
@@ -299,9 +301,9 @@ export const SourceCard = memo(function SourceCard({
             >
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                <span className="font-medium text-sm">Transcript</span>
+                <span className="font-medium text-sm">{t('sourceCard.transcriptLabel')}</span>
                 {transcript.word_count && (
-                  <span className="text-xs text-muted-foreground">({transcript.word_count} words)</span>
+                  <span className="text-xs text-muted-foreground">{t('sourceCard.wordCountLabel', { count: transcript.word_count })}</span>
                 )}
               </div>
               {isTranscriptExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -312,7 +314,7 @@ export const SourceCard = memo(function SourceCard({
                 {/* Summary */}
                 {transcript.summary && (
                   <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Summary</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceCard.summaryLabel')}</p>
                     <p className="text-sm">{transcript.summary}</p>
                   </div>
                 )}
@@ -320,7 +322,7 @@ export const SourceCard = memo(function SourceCard({
                 {/* Action Items */}
                 {transcript.action_items && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Action Items</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceCard.actionItemsLabel')}</p>
                     <ul className="list-disc list-inside text-sm space-y-1">
                       {parseJsonArray<string>(transcript.action_items).map((item, i) => (
                         <li key={i}>{item}</li>
@@ -332,7 +334,7 @@ export const SourceCard = memo(function SourceCard({
                 {/* Key Points */}
                 {transcript.key_points && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Key Points</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceCard.keyPointsLabel')}</p>
                     <ul className="list-disc list-inside text-sm space-y-1">
                       {parseJsonArray<string>(transcript.key_points).map((item, i) => (
                         <li key={i}>{item}</li>
@@ -344,7 +346,7 @@ export const SourceCard = memo(function SourceCard({
                 {/* Topics */}
                 {transcript.topics && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Topics</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceCard.topicsLabel')}</p>
                     <div className="flex flex-wrap gap-1">
                       {parseJsonArray<string>(transcript.topics).map((topic, i) => (
                         <span key={i} className="px-2 py-0.5 bg-secondary text-xs rounded-full">
@@ -357,7 +359,7 @@ export const SourceCard = memo(function SourceCard({
 
                 {/* Full Text */}
                 <details className="mt-2">
-                  <summary className="text-sm text-primary cursor-pointer hover:underline">View full transcript</summary>
+                  <summary className="text-sm text-primary cursor-pointer hover:underline">{t('sourceCard.viewFullTranscriptSummary')}</summary>
                   <p className="mt-2 text-sm whitespace-pre-wrap bg-muted p-3 rounded-lg max-h-64 overflow-auto">
                     {transcript.full_text}
                   </p>
@@ -365,8 +367,8 @@ export const SourceCard = memo(function SourceCard({
 
                 {/* Metadata */}
                 <div className="flex gap-4 text-xs text-muted-foreground pt-2 border-t">
-                  {transcript.language && <span>Language: {transcript.language}</span>}
-                  {transcript.transcription_provider && <span>Provider: {transcript.transcription_provider}</span>}
+                  {transcript.language && <span>{t('sourceCard.languageLabel', { value: transcript.language })}</span>}
+                  {transcript.transcription_provider && <span>{t('sourceCard.providerLabel', { value: transcript.transcription_provider })}</span>}
                 </div>
               </div>
             )}
@@ -376,7 +378,7 @@ export const SourceCard = memo(function SourceCard({
         {/* Device-only notice */}
         {isDeviceOnly(recording) && (
           <p className="text-xs text-muted-foreground italic">
-            Download this capture to play it and generate a transcript.
+            {t('sourceCard.downloadToGenerateTranscriptMessage')}
           </p>
         )}
       </CardContent>

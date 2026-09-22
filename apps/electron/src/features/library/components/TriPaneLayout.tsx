@@ -24,6 +24,7 @@
  */
 
 import { useState, useEffect, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Sparkles,
   PinOff,
@@ -100,6 +101,7 @@ function clampListSize(size: number, max: number): number {
 }
 
 export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection = true }: TriPaneLayoutProps) {
+  const { t } = useTranslation('library')
   const panelSizes = useLibraryStore((state) => state.panelSizes)
   const setPanelSizes = useLibraryStore((state) => state.setPanelSizes)
   // Persisted list-column width + collapse state (remembered across nav/restart).
@@ -145,10 +147,10 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
     <SidePaneChromeWithCollapse
       side={side}
       icon={List}
-      title="Sources"
-      regionLabel="Recording list"
-      collapseLabel="Collapse the source list"
-      collapseTitle="Collapse the list — give the reader more room"
+      title={t('triPaneLayout.sourcesLabel')}
+      regionLabel={t('triPaneLayout.recordingListRegionLabel')}
+      collapseLabel={t('triPaneLayout.collapseSourceListLabel')}
+      collapseTitle={t('triPaneLayout.collapseSourceListTitle')}
       onCollapse={() => setListCollapsed(true)}
     >
       {leftPanel}
@@ -164,17 +166,17 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
     <SidePaneChromeWithCollapse
       side={side}
       icon={Sparkles}
-      title="Assistant"
-      regionLabel="AI Assistant"
-      collapseLabel="Collapse assistant"
-      collapseTitle="Collapse the assistant"
+      title={t('triPaneLayout.assistantLabel')}
+      regionLabel={t('triPaneLayout.aiAssistantRegionLabel')}
+      collapseLabel={t('triPaneLayout.collapseAssistantLabel')}
+      collapseTitle={t('triPaneLayout.collapseAssistantTitle')}
       onCollapse={() => setChatEmbeddedCollapsed(true)}
       extra={
         <button
           onClick={handleUnpin}
           className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Unpin assistant (float as overlay)"
-          title="Unpin — float the assistant as an overlay"
+          aria-label={t('triPaneLayout.unpinAssistantAriaLabel')}
+          title={t('triPaneLayout.unpinAssistantTitle')}
         >
           <PinOff className="h-4 w-4" aria-hidden={true} />
         </button>
@@ -188,10 +190,10 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
     <SideRail
       side={side}
       icon={side === 'left' ? PanelLeftOpen : PanelRightOpen}
-      label="Sources"
+      label={t('triPaneLayout.sourcesLabel')}
       onExpand={() => setListCollapsed(false)}
-      expandLabel="Open the source list"
-      expandTitle="Show sources"
+      expandLabel={t('triPaneLayout.openSourceListLabel')}
+      expandTitle={t('triPaneLayout.showSourcesTitle')}
     />
   )
 
@@ -199,15 +201,15 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
     <SideRail
       side={side}
       icon={side === 'left' ? PanelLeftOpen : PanelRightOpen}
-      label="Assistant"
+      label={t('triPaneLayout.assistantLabel')}
       onExpand={() => setChatEmbeddedCollapsed(false)}
-      expandLabel="Open the AI assistant for this source"
-      expandTitle="Ask about this source"
+      expandLabel={t('triPaneLayout.openAssistantLabel')}
+      expandTitle={t('sourceReader.askAboutSourceButton')}
     />
   )
 
   const readerPane = (
-    <div role="region" aria-label="Recording content viewer" className="h-full overflow-hidden">
+    <div role="region" aria-label={t('triPaneLayout.recordingContentViewerRegionLabel')} className="h-full overflow-hidden">
       {centerPanel}
     </div>
   )
@@ -217,14 +219,14 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
   if (!hasSelection) {
     return (
       <div className="relative flex h-full overflow-hidden">
-        <div role="region" aria-label="Recording list" className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div role="region" aria-label={t('triPaneLayout.recordingListRegionLabel')} className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5">
             <List className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <h3 className="text-sm font-semibold text-foreground">Sources</h3>
+            <h3 className="text-sm font-semibold text-foreground">{t('triPaneLayout.sourcesLabel')}</h3>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">{leftPanel}</div>
         </div>
-        <FloatingAssistant title="Assistant">{rightPanel}</FloatingAssistant>
+        <FloatingAssistant title={t('triPaneLayout.assistantLabel')}>{rightPanel}</FloatingAssistant>
       </div>
     )
   }
@@ -242,10 +244,10 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
                 ? 'border-b-2 border-primary text-primary'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
-            aria-label="Show recording list"
+            aria-label={t('triPaneLayout.showRecordingListAriaLabel')}
             aria-pressed={activeMobilePane === 'left'}
           >
-            Sources
+            {t('triPaneLayout.sourcesLabel')}
           </button>
           <button
             onClick={() => setActiveMobilePane('center')}
@@ -254,10 +256,10 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
                 ? 'border-b-2 border-primary text-primary'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
-            aria-label="Show recording content"
+            aria-label={t('triPaneLayout.showRecordingContentAriaLabel')}
             aria-pressed={activeMobilePane === 'center'}
           >
-            Content
+            {t('triPaneLayout.contentTabLabel')}
           </button>
           <button
             onClick={() => setActiveMobilePane('right')}
@@ -266,27 +268,27 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
                 ? 'border-b-2 border-primary text-primary'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
-            aria-label="Show AI assistant"
+            aria-label={t('triPaneLayout.showAiAssistantAriaLabel')}
             aria-pressed={activeMobilePane === 'right'}
           >
-            Assistant
+            {t('triPaneLayout.assistantLabel')}
           </button>
         </div>
 
         {/* Active Pane Content */}
         <div className="flex-1 overflow-hidden">
           {activeMobilePane === 'left' && (
-            <div role="region" aria-label="Recording list" className="h-full overflow-auto">
+            <div role="region" aria-label={t('triPaneLayout.recordingListRegionLabel')} className="h-full overflow-auto">
               {leftPanel}
             </div>
           )}
           {activeMobilePane === 'center' && (
-            <div role="region" aria-label="Recording content viewer" className="h-full overflow-hidden">
+            <div role="region" aria-label={t('triPaneLayout.recordingContentViewerRegionLabel')} className="h-full overflow-hidden">
               {centerPanel}
             </div>
           )}
           {activeMobilePane === 'right' && (
-            <div role="region" aria-label="AI Assistant" className="h-full overflow-hidden">
+            <div role="region" aria-label={t('triPaneLayout.aiAssistantRegionLabel')} className="h-full overflow-hidden">
               {rightPanel}
             </div>
           )}
@@ -307,7 +309,7 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
           className="flex-1"
         >
           <ResizablePanel defaultSize={panelSizes[0] ?? 30} minSize={25} maxSize={45} id="left-panel-tablet">
-            <div role="region" aria-label="Recording list" className="h-full overflow-auto">
+            <div role="region" aria-label={t('triPaneLayout.recordingListRegionLabel')} className="h-full overflow-auto">
               {leftPanel}
             </div>
           </ResizablePanel>
@@ -315,7 +317,7 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
           <ResizableHandle withHandle />
 
           <ResizablePanel defaultSize={panelSizes[1] ?? 70} minSize={40} id="center-panel-tablet">
-            <div role="region" aria-label="Recording content viewer" className="h-full overflow-hidden">
+            <div role="region" aria-label={t('triPaneLayout.recordingContentViewerRegionLabel')} className="h-full overflow-hidden">
               {centerPanel}
             </div>
           </ResizablePanel>
@@ -325,18 +327,18 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
         {showRightPanelTablet && (
           <div
             role="region"
-            aria-label="AI Assistant"
+            aria-label={t('triPaneLayout.aiAssistantRegionLabel')}
             className="w-80 max-w-[80vw] border-l border-border overflow-hidden shadow-lg bg-card flex-shrink-0 z-10 flex flex-col"
           >
             <div className="flex justify-between items-center px-3 py-2 border-b border-border bg-muted/40">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-                <h3 className="font-semibold text-sm text-foreground">Ask about this source</h3>
+                <h3 className="font-semibold text-sm text-foreground">{t('sourceReader.askAboutSourceButton')}</h3>
               </div>
               <button
                 onClick={() => setShowRightPanelTablet(false)}
                 className="p-1.5 hover:bg-muted rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Close AI assistant panel"
+                aria-label={t('triPaneLayout.closeAiAssistantPanelAriaLabel')}
               >
                 <X className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               </button>
@@ -349,10 +351,10 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
           <button
             onClick={() => setShowRightPanelTablet(true)}
             className="fixed bottom-6 right-6 bg-primary text-primary-foreground px-4 py-3 rounded-full shadow-lg hover:bg-primary/90 transition-colors flex items-center gap-2 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Open AI assistant panel"
+            aria-label={t('triPaneLayout.openAiAssistantPanelAriaLabel')}
           >
             <Sparkles className="w-5 h-5" aria-hidden="true" />
-            <span className="text-sm font-medium">Assistant</span>
+            <span className="text-sm font-medium">{t('triPaneLayout.assistantLabel')}</span>
           </button>
         )}
       </div>
@@ -438,7 +440,7 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
       {listCollapsed ? (
         <>
           {listRail('left')}
-          <div role="region" aria-label="Recording content viewer" className="flex-1 min-w-0 overflow-hidden">
+          <div role="region" aria-label={t('triPaneLayout.recordingContentViewerRegionLabel')} className="flex-1 min-w-0 overflow-hidden">
             {centerPanel}
           </div>
         </>
@@ -457,14 +459,14 @@ export function TriPaneLayout({ leftPanel, centerPanel, rightPanel, hasSelection
           <ResizableHandle withHandle />
 
           <ResizablePanel defaultSize={100 - twoPaneListSize} minSize={40} id="center-panel-2pane">
-            <div role="region" aria-label="Recording content viewer" className="h-full overflow-hidden">
+            <div role="region" aria-label={t('triPaneLayout.recordingContentViewerRegionLabel')} className="h-full overflow-hidden">
               {centerPanel}
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
       )}
 
-      <FloatingAssistant title="Assistant">{rightPanel}</FloatingAssistant>
+      <FloatingAssistant title={t('triPaneLayout.assistantLabel')}>{rightPanel}</FloatingAssistant>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { Circle, Clock, Loader2, CheckCircle2, AlertCircle, MicOff, type LucideIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface TranscriptionStatusBadgeProps {
@@ -7,14 +8,14 @@ interface TranscriptionStatusBadgeProps {
   className?: string
 }
 
-// Human-readable status text mapping
-const STATUS_LABELS: Record<string, string> = {
-  none: 'Not transcribed',
-  pending: 'Queued',
-  processing: 'In Progress',
-  complete: 'Transcribed',
-  no_speech: 'No speech',
-  error: 'Failed'
+// Human-readable status text mapping (i18next key per status; resolved with t() below)
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  none: 'transcriptionStatusBadge.statusNone',
+  pending: 'transcriptionStatusBadge.statusPending',
+  processing: 'transcriptionStatusBadge.statusProcessing',
+  complete: 'transcriptionStatusBadge.statusComplete',
+  no_speech: 'transcriptionStatusBadge.statusNoSpeech',
+  error: 'transcriptionStatusBadge.statusError'
 }
 
 // Distinct shape per status — status must be legible without relying on color
@@ -50,13 +51,15 @@ const STATUS_STYLES: Record<string, string> = {
 }
 
 export function TranscriptionStatusBadge({ status, compact, className }: TranscriptionStatusBadgeProps) {
+  const { t } = useTranslation('library')
+  const label = t(STATUS_LABEL_KEYS[status])
   if (compact) {
     const Icon = STATUS_ICONS[status] ?? Circle
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className={`inline-flex shrink-0 ${className || ''}`} aria-label={STATUS_LABELS[status]} role="img">
+            <span className={`inline-flex shrink-0 ${className || ''}`} aria-label={label} role="img">
               <Icon
                 className={`h-3.5 w-3.5 ${ICON_COLORS[status]} ${status === 'processing' ? 'motion-safe:animate-spin' : ''}`}
                 aria-hidden="true"
@@ -64,7 +67,7 @@ export function TranscriptionStatusBadge({ status, compact, className }: Transcr
             </span>
           </TooltipTrigger>
           <TooltipContent>
-            <p>{STATUS_LABELS[status]}</p>
+            <p>{label}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -73,7 +76,7 @@ export function TranscriptionStatusBadge({ status, compact, className }: Transcr
 
   return (
     <span className={`text-xs px-2 py-1 rounded-full ${STATUS_STYLES[status]} ${className || ''}`}>
-      {STATUS_LABELS[status]}
+      {label}
     </span>
   )
 }

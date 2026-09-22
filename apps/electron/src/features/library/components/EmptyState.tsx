@@ -1,4 +1,5 @@
 import { Mic, Plus, SearchX } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
@@ -17,6 +18,7 @@ export function EmptyState({
   selectedOutsideFilters = false,
   onRevealSelected
 }: EmptyStateProps) {
+  const { t } = useTranslation('library')
   return (
     <Card className="animate-rise-in border-border/70 shadow-sm">
       <CardContent className="flex flex-col items-center py-16 text-center">
@@ -26,33 +28,33 @@ export function EmptyState({
         </div>
         {!hasRecordings ? (
           <>
-            <h3 className="text-lg font-semibold mb-2 text-foreground">No knowledge captured yet</h3>
+            <h3 className="text-lg font-semibold mb-2 text-foreground">{t('emptyState.noRecordingsTitle')}</h3>
             <p className="max-w-sm text-sm text-muted-foreground mb-5 leading-relaxed">
-              Connect your HiDock device to sync your captured conversations, or import an audio file from your computer.
+              {t('emptyState.noRecordingsMessage')}
             </p>
             <div className="flex gap-2 justify-center">
-              <Button onClick={onNavigateToDevice}>Go to Device</Button>
+              <Button onClick={onNavigateToDevice}>{t('emptyState.goToDeviceButton')}</Button>
               <Button variant="outline" onClick={onAddRecording}>
                 <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
-                Import File
+                {t('emptyState.importFileButton')}
               </Button>
             </div>
           </>
         ) : selectedOutsideFilters ? (
           <>
-            <h3 className="mb-2 text-lg font-semibold text-foreground">Source opened outside current filters</h3>
+            <h3 className="mb-2 text-lg font-semibold text-foreground">{t('emptyState.selectedOutsideFiltersTitle')}</h3>
             <p className="mb-5 max-w-sm text-sm leading-relaxed text-muted-foreground">
-              Its details are open beside this list. Your filters were preserved so Back returns to the same context.
+              {t('emptyState.selectedOutsideFiltersMessage')}
             </p>
             {onRevealSelected && (
-              <Button variant="outline" onClick={onRevealSelected}>Show source in this list</Button>
+              <Button variant="outline" onClick={onRevealSelected}>{t('emptyState.showSourceButton')}</Button>
             )}
           </>
         ) : (
           <>
-            <h3 className="text-lg font-semibold mb-2 text-foreground">No matching captures</h3>
+            <h3 className="text-lg font-semibold mb-2 text-foreground">{t('emptyState.noMatchingCapturesTitle')}</h3>
             <p className="max-w-sm text-sm text-muted-foreground leading-relaxed">
-              Nothing matches your current filter or search. Try clearing the search box or widening your filters.
+              {t('emptyState.noMatchingCapturesMessage')}
             </p>
           </>
         )}
