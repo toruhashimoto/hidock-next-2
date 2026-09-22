@@ -31,6 +31,8 @@ import { AIBrainsSettings } from '@/components/settings/AIBrainsSettings'
 import { FeaturesSettings } from '@/components/settings/FeaturesSettings'
 import { toast } from '@/components/ui/toaster'
 import { LEGACY_GRAPH_DISCLOSURE } from '@/features/library/utils/deletionCopy'
+import { useLanguage } from '@/hooks/useLanguage'
+import type { LanguagePreference } from '@/lib/language'
 import type { StorageInfo, AppConfig } from '@/types'
 
 // RAG configuration constants — MAX_CONTEXT_CHUNKS must match config.ts default (10)
@@ -60,6 +62,61 @@ type SpeakerModelAccess = {
   fallbackModel: string
   account?: string
   message: string
+}
+
+/** The three display-language choices, in the order they appear. */
+const LANGUAGE_OPTIONS: ReadonlyArray<{ value: LanguagePreference; label: string }> = [
+  { value: 'system', label: 'System' },
+  { value: 'en', label: 'English' },
+  { value: 'ja', label: '日本語' }
+]
+
+/**
+ * Display-language picker. Uses the same segmented-button shape as the
+ * Assistant card's placement/position controls so the Settings page has one
+ * interaction idiom rather than two.
+ */
+export function LanguageSettingsCard(): React.ReactElement {
+  const { language, setLanguage } = useLanguage()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Appearance</CardTitle>
+        <CardDescription>Choose the language the interface is displayed in</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="space-y-2">
+          <span className="text-sm font-medium">Display language</span>
+          <div
+            role="group"
+            aria-label="Display language"
+            className="inline-flex rounded-lg border border-input bg-muted/40 p-0.5"
+          >
+            {LANGUAGE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={language === option.value}
+                onClick={() => setLanguage(option.value)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  language === option.value
+                    ? 'bg-background font-medium text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            System follows your operating system&apos;s language. Changes apply immediately.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 export function Settings() {
@@ -720,6 +777,8 @@ export function Settings() {
           <div id="features">
             <FeaturesSettings />
           </div>
+
+          <LanguageSettingsCard />
 
           {/* Assistant — Chat Placement */}
           <Card>
