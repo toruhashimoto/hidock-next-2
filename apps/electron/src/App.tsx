@@ -12,6 +12,7 @@ import { getHiDockDeviceService } from '@/services/hidock-device'
 import { NavigationLogger, initInteractionLogger, initErrorLogger, cleanupQAMonitor } from '@/services/qa-monitor'
 import { lazyWithRetry } from '@/lib/lazyWithRetry'
 import { useTheme } from '@/hooks/useTheme'
+import { useLanguage } from '@/hooks/useLanguage'
 import { ClipboardCapture } from '@/hooks/useClipboardCapture'
 import { persistRoute, getInitialRoute } from '@/lib/routePersistence'
 
@@ -103,6 +104,7 @@ function RootRedirect(): React.ReactElement {
 function App(): React.ReactElement {
   // Keep the applied theme reconciled with the persisted preference + OS.
   useTheme()
+  useLanguage()
 
   // Initialize QA monitoring and auto-connect
   useEffect(() => {
