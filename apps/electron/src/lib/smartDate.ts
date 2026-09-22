@@ -120,5 +120,5 @@ export function formatSmartDateWithRelative(
 ): string {
   const absolute = formatSmartDate(value, opts)
   const rel = formatRelativeDate(value)
-  return rel && absolute !== (opts.fallback ?? 'Unknown date') ? `${absolute} (${rel})` : absolute
+  return rel && absolute !== (opts.fallback ?? i18n.t('common:date.unknown')) ? `${absolute} (${rel})` : absolute
 }
