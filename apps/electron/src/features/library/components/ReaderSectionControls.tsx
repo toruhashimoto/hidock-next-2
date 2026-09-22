@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight, EyeOff, Maximize2, PanelTop, Square, Undo2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -10,11 +11,11 @@ import {
 import { cn } from '@/lib/utils'
 import type { ReaderSectionId, ReaderSectionMode } from '@/store/useLibraryStore'
 
-const MODE_LABELS: Record<ReaderSectionMode, string> = {
-  expanded: 'Expanded',
-  compact: 'Minimized',
-  docked: 'Docked',
-  hidden: 'Hidden'
+const MODE_LABEL_KEYS: Record<ReaderSectionMode, string> = {
+  expanded: 'library:readerSectionControls.modeExpanded',
+  compact: 'library:readerSectionControls.modeMinimized',
+  docked: 'library:readerSectionControls.modeDocked',
+  hidden: 'library:readerSectionControls.modeHidden'
 }
 
 interface ReaderSectionControlsProps {
@@ -36,6 +37,7 @@ export function ReaderSectionControls({
   maximized = false,
   className
 }: ReaderSectionControlsProps) {
+  const { t } = useTranslation()
   const expanded = mode === 'expanded' || mode === 'docked'
 
   return (
@@ -54,7 +56,7 @@ export function ReaderSectionControls({
         <span className="truncate">{label}</span>
         {mode !== 'expanded' && (
           <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-            {MODE_LABELS[mode]}
+            {t(MODE_LABEL_KEYS[mode])}
           </span>
         )}
       </button>
@@ -65,10 +67,10 @@ export function ReaderSectionControls({
           size="sm"
           className="h-8 gap-1.5"
           onClick={() => onMaximize()}
-          aria-label={`Return ${label} to reader`}
+          aria-label={t('library:readerSectionControls.returnToReaderAriaLabel', { label })}
         >
           <Undo2 className="h-3.5 w-3.5" />
-          Return to reader
+          {t('library:readerSectionControls.returnToReader')}
         </Button>
       ) : (
         <DropdownMenu>
@@ -77,34 +79,36 @@ export function ReaderSectionControls({
               variant="ghost"
               size="sm"
               className="h-8 shrink-0 gap-1.5 px-2 text-muted-foreground"
-              aria-label={`Layout options for ${label}`}
-              title={`Layout options for ${label}`}
+              aria-label={t('library:readerSectionControls.layoutOptionsLabel', { label })}
+              title={t('library:readerSectionControls.layoutOptionsLabel', { label })}
             >
               <PanelTop className="h-4 w-4" />
-              <span className="hidden @md:inline">Layout</span>
+              <span className="hidden @md:inline">{t('library:readerSectionControls.layout')}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuItem onClick={() => onModeChange('expanded')} disabled={mode === 'expanded'}>
               <Square className="h-4 w-4" />
-              Expand
+              {t('library:readerSectionControls.expand')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onModeChange('compact')} disabled={mode === 'compact'}>
               <ChevronRight className="h-4 w-4" />
-              Minimize
+              {t('library:readerSectionControls.minimize')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onModeChange('docked')} disabled={mode === 'docked'}>
               <PanelTop className="h-4 w-4" />
-              {section === 'player' ? 'Dock small player' : 'Dock to top'}
+              {section === 'player'
+                ? t('library:readerSectionControls.dockSmallPlayer')
+                : t('library:readerSectionControls.dockToTop')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onMaximize}>
               <Maximize2 className="h-4 w-4" />
-              Maximize section
+              {t('library:readerSectionControls.maximizeSection')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onModeChange('hidden')} className="text-muted-foreground">
               <EyeOff className="h-4 w-4" />
-              Hide section
+              {t('library:readerSectionControls.hideSection')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -119,11 +123,12 @@ interface HiddenReaderSectionsProps {
 }
 
 export function HiddenReaderSections({ hidden, onRestore }: HiddenReaderSectionsProps) {
+  const { t } = useTranslation()
   if (hidden.length === 0) return null
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/20 px-4 py-1.5 text-xs" data-testid="reader-hidden-sections">
-      <span className="mr-1 text-muted-foreground">Hidden</span>
+      <span className="mr-1 text-muted-foreground">{t('library:hiddenReaderSections.label')}</span>
       {hidden.map(({ id, label }) => (
         <button
           key={id}
@@ -131,7 +136,7 @@ export function HiddenReaderSections({ hidden, onRestore }: HiddenReaderSections
           onClick={() => onRestore(id)}
           className="rounded-full border bg-background px-2.5 py-1 font-medium text-foreground hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
-          Show {label}
+          {t('library:hiddenReaderSections.showButton', { label })}
         </button>
       ))}
     </div>

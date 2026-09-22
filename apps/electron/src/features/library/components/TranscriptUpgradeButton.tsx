@@ -15,6 +15,7 @@
 
 import { useCallback, useState } from 'react'
 import { Sparkles, RefreshCw, Wand2, ListChecks } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -51,6 +52,7 @@ function getUpgradeApi(): TranscriptUpgradeAPI | null {
 }
 
 export function TranscriptUpgradeButton({ compact = false }: { compact?: boolean } = {}) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [running, setRunning] = useState(false)
@@ -70,10 +72,10 @@ export function TranscriptUpgradeButton({ compact = false }: { compact?: boolean
         setScan(res.data)
         setUnavailable(false)
       } else {
-        toast.error('Scan failed', res.error?.message)
+        toast.error(t('library:transcriptUpgradeButton.scanFailedTitle'), res.error?.message)
       }
     } catch (e) {
-      toast.error('Scan failed', e instanceof Error ? e.message : undefined)
+      toast.error(t('library:transcriptUpgradeButton.scanFailedTitle'), e instanceof Error ? e.message : undefined)
     } finally {
       setLoading(false)
     }
@@ -96,14 +98,14 @@ export function TranscriptUpgradeButton({ compact = false }: { compact?: boolean
       if (res.success) {
         setScan(res.data)
         toast.success(
-          'Upgrade started',
-          `${res.data.toReformat} transcript${res.data.toReformat === 1 ? '' : 's'} queued for reformatting (runs only while the device is not transcribing).`
+          t('library:transcriptUpgradeButton.upgradeStartedTitle'),
+          t('library:transcriptUpgradeButton.upgradeStartedMessage', { count: res.data.toReformat })
         )
       } else {
-        toast.error('Upgrade failed', res.error?.message)
+        toast.error(t('library:transcriptUpgradeButton.upgradeFailedTitle'), res.error?.message)
       }
     } catch (e) {
-      toast.error('Upgrade failed', e instanceof Error ? e.message : undefined)
+      toast.error(t('library:transcriptUpgradeButton.upgradeFailedTitle'), e instanceof Error ? e.message : undefined)
     } finally {
       setRunning(false)
     }
@@ -115,22 +117,25 @@ export function TranscriptUpgradeButton({ compact = false }: { compact?: boolean
     try {
       const res = await api.getRecommended()
       if (!res.success) {
-        toast.error('Could not load flagged recordings', res.error?.message)
+        toast.error(t('library:transcriptUpgradeButton.loadFlaggedFailedTitle'), res.error?.message)
         return
       }
       const ids = res.data
       if (ids.length === 0) {
-        toast.info('Nothing to select', 'No transcripts are flagged for re-transcription yet. Run the upgrade first.')
+        toast.info(
+          t('library:transcriptUpgradeButton.nothingToSelectTitle'),
+          t('library:transcriptUpgradeButton.nothingToSelectMessage')
+        )
         return
       }
       useLibraryStore.getState().selectAll(ids)
       setOpen(false)
       toast.success(
-        'Selected flagged recordings',
-        `${ids.length} selected. Use "Process All" to re-transcribe them from audio.`
+        t('library:transcriptUpgradeButton.selectedFlaggedTitle'),
+        t('library:transcriptUpgradeButton.selectedFlaggedMessage', { count: ids.length })
       )
     } catch (e) {
-      toast.error('Could not load flagged recordings', e instanceof Error ? e.message : undefined)
+      toast.error(t('library:transcriptUpgradeButton.loadFlaggedFailedTitle'), e instanceof Error ? e.message : undefined)
     }
   }, [])
 
@@ -140,39 +145,37 @@ export function TranscriptUpgradeButton({ compact = false }: { compact?: boolean
         variant={compact ? 'ghost' : 'outline'}
         size={compact ? 'icon-sm' : 'sm'}
         onClick={() => onOpenChange(true)}
-        title="Triage and reformat old (pre-speaker-turns) transcripts"
-        aria-label={compact ? 'Upgrade transcripts' : undefined}
+        title={t('library:transcriptUpgradeButton.triggerTitle')}
+        aria-label={compact ? t('library:transcriptUpgradeButton.triggerAriaLabel') : undefined}
       >
         <Sparkles className={compact ? 'h-4 w-4' : 'h-4 w-4 mr-2'} aria-hidden="true" />
-        {!compact && 'Upgrade Transcripts'}
+        {!compact && t('library:transcriptUpgradeButton.triggerLabel')}
       </Button>
 
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Upgrade old transcripts</DialogTitle>
-            <DialogDescription>
-              Old transcripts stored as flat text can be restructured into readable speaker turns cheaply, without
-              re-transcribing the audio. The most important ones are flagged for a full audio re-transcription instead
-              — that stays your call.
-            </DialogDescription>
+            <DialogTitle>{t('library:transcriptUpgradeButton.dialogTitle')}</DialogTitle>
+            <DialogDescription>{t('library:transcriptUpgradeButton.description')}</DialogDescription>
           </DialogHeader>
 
           {unavailable ? (
-            <p className="text-sm text-muted-foreground py-2">
-              This maintenance action is not available in the current build. Restart the app after updating to enable it.
-            </p>
+            <p className="text-sm text-muted-foreground py-2">{t('library:transcriptUpgradeButton.unavailable')}</p>
           ) : loading && !scan ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
               <RefreshCw className="h-4 w-4 animate-spin" />
-              Scanning transcripts...
+              {t('library:transcriptUpgradeButton.scanning')}
             </div>
           ) : scan ? (
             <div className="grid grid-cols-2 gap-3 py-2">
-              <Stat label="Flat transcripts" value={scan.legacyTotal} />
-              <Stat label="Already reformatted" value={scan.alreadyReformatted} />
-              <Stat label="To reformat (cheap)" value={scan.toReformat} accent="primary" />
-              <Stat label="Flagged for re-transcription" value={scan.recommendedRetranscription} accent="orange" />
+              <Stat label={t('library:transcriptUpgradeButton.statFlatTranscripts')} value={scan.legacyTotal} />
+              <Stat label={t('library:transcriptUpgradeButton.statAlreadyReformatted')} value={scan.alreadyReformatted} />
+              <Stat label={t('library:transcriptUpgradeButton.statToReformat')} value={scan.toReformat} accent="primary" />
+              <Stat
+                label={t('library:transcriptUpgradeButton.statFlagged')}
+                value={scan.recommendedRetranscription}
+                accent="orange"
+              />
             </div>
           ) : null}
 
@@ -182,10 +185,10 @@ export function TranscriptUpgradeButton({ compact = false }: { compact?: boolean
               size="sm"
               onClick={onSelectFlagged}
               disabled={unavailable || !scan || scan.recommendedRetranscription === 0}
-              title="Select the flagged recordings so you can re-transcribe them with Process All"
+              title={t('library:transcriptUpgradeButton.selectFlaggedTitle')}
             >
               <ListChecks className="h-4 w-4 mr-2" />
-              Select flagged
+              {t('library:transcriptUpgradeButton.selectFlaggedButton')}
             </Button>
             <Button
               size="sm"
@@ -195,12 +198,12 @@ export function TranscriptUpgradeButton({ compact = false }: { compact?: boolean
               {running ? (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Starting...
+                  {t('library:transcriptUpgradeButton.starting')}
                 </>
               ) : (
                 <>
                   <Wand2 className="h-4 w-4 mr-2" />
-                  Reformat {scan?.toReformat ?? 0} now
+                  {t('library:transcriptUpgradeButton.reformatNowButton', { count: scan?.toReformat ?? 0 })}
                 </>
               )}
             </Button>

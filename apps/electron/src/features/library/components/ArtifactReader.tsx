@@ -10,6 +10,8 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { FolderOpen, Sparkles, FileText } from 'lucide-react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime, formatBytes } from '@/lib/utils'
@@ -72,8 +74,8 @@ function getMetadataValue(
 }
 
 /** Format the artifact's added date; tolerate null/undefined. */
-function formatAddedAt(createdAt: string | null | undefined): string {
-  if (!createdAt) return 'Unknown'
+function formatAddedAt(t: TFunction, createdAt: string | null | undefined): string {
+  if (!createdAt) return t('library:artifactReader.unknownDate')
   try {
     return formatDateTime(createdAt)
   } catch {
@@ -89,25 +91,26 @@ function RelatedData({
   artifact: ArtifactSummary
   recording: UnifiedRecording
 }) {
+  const { t } = useTranslation()
   return (
     <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-      <p className="text-xs font-medium text-muted-foreground">Related data</p>
+      <p className="text-xs font-medium text-muted-foreground">{t('library:artifactReader.relatedDataHeading')}</p>
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div>
-          <p className="text-xs text-muted-foreground">Filename</p>
+          <p className="text-xs text-muted-foreground">{t('library:artifactReader.filenameLabel')}</p>
           <p className="truncate" title={recording.filename}>{recording.filename}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Kind</p>
+          <p className="text-xs text-muted-foreground">{t('library:artifactReader.kindLabel')}</p>
           <Badge variant="neutral" className="capitalize">{artifact.kind}</Badge>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Size</p>
+          <p className="text-xs text-muted-foreground">{t('library:artifactReader.sizeLabel')}</p>
           <p>{formatBytes(artifact.size ?? 0)}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Date added</p>
-          <p>{formatAddedAt(artifact.createdAt)}</p>
+          <p className="text-xs text-muted-foreground">{t('library:artifactReader.dateAddedLabel')}</p>
+          <p>{formatAddedAt(t, artifact.createdAt)}</p>
         </div>
       </div>
     </div>
@@ -122,6 +125,7 @@ function ArtifactActions({
   artifact: ArtifactSummary
   onAskAboutSource?: () => void
 }) {
+  const { t } = useTranslation()
   const handleOpenInFolder = () => {
     window.electronAPI?.artifacts?.openInFolder?.(artifact.id)
   }
@@ -134,10 +138,10 @@ function ArtifactActions({
           size="sm"
           onClick={onAskAboutSource}
           className="gap-2"
-          title="Ask the AI assistant about this source"
+          title={t('library:artifactReader.askAboutSourceTitle')}
         >
           <Sparkles className="h-4 w-4" />
-          Ask about this source
+          {t('library:artifactReader.askAboutSourceButton')}
         </Button>
       )}
       <Button
@@ -145,10 +149,10 @@ function ArtifactActions({
         size="sm"
         onClick={handleOpenInFolder}
         className="gap-2"
-        title="Reveal this artifact in its folder"
+        title={t('library:artifactReader.openInFolderTitle')}
       >
         <FolderOpen className="h-4 w-4" />
-        Open in folder
+        {t('library:artifactReader.openInFolderButton')}
       </Button>
     </div>
   )
@@ -162,6 +166,7 @@ function ImageSurface({
   artifact: ArtifactSummary
   content: ArtifactContent | null
 }) {
+  const { t } = useTranslation()
   const mime = content?.mime || artifact.mime || 'image/png'
   const src = content?.blobBase64 ? `data:${mime};base64,${content.blobBase64}` : undefined
   const description = getMetadataValue(artifact.metadata, 'description')
@@ -171,7 +176,7 @@ function ImageSurface({
       {src ? (
         <img
           src={src}
-          alt={artifact.filename || artifact.storagePath || 'Artifact preview'}
+          alt={artifact.filename || artifact.storagePath || t('library:artifactReader.imagePreviewAlt')}
           className="max-h-[420px] object-contain mx-auto rounded-md"
         />
       ) : (
@@ -181,18 +186,18 @@ function ImageSurface({
             'border-border bg-muted/30 text-muted-foreground'
           }
         >
-          <p className="text-sm">Image preview unavailable</p>
+          <p className="text-sm">{t('library:artifactReader.imagePreviewUnavailable')}</p>
         </div>
       )}
       <div className="rounded-lg border p-3 space-y-1.5">
         <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
           <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-          Extracted information
+          {t('library:artifactReader.extractedInfoHeading')}
         </p>
         <p className="text-sm">
           {typeof description === 'string' && description.trim()
             ? description
-            : 'No description extracted.'}
+            : t('library:artifactReader.noDescriptionExtracted')}
         </p>
       </div>
     </div>
@@ -207,6 +212,7 @@ function PdfSurface({
   artifact: ArtifactSummary
   content: ArtifactContent | null
 }) {
+  const { t } = useTranslation()
   // Chromium blocks data: URLs in iframes (top-level navigation restriction) —
   // the preview renders blank. A same-origin blob: URL is the supported path.
   const src = useMemo(() => {
@@ -227,7 +233,7 @@ function PdfSurface({
         <iframe
           src={src}
           className="w-full h-[480px] rounded-md border border-border"
-          title={artifact.filename || artifact.storagePath || 'PDF preview'}
+          title={artifact.filename || artifact.storagePath || t('library:artifactReader.pdfPreviewTitle')}
         />
       ) : (
         <div
@@ -236,13 +242,13 @@ function PdfSurface({
             'border-border bg-muted/30 text-muted-foreground'
           }
         >
-          <p className="text-sm">PDF preview unavailable</p>
+          <p className="text-sm">{t('library:artifactReader.pdfPreviewUnavailable')}</p>
         </div>
       )}
       {content?.textContent && (
         <details className="rounded-md border border-border bg-background">
           <summary className="cursor-pointer px-3 py-2 text-sm font-medium hover:bg-muted/50">
-            Extracted text
+            {t('library:artifactReader.extractedTextSummary')}
           </summary>
           <div className="max-h-64 overflow-y-auto border-t border-border p-3">
             <pre className="whitespace-pre-wrap text-sm font-sans">{content.textContent}</pre>
@@ -251,7 +257,7 @@ function PdfSurface({
       )}
       {typeof pageCount === 'number' && pageCount > 0 && (
         <p className="text-xs text-muted-foreground">
-          {pageCount} page{pageCount === 1 ? '' : 's'}
+          {t('library:artifactReader.pageCount', { count: pageCount })}
         </p>
       )}
     </div>
@@ -260,11 +266,12 @@ function PdfSurface({
 
 /** Plain-text surface for notes, markdown, json, csv, and similar text kinds. */
 function TextSurface({ content }: { content: ArtifactContent | null }) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-3">
       <div className="max-h-[480px] overflow-y-auto rounded-md border border-border p-3 bg-muted/30">
         <pre className="whitespace-pre-wrap font-mono text-sm">
-          {content?.textContent || 'No extracted text available.'}
+          {content?.textContent || t('library:artifactReader.noExtractedTextAvailable')}
         </pre>
       </div>
     </div>
@@ -273,9 +280,10 @@ function TextSurface({ content }: { content: ArtifactContent | null }) {
 
 /** Graceful fallback when we cannot render a preview for the kind. */
 function FallbackSurface({ kind }: { kind: string }) {
+  const { t } = useTranslation()
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-6 text-center text-muted-foreground">
-      <p className="text-sm font-medium">Preview not available for this file type</p>
+      <p className="text-sm font-medium">{t('library:artifactReader.previewNotAvailable')}</p>
       {kind && <p className="text-xs mt-1 capitalize">{kind}</p>}
     </div>
   )
@@ -283,15 +291,17 @@ function FallbackSurface({ kind }: { kind: string }) {
 
 /** Empty-state fallback when no artifacts are linked to the capture. */
 function EmptySurface() {
+  const { t } = useTranslation()
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-6 text-center text-muted-foreground">
-      <p className="text-sm font-medium">No artifact found for this capture</p>
-      <p className="text-xs mt-1">The capture may not have finished importing.</p>
+      <p className="text-sm font-medium">{t('library:artifactReader.emptyTitle')}</p>
+      <p className="text-xs mt-1">{t('library:artifactReader.emptyHint')}</p>
     </div>
   )
 }
 
 export function ArtifactReader({ recording, onAskAboutSource }: ArtifactReaderProps) {
+  const { t } = useTranslation()
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([])
   const [content, setContent] = useState<ArtifactContent | null>(null)
   const [loading, setLoading] = useState(false)
@@ -333,7 +343,7 @@ export function ArtifactReader({ recording, onAskAboutSource }: ArtifactReaderPr
         if (cancelled) return
         setContent(contentRes?.success ? (contentRes.data as ArtifactContent) : null)
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load artifact')
+        if (!cancelled) setError(err instanceof Error ? err.message : t('library:artifactReader.loadFailedFallback'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -341,12 +351,12 @@ export function ArtifactReader({ recording, onAskAboutSource }: ArtifactReaderPr
 
     load()
     return () => { cancelled = true }
-  }, [recording.id])
+  }, [recording.id, t])
 
   if (loading) {
     return (
       <div className="text-center text-muted-foreground py-8">
-        <p className="text-sm">Loading artifact…</p>
+        <p className="text-sm">{t('library:artifactReader.loadingArtifact')}</p>
       </div>
     )
   }

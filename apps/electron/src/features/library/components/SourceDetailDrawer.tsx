@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Play, Pause, FileText, Wand2, Calendar, Download, Trash2, ExternalLink, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -83,6 +84,7 @@ export function SourceDetailDrawer({
   onAskAssistant,
   deviceConnected
 }: SourceDetailDrawerProps) {
+  const { t } = useTranslation()
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const [errorDetailsExpanded, setErrorDetailsExpanded] = useState(false)
 
@@ -135,8 +137,8 @@ export function SourceDetailDrawer({
           </div>
           <SheetDescription id="source-detail-description">
             {formatDateTime(source.dateRecorded.toISOString())}
-            {source.size && ` • ${formatBytes(source.size)}`}
-            {source.duration && ` • ${formatDuration(source.duration)}`}
+            {source.size && `${t('library:sourceDetailDrawer.metaSeparator')}${formatBytes(source.size)}`}
+            {source.duration && `${t('library:sourceDetailDrawer.metaSeparator')}${formatDuration(source.duration)}`}
           </SheetDescription>
         </SheetHeader>
 
@@ -152,7 +154,11 @@ export function SourceDetailDrawer({
                   : 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300'
             }`}
           >
-            {source.location === 'device-only' ? 'On Device' : source.location === 'local-only' ? 'Local' : 'Synced'}
+            {source.location === 'device-only'
+              ? t('library:sourceDetailDrawer.locationDeviceOnly')
+              : source.location === 'local-only'
+                ? t('library:sourceDetailDrawer.locationLocal')
+                : t('library:sourceDetailDrawer.locationSynced')}
           </span>
 
           {/* Transcription status badge */}
@@ -176,29 +182,33 @@ export function SourceDetailDrawer({
 
         {/* Location details - expanded */}
         <div className="space-y-2 mt-4 p-3 border rounded-lg bg-muted/30">
-          <h4 className="text-sm font-medium">File Location</h4>
+          <h4 className="text-sm font-medium">{t('library:sourceDetailDrawer.fileLocationHeading')}</h4>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div>
-              <span className="text-muted-foreground">On Device:</span>
+              <span className="text-muted-foreground">{t('library:sourceDetailDrawer.onDeviceLabel')}</span>
               <span className="ml-2 font-medium">
-                {source.location === 'device-only' || source.location === 'both' ? '✓ Yes' : '✗ No'}
+                {source.location === 'device-only' || source.location === 'both'
+                  ? t('library:sourceDetailDrawer.checkYes')
+                  : t('library:sourceDetailDrawer.crossNo')}
               </span>
             </div>
             <div>
-              <span className="text-muted-foreground">Downloaded:</span>
+              <span className="text-muted-foreground">{t('library:sourceDetailDrawer.downloadedLabel')}</span>
               <span className="ml-2 font-medium">
-                {source.location === 'local-only' || source.location === 'both' ? '✓ Yes' : '✗ No'}
+                {source.location === 'local-only' || source.location === 'both'
+                  ? t('library:sourceDetailDrawer.checkYes')
+                  : t('library:sourceDetailDrawer.crossNo')}
               </span>
             </div>
           </div>
           {source.location === 'device-only' && 'deviceFilename' in source && (
             <p className="text-xs text-muted-foreground mt-2">
-              <span className="font-medium">Device:</span> {source.deviceFilename}
+              <span className="font-medium">{t('library:sourceDetailDrawer.deviceFilenameLabel')}</span> {source.deviceFilename}
             </p>
           )}
           {('localPath' in source) && source.localPath && (
             <p className="text-xs text-muted-foreground break-all mt-2">
-              <span className="font-medium">Local:</span> {source.localPath}
+              <span className="font-medium">{t('library:sourceDetailDrawer.localPathLabel')}</span> {source.localPath}
             </p>
           )}
         </div>
@@ -214,7 +224,7 @@ export function SourceDetailDrawer({
             className="gap-2"
           >
             {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            {isPlaying ? 'Stop' : 'Play'}
+            {isPlaying ? t('library:sourceDetailDrawer.stopButton') : t('library:sourceDetailDrawer.playButton')}
           </Button>
 
           {/* Download */}
@@ -227,7 +237,7 @@ export function SourceDetailDrawer({
               className="gap-2"
             >
               <Download className="h-4 w-4" />
-              Download
+              {t('library:sourceDetailDrawer.downloadButton')}
             </Button>
           )}
 
@@ -235,7 +245,7 @@ export function SourceDetailDrawer({
           {needsTranscription && (
             <Button variant="outline" size="sm" onClick={onTranscribe} className="gap-2">
               <Wand2 className="h-4 w-4" />
-              Transcribe
+              {t('library:sourceDetailDrawer.transcribeButton')}
             </Button>
           )}
 
@@ -243,7 +253,7 @@ export function SourceDetailDrawer({
           {onAskAssistant && (
             <Button variant="outline" size="sm" onClick={onAskAssistant} className="gap-2">
               <FileText className="h-4 w-4" />
-              Ask Assistant
+              {t('library:sourceDetailDrawer.askAssistantButton')}
             </Button>
           )}
 
@@ -256,7 +266,7 @@ export function SourceDetailDrawer({
             className="gap-2 text-destructive hover:text-destructive"
           >
             <Trash2 className="h-4 w-4" />
-            Delete
+            {t('library:sourceDetailDrawer.deleteButton')}
           </Button>
         </div>
 
@@ -275,15 +285,25 @@ export function SourceDetailDrawer({
                   className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 mt-2 hover:underline"
                 >
                   {errorDetailsExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                  {errorDetailsExpanded ? 'Hide details' : 'Show details'}
+                  {errorDetailsExpanded
+                    ? t('library:sourceDetailDrawer.hideDetails')
+                    : t('library:sourceDetailDrawer.showDetails')}
                 </button>
 
                 {errorDetailsExpanded && (
                   <div className="mt-2 p-2 bg-red-100 dark:bg-red-900 rounded text-xs space-y-1">
-                    <div><span className="font-medium">Type:</span> {error.type}</div>
-                    <div><span className="font-medium">Recoverable:</span> {error.recoverable ? 'Yes' : 'No'}</div>
-                    <div><span className="font-medium">Retryable:</span> {error.retryable ? 'Yes' : 'No'}</div>
-                    {error.sourceId && <div><span className="font-medium">Source ID:</span> {error.sourceId}</div>}
+                    <div><span className="font-medium">{t('library:sourceDetailDrawer.errorTypeLabel')}</span> {error.type}</div>
+                    <div>
+                      <span className="font-medium">{t('library:sourceDetailDrawer.recoverableLabel')}</span>{' '}
+                      {error.recoverable ? t('library:sourceDetailDrawer.yes') : t('library:sourceDetailDrawer.no')}
+                    </div>
+                    <div>
+                      <span className="font-medium">{t('library:sourceDetailDrawer.retryableLabel')}</span>{' '}
+                      {error.retryable ? t('library:sourceDetailDrawer.yes') : t('library:sourceDetailDrawer.no')}
+                    </div>
+                    {error.sourceId && (
+                      <div><span className="font-medium">{t('library:sourceDetailDrawer.sourceIdLabel')}</span> {error.sourceId}</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -326,13 +346,13 @@ export function SourceDetailDrawer({
           <Tabs defaultValue="transcript" className="mt-4">
             <TabsList className="w-full">
               <TabsTrigger value="transcript" className="flex-1">
-                Transcript
+                {t('library:sourceDetailDrawer.transcriptTab')}
               </TabsTrigger>
               <TabsTrigger value="summary" className="flex-1">
-                Summary
+                {t('library:sourceDetailDrawer.summaryTab')}
               </TabsTrigger>
               <TabsTrigger value="details" className="flex-1">
-                Details
+                {t('library:sourceDetailDrawer.detailsTab')}
               </TabsTrigger>
             </TabsList>
 
@@ -340,7 +360,7 @@ export function SourceDetailDrawer({
               {/* Summary */}
               {transcript.summary && (
                 <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Summary</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">{t('library:sourceDetailDrawer.summaryHeading')}</p>
                   <p className="text-sm">{transcript.summary}</p>
                 </div>
               )}
@@ -348,7 +368,9 @@ export function SourceDetailDrawer({
               {/* Full transcript */}
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-2">
-                  Full Transcript{transcript.word_count && ` (${transcript.word_count} words)`}
+                  {transcript.word_count
+                    ? t('library:sourceDetailDrawer.fullTranscriptHeadingWithCount', { count: transcript.word_count })
+                    : t('library:sourceDetailDrawer.fullTranscriptHeading')}
                 </p>
                 <div className="p-3 bg-muted rounded-lg max-h-96 overflow-y-auto">
                   <p className="text-sm whitespace-pre-wrap">{transcript.full_text}</p>
@@ -360,7 +382,7 @@ export function SourceDetailDrawer({
               {/* Action Items */}
               {transcript.action_items && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Action Items</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">{t('library:sourceDetailDrawer.actionItemsHeading')}</p>
                   <ul className="list-disc list-inside text-sm space-y-1 bg-muted p-3 rounded-lg">
                     {parseJsonArray<string>(transcript.action_items).map((item, i) => (
                       <li key={i}>{item}</li>
@@ -372,7 +394,7 @@ export function SourceDetailDrawer({
               {/* Key Points */}
               {transcript.key_points && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Key Points</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">{t('library:sourceDetailDrawer.keyPointsHeading')}</p>
                   <ul className="list-disc list-inside text-sm space-y-1 bg-muted p-3 rounded-lg">
                     {parseJsonArray<string>(transcript.key_points).map((item, i) => (
                       <li key={i}>{item}</li>
@@ -384,7 +406,7 @@ export function SourceDetailDrawer({
               {/* Topics */}
               {transcript.topics && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Topics</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">{t('library:sourceDetailDrawer.topicsHeading')}</p>
                   <div className="flex flex-wrap gap-1">
                     {parseJsonArray<string>(transcript.topics).map((topic, i) => (
                       <span key={i} className="px-2 py-0.5 bg-secondary text-xs rounded-full">
@@ -396,41 +418,41 @@ export function SourceDetailDrawer({
               )}
 
               {!transcript.action_items && !transcript.key_points && !transcript.topics && (
-                <p className="text-sm text-muted-foreground">No summary data available for this transcript.</p>
+                <p className="text-sm text-muted-foreground">{t('library:sourceDetailDrawer.noSummaryData')}</p>
               )}
             </TabsContent>
 
             <TabsContent value="details" className="mt-4">
               <dl className="space-y-3 text-sm">
                 <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Filename</dt>
+                  <dt className="text-xs font-medium text-muted-foreground">{t('library:sourceDetailDrawer.filenameDetailLabel')}</dt>
                   <dd className="mt-1">{source.filename}</dd>
                 </div>
                 {source.duration && (
                   <div>
-                    <dt className="text-xs font-medium text-muted-foreground">Duration</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">{t('library:sourceDetailDrawer.durationLabel')}</dt>
                     <dd className="mt-1">{formatDuration(source.duration)}</dd>
                   </div>
                 )}
                 {source.size && (
                   <div>
-                    <dt className="text-xs font-medium text-muted-foreground">Size</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">{t('library:sourceDetailDrawer.sizeDetailLabel')}</dt>
                     <dd className="mt-1">{formatBytes(source.size)}</dd>
                   </div>
                 )}
                 <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Recorded</dt>
+                  <dt className="text-xs font-medium text-muted-foreground">{t('library:sourceDetailDrawer.recordedLabel')}</dt>
                   <dd className="mt-1">{formatDateTime(source.dateRecorded.toISOString())}</dd>
                 </div>
                 {transcript.language && (
                   <div>
-                    <dt className="text-xs font-medium text-muted-foreground">Language</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">{t('library:sourceDetailDrawer.languageLabel')}</dt>
                     <dd className="mt-1">{transcript.language}</dd>
                   </div>
                 )}
                 {transcript.transcription_provider && (
                   <div>
-                    <dt className="text-xs font-medium text-muted-foreground">Transcription Provider</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">{t('library:sourceDetailDrawer.transcriptionProviderLabel')}</dt>
                     <dd className="mt-1">
                       {transcript.transcription_provider}
                       {transcript.transcription_model && ` (${transcript.transcription_model})`}
@@ -438,7 +460,7 @@ export function SourceDetailDrawer({
                   </div>
                 )}
                 <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Transcribed</dt>
+                  <dt className="text-xs font-medium text-muted-foreground">{t('library:sourceDetailDrawer.transcribedLabel')}</dt>
                   <dd className="mt-1">{formatDateTime(transcript.created_at)}</dd>
                 </div>
               </dl>
@@ -449,7 +471,7 @@ export function SourceDetailDrawer({
             {needsDownload ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Download className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-sm">Download this capture to view its transcript.</p>
+                <p className="text-sm">{t('library:sourceDetailDrawer.downloadPromptMessage')}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -457,21 +479,21 @@ export function SourceDetailDrawer({
                   disabled={!deviceConnected}
                   className="mt-4"
                 >
-                  Download from Device
+                  {t('library:sourceDetailDrawer.downloadFromDeviceButton')}
                 </Button>
               </div>
             ) : needsTranscription ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Wand2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-sm">This capture hasn&apos;t been transcribed yet.</p>
+                <p className="text-sm">{t('library:sourceDetailDrawer.notTranscribedMessage')}</p>
                 <Button variant="outline" size="sm" onClick={onTranscribe} className="mt-4">
-                  Start Transcription
+                  {t('library:sourceDetailDrawer.startTranscriptionButton')}
                 </Button>
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-sm">No transcript available.</p>
+                <p className="text-sm">{t('library:sourceDetailDrawer.noTranscriptAvailable')}</p>
               </div>
             )}
           </div>
