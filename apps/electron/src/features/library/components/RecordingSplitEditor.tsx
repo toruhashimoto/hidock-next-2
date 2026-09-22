@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Loader2, Pause, Play, Scissors, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
@@ -37,20 +39,24 @@ function formatPreciseTime(seconds: number): string {
     : `${minutes}:${String(secs).padStart(2, '0')}.${tenths}`
 }
 
-function suggestionLabel(suggestion: SplitSuggestion): string {
+/**
+ * Private, non-exported, not asserted directly by any test — both helpers
+ * below take `t` as a parameter (task brief approach 1).
+ */
+function suggestionLabel(t: TFunction, suggestion: SplitSuggestion): string {
   const signal = suggestion.reason === 'silence-and-transcript-gap'
-    ? 'silence + transcript gap'
+    ? t('recordingSplitEditor.reasonSilenceAndGap')
     : suggestion.reason === 'transcript-gap'
-      ? 'transcript gap'
-      : 'silence'
-  return `${formatPreciseTime(suggestion.timeSec)} · ${suggestion.gapSeconds.toFixed(1)}s ${signal}`
+      ? t('recordingSplitEditor.reasonTranscriptGap')
+      : t('recordingSplitEditor.reasonSilence')
+  return t('recordingSplitEditor.suggestionLabel', { time: formatPreciseTime(suggestion.timeSec), gap: suggestion.gapSeconds.toFixed(1), reason: signal })
 }
 
-function detectionFailureCopy(error: string): string {
+function detectionFailureCopy(t: TFunction, error: string): string {
   const normalized = error.toLowerCase()
-  if (normalized.includes('local audio file is unavailable')) return 'the local audio file is unavailable'
-  if (normalized.includes('determine the audio duration')) return 'the audio duration could not be read'
-  return 'the audio analysis could not finish'
+  if (normalized.includes('local audio file is unavailable')) return t('recordingSplitEditor.failureReasonFileUnavailable')
+  if (normalized.includes('determine the audio duration')) return t('recordingSplitEditor.failureReasonDurationUnknown')
+  return t('recordingSplitEditor.failureReasonGeneric')
 }
 
 export function RecordingSplitEditor({
@@ -63,6 +69,7 @@ export function RecordingSplitEditor({
   onCancel,
   onSplitCompleted,
 }: RecordingSplitEditorProps) {
+  const { t } = useTranslation('library')
   const [suggestions, setSuggestions] = useState<SplitSuggestion[]>([])
   const [detecting, setDetecting] = useState(true)
   const [detectError, setDetectError] = useState<string | null>(null)
@@ -79,6 +86,12 @@ export function RecordingSplitEditor({
     let cancelled = false
     setDetecting(true)
     setDetectError(null)
+    // i18n note (Task 11c): `detectError` is never rendered verbatim — it is
+    // only ever fed to `detectionFailureCopy()`'s substring classification
+    // below (`Automatic suggestions are unavailable because {{reason}}...`),
+    // which resolves to one of 3 translated phrases. So this literal (the
+    // classifier's INPUT, not UI copy) is intentionally left untranslated,
+    // same as a backend `result.error`/`error.message` string would be.
     window.electronAPI.recordings.detectSplitPoints(recordingId)
       .then((result) => {
         if (cancelled) return
@@ -128,7 +141,7 @@ export function RecordingSplitEditor({
     }
     const play = window.__audioControls?.play
     if (!play) {
-      toast.error('Preview unavailable', 'The audio player is not ready yet.')
+      toast.error(t('recordingSplitEditor.previewUnavailableTitle'), t('recordingSplitEditor.audioPlayerNotReadyMessage'))
       return
     }
     setPreviewActive(true)
@@ -136,30 +149,30 @@ export function RecordingSplitEditor({
       await play(recordingId, filePath, selected)
     } catch (error) {
       setPreviewActive(false)
-      toast.error('Preview unavailable', error instanceof Error ? error.message : undefined)
+      toast.error(t('recordingSplitEditor.previewUnavailableTitle'), error instanceof Error ? error.message : undefined)
     }
-  }, [filePath, isPlaying, previewActive, recordingId, selected])
+  }, [filePath, isPlaying, previewActive, recordingId, selected, t])
 
   const createSplit = useCallback(async () => {
     setSplitting(true)
     window.__audioControls?.pause()
     try {
       const response = await window.electronAPI.recordings.split(recordingId, selected)
-      if (!response.success || !response.result) throw new Error(response.error || 'The recording could not be split')
-      toast.success('Recording split', 'Two lossless recordings were created. The original is recoverable from Trash.')
+      if (!response.success || !response.result) throw new Error(response.error || t('recordingSplitEditor.splitFailedFallback'))
+      toast.success(t('recordingSplitEditor.recordingSplitTitle'), t('recordingSplitEditor.recordingSplitMessage'))
       onSplitCompleted(response.result.children[0].id)
     } catch (error) {
-      toast.error('Split failed', error instanceof Error ? error.message : 'The original recording was not changed.')
+      toast.error(t('recordingSplitEditor.splitFailedTitle'), error instanceof Error ? error.message : t('recordingSplitEditor.originalRecordingUnchangedMessage'))
     } finally {
       setSplitting(false)
       setConfirmOpen(false)
     }
-  }, [onSplitCompleted, recordingId, selected])
+  }, [onSplitCompleted, recordingId, selected, t])
 
   return (
     <section
       className="mt-2 rounded-lg border border-primary/35 bg-primary/[0.04] p-3 shadow-sm"
-      aria-label="Split recording editor"
+      aria-label={t('recordingSplitEditor.sectionAriaLabel')}
       data-testid="recording-split-editor"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -168,28 +181,28 @@ export function RecordingSplitEditor({
             <Scissors className="h-4 w-4" aria-hidden="true" />
           </span>
           <div>
-            <h3 className="text-sm font-semibold">Choose the exact session boundary</h3>
+            <h3 className="text-sm font-semibold">{t('recordingSplitEditor.heading')}</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Click the waveform or any transcript timestamp, then drag or use the arrow keys for 0.1-second precision.
+              {t('recordingSplitEditor.instructions')}
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onCancel} disabled={splitting}>Cancel</Button>
+        <Button variant="ghost" size="sm" onClick={onCancel} disabled={splitting}>{t('recordingSplitEditor.cancelButton')}</Button>
       </div>
 
       <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">First recording</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('recordingSplitEditor.firstRecordingLabel')}</p>
           <p className="mt-0.5 text-sm font-semibold tabular-nums">{formatPreciseTime(selected)}</p>
         </div>
         <div className="text-center">
-          <p className="text-[11px] font-medium text-muted-foreground">Cut at</p>
+          <p className="text-[11px] font-medium text-muted-foreground">{t('recordingSplitEditor.cutAtLabel')}</p>
           <output className="text-lg font-semibold tabular-nums text-primary" aria-live="polite">
             {formatPreciseTime(selected)}
           </output>
         </div>
         <div className="text-right">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Second recording</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('recordingSplitEditor.secondRecordingLabel')}</p>
           <p className="mt-0.5 text-sm font-semibold tabular-nums">{formatPreciseTime(durationSec - selected)}</p>
         </div>
       </div>
@@ -201,7 +214,7 @@ export function RecordingSplitEditor({
         step={0.1}
         value={[selected]}
         onValueChange={([value]) => changePoint(value)}
-        aria-label="Exact split position"
+        aria-label={t('recordingSplitEditor.sliderAriaLabel')}
         aria-valuetext={formatPreciseTime(selected)}
       />
 
@@ -215,7 +228,11 @@ export function RecordingSplitEditor({
             className="h-7 px-2 text-xs tabular-nums"
             onClick={() => changePoint(selected + delta)}
             disabled={splitting || selected + delta < min || selected + delta > max}
-            aria-label={`${delta < 0 ? 'Move cut earlier' : 'Move cut later'} by ${Math.abs(delta)} seconds`}
+            aria-label={
+              delta < 0
+                ? t('recordingSplitEditor.moveCutEarlierAriaLabel', { seconds: Math.abs(delta) })
+                : t('recordingSplitEditor.moveCutLaterAriaLabel', { seconds: Math.abs(delta) })
+            }
           >
             {delta > 0 ? '+' : '−'}{Math.abs(delta)}s
           </Button>
@@ -229,17 +246,17 @@ export function RecordingSplitEditor({
           disabled={splitting}
         >
           {previewActive && isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-          {previewActive && isPlaying ? 'Stop preview' : 'Preview from cut'}
+          {previewActive && isPlaying ? t('recordingSplitEditor.stopPreviewButton') : t('recordingSplitEditor.previewFromCutButton')}
         </Button>
       </div>
 
       <div className="mt-3 border-t border-border/60 pt-3">
         <div className="flex items-center gap-1.5 text-xs font-medium">
           {detecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-primary" />}
-          Suggested boundaries
+          {t('recordingSplitEditor.suggestedBoundariesHeading')}
         </div>
         {detecting ? (
-          <p className="mt-1 text-xs text-muted-foreground" role="status">Listening for longer silences and transcript gaps…</p>
+          <p className="mt-1 text-xs text-muted-foreground" role="status">{t('recordingSplitEditor.listeningMessage')}</p>
         ) : suggestions.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {suggestions.map((suggestion) => (
@@ -254,39 +271,39 @@ export function RecordingSplitEditor({
                     : 'border-border bg-background hover:border-primary/60 hover:bg-primary/5'
                 )}
                 aria-pressed={Math.abs(selected - suggestion.timeSec) < 0.05}
-                aria-label={`${suggestionLabel(suggestion)}. ${Math.round(suggestion.confidence * 100)}% confidence`}
-                title={`${Math.round(suggestion.confidence * 100)}% confidence`}
+                aria-label={t('recordingSplitEditor.suggestionAriaLabel', { label: suggestionLabel(t, suggestion), confidence: Math.round(suggestion.confidence * 100) })}
+                title={t('recordingSplitEditor.confidenceTitle', { confidence: Math.round(suggestion.confidence * 100) })}
               >
-                {suggestionLabel(suggestion)}
+                {suggestionLabel(t, suggestion)}
               </button>
             ))}
           </div>
         ) : (
           <p className="mt-1 text-xs text-muted-foreground">
             {detectError
-              ? `Automatic suggestions are unavailable because ${detectionFailureCopy(detectError)}. Manual selection still works.`
-              : 'No strong boundary found; choose the point manually.'}
+              ? t('recordingSplitEditor.suggestionsUnavailableMessage', { reason: detectionFailureCopy(t, detectError) })
+              : t('recordingSplitEditor.noStrongBoundaryMessage')}
           </p>
         )}
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <p className="max-w-xl text-xs text-muted-foreground">
-          The two new FLAC files are lossless. The original and its current transcript move to Trash as a recoverable safety copy.
+          {t('recordingSplitEditor.losslessNote')}
         </p>
         <Button className="gap-2" onClick={() => setConfirmOpen(true)} disabled={splitting || durationSec <= 2}>
           {splitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scissors className="h-4 w-4" />}
-          Create two recordings
+          {t('recordingSplitEditor.createTwoRecordingsButton')}
         </Button>
       </div>
 
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={`Split at ${formatPreciseTime(selected)}?`}
-        description={`This creates recordings of ${formatPreciseTime(selected)} and ${formatPreciseTime(durationSec - selected)}. The original stays recoverable in Trash.`}
-        actionLabel="Create two recordings"
-        cancelLabel="Keep editing"
+        title={t('recordingSplitEditor.splitConfirmTitle', { time: formatPreciseTime(selected) })}
+        description={t('recordingSplitEditor.splitConfirmDescription', { first: formatPreciseTime(selected), second: formatPreciseTime(durationSec - selected) })}
+        actionLabel={t('recordingSplitEditor.createTwoRecordingsButton')}
+        cancelLabel={t('recordingSplitEditor.keepEditingButton')}
         variant="default"
         onConfirm={createSplit}
       />

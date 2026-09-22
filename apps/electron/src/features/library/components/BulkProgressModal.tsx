@@ -5,6 +5,8 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   Dialog,
   DialogContent,
@@ -50,33 +52,35 @@ function StatusIcon({ status }: { status: BulkItemStatus }) {
 }
 
 /**
- * Status text for screen readers
+ * Status text for screen readers. Private, non-exported, not asserted
+ * directly by any test — takes `t` as a parameter (task brief approach 1).
  */
-function getStatusText(status: BulkItemStatus): string {
+function getStatusText(t: TFunction, status: BulkItemStatus): string {
   switch (status) {
     case 'success':
-      return 'completed successfully'
+      return t('bulkProgressModal.statusCompletedSuccessfully')
     case 'failed':
-      return 'failed'
+      return t('bulkProgressModal.statusFailed')
     case 'pending':
-      return 'pending'
+      return t('bulkProgressModal.statusPending')
     case 'processing':
-      return 'in progress'
+      return t('bulkProgressModal.statusInProgress')
     case 'cancelled':
-      return 'cancelled'
+      return t('bulkProgressModal.statusCancelled')
     default:
-      return 'unknown status'
+      return t('bulkProgressModal.statusUnknown')
   }
 }
 
 /**
- * Operation verb for display
+ * Operation verb for display. Private, non-exported, not asserted directly
+ * by any test — takes `t` as a parameter (task brief approach 1).
  */
-function getOperationVerb(operation: 'download' | 'transcribe' | 'delete', suffix: 'ing' | 'ed' = 'ing'): string {
+function getOperationVerb(t: TFunction, operation: 'download' | 'transcribe' | 'delete', suffix: 'ing' | 'ed' = 'ing'): string {
   const verbs = {
-    download: { ing: 'Downloading', ed: 'downloaded' },
-    transcribe: { ing: 'Transcribing', ed: 'transcribed' },
-    delete: { ing: 'Deleting', ed: 'deleted' }
+    download: { ing: t('bulkProgressModal.verbDownloadingIng'), ed: t('bulkProgressModal.verbDownloadedEd') },
+    transcribe: { ing: t('bulkProgressModal.verbTranscribingIng'), ed: t('bulkProgressModal.verbTranscribedEd') },
+    delete: { ing: t('bulkProgressModal.verbDeletingIng'), ed: t('bulkProgressModal.verbDeletedEd') }
   }
   return verbs[operation][suffix]
 }
@@ -85,6 +89,7 @@ function getOperationVerb(operation: 'download' | 'transcribe' | 'delete', suffi
  * Expandable error details component
  */
 function ErrorDetails({ error }: { error: LibraryError }) {
+  const { t } = useTranslation('library')
   const [isExpanded, setIsExpanded] = useState(false)
   const recoveryAction = getRecoveryAction(error.type)
 
@@ -97,7 +102,7 @@ function ErrorDetails({ error }: { error: LibraryError }) {
         aria-controls={`error-details-${error.sourceId}`}
       >
         {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        <span className="text-destructive">Error details</span>
+        <span className="text-destructive">{t('bulkProgressModal.errorDetailsButton')}</span>
       </button>
 
       {isExpanded && (
@@ -117,11 +122,12 @@ function ErrorDetails({ error }: { error: LibraryError }) {
  * Individual item row component
  */
 function ItemRow({ item }: { item: BulkOperationItem }) {
+  const { t } = useTranslation('library')
   const data = item.data as Record<string, unknown> | null
-  const title = (data?.title as string) || (data?.name as string) || `Item ${item.id.slice(0, 8)}`
+  const title = (data?.title as string) || (data?.name as string) || t('bulkProgressModal.itemFallbackTitle', { id: item.id.slice(0, 8) })
 
   return (
-    <li className="py-2 border-b last:border-b-0" aria-label={`${title}: ${getStatusText(item.status)}`}>
+    <li className="py-2 border-b last:border-b-0" aria-label={t('bulkProgressModal.itemAriaLabel', { title, status: getStatusText(t, item.status) })}>
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
           <StatusIcon status={item.status} />
@@ -146,7 +152,7 @@ function ItemRow({ item }: { item: BulkOperationItem }) {
         </div>
 
         {/* Status text for screen readers */}
-        <span className="sr-only">{getStatusText(item.status)}</span>
+        <span className="sr-only">{getStatusText(t, item.status)}</span>
       </div>
 
       {/* Error details (expandable) */}
@@ -166,6 +172,7 @@ export function BulkProgressModal({
   progress,
   onCancel
 }: BulkProgressModalProps) {
+  const { t } = useTranslation('library')
   // Track if operation is running (items with pending or processing status)
   const isRunning = items.some((item) => item.status === 'pending' || item.status === 'processing')
 
@@ -179,9 +186,9 @@ export function BulkProgressModal({
   // Update announcement when progress changes
   useEffect(() => {
     if (progress.current > 0) {
-      setAnnouncement(`${progress.current} of ${progress.total} items processed`)
+      setAnnouncement(t('bulkProgressModal.itemsProcessedAnnouncement', { current: progress.current, total: progress.total }))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- announce only on current/total changes, not on progress object identity
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- announce only on current/total changes, not on progress object identity or `t` (a language switch does not need to re-announce a stale progress snapshot)
   }, [progress.current, progress.total])
 
   // Determine close behavior
@@ -209,11 +216,12 @@ export function BulkProgressModal({
       >
         <DialogHeader>
           <DialogTitle id="bulk-progress-title">
-            {getOperationVerb(operation)} Files
+            {t('bulkProgressModal.dialogTitle', { verb: getOperationVerb(t, operation) })}
           </DialogTitle>
           <DialogDescription id="bulk-progress-description">
-            {progress.current} of {progress.total} complete
-            {failedCount > 0 && ` (${failedCount} failed)`}
+            {failedCount > 0
+              ? t('bulkProgressModal.progressDescriptionWithFailures', { current: progress.current, total: progress.total, failed: failedCount })
+              : t('bulkProgressModal.progressDescription', { current: progress.current, total: progress.total })}
           </DialogDescription>
         </DialogHeader>
 
@@ -238,14 +246,14 @@ export function BulkProgressModal({
               aria-valuenow={progressPercent}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-label="Overall progress"
+              aria-label={t('bulkProgressModal.overallProgressAriaLabel')}
             />
           </div>
         </div>
 
         {/* Item list - scrollable */}
         <div className="flex-1 overflow-y-auto min-h-0 px-6">
-          <ul role="list" aria-label="Operation progress" className="space-y-0">
+          <ul role="list" aria-label={t('bulkProgressModal.operationProgressAriaLabel')} className="space-y-0">
             {items.map((item) => (
               <ItemRow key={item.id} item={item} />
             ))}
@@ -256,7 +264,7 @@ export function BulkProgressModal({
           {/* Cancel button (only show when running) */}
           {isRunning && (
             <Button onClick={onCancel} variant="destructive" size="sm">
-              Cancel Remaining
+              {t('bulkProgressModal.cancelRemainingButton')}
             </Button>
           )}
 
@@ -268,7 +276,7 @@ export function BulkProgressModal({
             size="sm"
             className="ml-auto"
           >
-            {isRunning ? 'Running...' : 'Close'}
+            {isRunning ? t('bulkProgressModal.runningButton') : t('bulkProgressModal.closeButton')}
           </Button>
         </DialogFooter>
       </DialogContent>

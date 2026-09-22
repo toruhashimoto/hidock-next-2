@@ -8,6 +8,7 @@
 
 import type { UnifiedRecording } from '@/types/unified-recording'
 import { getSourceType, sourceTypeHasDuration } from './sourceType'
+import i18n from '@/i18n'
 
 export type DurationPreset = 'all' | 'under10s' | 'under1m' | 'under5m' | 'over5m'
 
@@ -20,12 +21,21 @@ const PRESET_MAX: Record<DurationPreset, number | null> = {
   over5m: null // handled specially (>= 300)
 }
 
+/**
+ * i18n note (Task 11c): `LibraryFilters.tsx` (Part B, already committed)
+ * imports this object and indexes it directly (`DURATION_PRESET_LABELS[preset]`)
+ * as a plain string at render time, so this cannot become a function taking
+ * `t`. It is resolved once via the shared `i18n` singleton at module-eval
+ * time (task brief "approach 2", "value needed at module scope") — see the
+ * file-level note in utils/deletionCopy.ts for the full reasoning and the
+ * known non-reactive-to-live-language-switch limitation this shares with it.
+ */
 export const DURATION_PRESET_LABELS: Record<DurationPreset, string> = {
-  all: 'Any length',
-  under10s: 'Under 10s',
-  under1m: 'Under 1 min',
-  under5m: 'Under 5 min',
-  over5m: 'Over 5 min'
+  all: i18n.t('library:durationFilter.presetAll'),
+  under10s: i18n.t('library:durationFilter.presetUnder10s'),
+  under1m: i18n.t('library:durationFilter.presetUnder1m'),
+  under5m: i18n.t('library:durationFilter.presetUnder5m'),
+  over5m: i18n.t('library:durationFilter.presetOver5m')
 }
 
 /**

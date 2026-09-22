@@ -13,6 +13,8 @@
  * rather than dropping it silently.
  */
 
+import i18n from '@/i18n'
+
 export type KnownValueReason =
   | 'personal_family'
   | 'greeting_only_no_show'
@@ -20,12 +22,22 @@ export type KnownValueReason =
   | 'no_substance'
   | 'off_topic_chatter'
 
+/**
+ * i18n note (Task 11c): `SourceRow.tsx`'s `ValueBadge` (Part B, already
+ * committed) reads `VALUE_REASON_LABELS.personal_family` etc. as plain
+ * strings, and this object's own test (`valueReasons.test.ts`) asserts
+ * `VALUE_REASON_LABELS.personal_family` directly — so this cannot become a
+ * function. It is resolved once via the shared `i18n` singleton at
+ * module-eval time (task brief "approach 2", "value needed at module
+ * scope"); see the file-level note in utils/deletionCopy.ts for the full
+ * reasoning and the known non-reactive-to-live-language-switch limitation.
+ */
 export const VALUE_REASON_LABELS: Record<KnownValueReason, string> = {
-  personal_family: 'Personal / family',
-  greeting_only_no_show: 'Greeting only / no-show',
-  background_ambient: 'Background / ambient',
-  no_substance: 'No substance',
-  off_topic_chatter: 'Off-topic chatter'
+  personal_family: i18n.t('library:valueReasons.personalFamily'),
+  greeting_only_no_show: i18n.t('library:valueReasons.greetingOnlyNoShow'),
+  background_ambient: i18n.t('library:valueReasons.backgroundAmbient'),
+  no_substance: i18n.t('library:valueReasons.noSubstance'),
+  off_topic_chatter: i18n.t('library:valueReasons.offTopicChatter')
 }
 
 function isKnownValueReason(reason: string): reason is KnownValueReason {

@@ -28,6 +28,8 @@
 
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Check, ExternalLink, Scissors, Undo2, UserCog, UserPlus, UserX, Users } from 'lucide-react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
@@ -79,9 +81,14 @@ function initialOf(name: string): string {
   return trimmed ? trimmed[0].toUpperCase() : '?'
 }
 
-/** Secondary descriptor line for a contact: "role · company" if present, else email. */
-function secondaryLine(contact: Person): string {
-  const roleCompany = [contact.role, contact.company].filter(Boolean).join(' · ')
+/**
+ * Secondary descriptor line for a contact: "role · company" if present, else
+ * email. `t` passed as a parameter (task brief approach 1) — this is a
+ * private, non-exported, non-directly-tested helper called from within two
+ * components' render bodies below.
+ */
+function secondaryLine(t: TFunction, contact: Person): string {
+  const roleCompany = [contact.role, contact.company].filter(Boolean).join(t('speakerAssignPopover.fieldSeparator'))
   return roleCompany || contact.email || ''
 }
 
@@ -106,7 +113,8 @@ function ContactRow({
   selected: boolean
   onSelect: () => void
 }) {
-  const secondary = secondaryLine(contact)
+  const { t } = useTranslation('library')
+  const secondary = secondaryLine(t, contact)
   const count = contact.interactionCount
   return (
     <button
@@ -121,7 +129,7 @@ function ContactRow({
       </span>
       {typeof count === 'number' && count > 0 && (
         <span className="shrink-0 text-xs text-muted-foreground">
-          {count} meeting{count === 1 ? '' : 's'}
+          {t('speakerAssignPopover.meetingCount', { count })}
         </span>
       )}
       {selected && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
@@ -131,8 +139,9 @@ function ContactRow({
 
 /** Compact summary of the currently-assigned person, shown atop the popover. */
 function AssignedSummary({ person, fallbackName }: { person?: Person; fallbackName: string }) {
+  const { t } = useTranslation('library')
   const name = person?.name ?? fallbackName
-  const secondary = person ? secondaryLine(person) : ''
+  const secondary = person ? secondaryLine(t, person) : ''
   return (
     <div className="flex items-center gap-2">
       <Avatar name={name} />
@@ -151,20 +160,21 @@ function AssignedSummary({ person, fallbackName }: { person?: Person; fallbackNa
 
 /** Hover-card body shown for an unassigned speaker label. */
 function UnidentifiedHint({ label }: { label: string }) {
+  const { t } = useTranslation('library')
   return (
     <div className="space-y-1">
-      <p className="text-sm font-semibold leading-tight">Unidentified speaker</p>
+      <p className="text-sm font-semibold leading-tight">{t('speakerAssignPopover.unidentifiedHintHeading')}</p>
       <p className="text-xs text-muted-foreground">
-        {label} hasn&rsquo;t been matched to a person yet. Click to identify.
+        {t('speakerAssignPopover.unidentifiedHintBody', { label })}
       </p>
     </div>
   )
 }
 
-const SCOPE_OPTIONS: { value: AssignScope; label: string }[] = [
-  { value: 'everywhere', label: 'This speaker everywhere' },
-  { value: 'turn', label: 'Just this turn' },
-  { value: 'fromHere', label: 'From here on' }
+const SCOPE_OPTIONS: { value: AssignScope; labelKey: string }[] = [
+  { value: 'everywhere', labelKey: 'speakerAssignPopover.scopeEverywhereLabel' },
+  { value: 'turn', labelKey: 'speakerAssignPopover.scopeTurnLabel' },
+  { value: 'fromHere', labelKey: 'speakerAssignPopover.scopeFromHereLabel' }
 ]
 
 /** The scope segmented control shown atop the picker. Default is "everywhere". */
@@ -177,9 +187,10 @@ function ScopePicker({
   onScope: (s: AssignScope) => void
   allowFromHere: boolean
 }) {
+  const { t } = useTranslation('library')
   const options = allowFromHere ? SCOPE_OPTIONS : SCOPE_OPTIONS.filter((o) => o.value !== 'fromHere')
   return (
-    <div role="radiogroup" aria-label="Assignment scope" className="flex flex-col gap-0.5">
+    <div role="radiogroup" aria-label={t('speakerAssignPopover.assignmentScopeAriaLabel')} className="flex flex-col gap-0.5">
       {options.map((o) => (
         <button
           key={o.value}
@@ -199,7 +210,7 @@ function ScopePicker({
           >
             {scope === o.value && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
           </span>
-          {o.label}
+          {t(o.labelKey)}
         </button>
       ))}
     </div>
@@ -222,6 +233,7 @@ export function SpeakerAssignPopover({
   onMergeSplit,
   mergeSuspected = false
 }: SpeakerAssignPopoverProps) {
+  const { t } = useTranslation('library')
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -295,7 +307,7 @@ export function SpeakerAssignPopover({
     navigate(`/person/${assignedContactId}`)
   }
 
-  const resetLabel = assignmentScope === 'turn' ? 'Reset this turn' : 'Reset to unidentified'
+  const resetLabel = assignmentScope === 'turn' ? t('speakerAssignPopover.resetThisTurnButton') : t('speakerAssignPopover.resetToUnidentifiedButton')
 
   return (
     <HoverCard suppressed={open}>
@@ -310,8 +322,8 @@ export function SpeakerAssignPopover({
               }}
               aria-label={
                 isAssigned
-                  ? `Speaker: ${displayText} (click for options)`
-                  : `Assign speaker ${label}`
+                  ? t('speakerAssignPopover.speakerOptionsAriaLabel', { name: displayText })
+                  : t('speakerAssignPopover.assignSpeakerAriaLabel', { label })
               }
               className={
                 isAssigned
@@ -323,7 +335,7 @@ export function SpeakerAssignPopover({
               {mergeSuspected && (
                 <span
                   aria-hidden="true"
-                  title="This speaker may be two people"
+                  title={t('speakerAssignPopover.mayBeTwoPeopleTitle')}
                   className="ml-1 inline-flex h-1.5 w-1.5 rounded-full bg-amber-500 align-middle"
                 />
               )}
@@ -334,14 +346,14 @@ export function SpeakerAssignPopover({
         <PopoverContent align="start" className="w-72 p-0">
           {mergeSuspected && canSplitHere && !hasSplitHere && (
             <div className="border-b bg-amber-500/10 p-2">
-              <p className="text-xs font-medium text-foreground">This speaker may be two people.</p>
+              <p className="text-xs font-medium text-foreground">{t('speakerAssignPopover.mayBeTwoPeopleBanner')}</p>
               <button
                 type="button"
                 onClick={split}
                 className="mt-1 flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-amber-700 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none dark:text-amber-400"
               >
                 <Scissors className="h-4 w-4" aria-hidden="true" />
-                Split speaker from here
+                {t('speakerAssignPopover.splitSpeakerFromHereButton')}
               </button>
             </div>
           )}
@@ -356,7 +368,7 @@ export function SpeakerAssignPopover({
                   className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                 >
                   <ExternalLink className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  View person
+                  {t('speakerAssignPopover.viewPersonButton')}
                 </button>
                 <button
                   type="button"
@@ -369,7 +381,7 @@ export function SpeakerAssignPopover({
                   className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                 >
                   <UserCog className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  Change identity
+                  {t('speakerAssignPopover.changeIdentityButton')}
                 </button>
                 <button
                   type="button"
@@ -393,8 +405,8 @@ export function SpeakerAssignPopover({
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search or create person..."
-                  aria-label="Search or create person"
+                  placeholder={t('speakerAssignPopover.searchPlaceholder')}
+                  aria-label={t('speakerAssignPopover.searchAriaLabel')}
                   className="w-full text-sm px-2 py-1.5 rounded border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
                   autoFocus
                 />
@@ -408,11 +420,11 @@ export function SpeakerAssignPopover({
                     className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-primary hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                   >
                     <UserPlus className="h-4 w-4" aria-hidden="true" />
-                    Create &ldquo;{trimmed}&rdquo;
+                    {t('speakerAssignPopover.createContactButton', { name: trimmed })}
                   </button>
                 )}
                 {filtered.length === 0 && !canCreate ? (
-                  <p className="px-2 py-3 text-center text-xs text-muted-foreground">No contacts found</p>
+                  <p className="px-2 py-3 text-center text-xs text-muted-foreground">{t('speakerAssignPopover.noContactsFoundMessage')}</p>
                 ) : (
                   filtered.map((contact) => (
                     <ContactRow
@@ -437,7 +449,7 @@ export function SpeakerAssignPopover({
                   className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
                 >
                   <Undo2 className="h-4 w-4" aria-hidden="true" />
-                  Merge back into {label.replace(/ · [A-Z0-9]+$/, '')}
+                  {t('speakerAssignPopover.mergeBackButton', { name: label.replace(/ · [A-Z0-9]+$/, '') })}
                 </button>
               ) : (
                 <button
@@ -446,7 +458,7 @@ export function SpeakerAssignPopover({
                   className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
                 >
                   <Users className="h-4 w-4" aria-hidden="true" />
-                  Split speaker from here
+                  {t('speakerAssignPopover.splitSpeakerFromHereButton')}
                 </button>
               )}
             </div>

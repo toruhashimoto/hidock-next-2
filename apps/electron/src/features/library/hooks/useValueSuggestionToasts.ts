@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { formatValueReasons } from '@/features/library/utils/valueReasons'
 
 interface ValueClassifiedPayload {
@@ -40,8 +41,17 @@ export interface UseValueSuggestionToastsOptions {
   debounceMs?: number
 }
 
-/** Mount ONCE (Library page or App shell) — see spec-003 Part F step 17. */
+/**
+ * Mount ONCE (Library page or App shell) — see spec-003 Part F step 17.
+ *
+ * i18n note (Task 11c): this is a genuine React hook (always called from
+ * within a component's render), not a plain data helper, so — unlike the
+ * `utils/` modules in this feature — it CAN call `useTranslation()` directly.
+ * This mirrors the existing precedent in `features/today/useTodayCaptures.ts`
+ * / `useTodayCommits.ts` (Task 9), which do the same for the same reason.
+ */
 export function useValueSuggestionToasts({ refresh, onReview, debounceMs = 2500 }: UseValueSuggestionToastsOptions): void {
+  const { t } = useTranslation('library')
   const bufferRef = useRef<ValueClassifiedPayload[]>([])
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Refs so the subscription effect below never needs to re-subscribe just
@@ -64,11 +74,11 @@ export function useValueSuggestionToasts({ refresh, onReview, debounceMs = 2500 
       import('@/components/ui/toaster').then(({ toast }) => {
         if (events.length === 1) {
           const { recordingId, rating, reasons } = events[0]
-          const title = rating === 'garbage' ? 'Marked garbage' : 'Marked low-value'
-          const description = formatValueReasons(reasons) || 'AI-assessed'
+          const title = rating === 'garbage' ? t('useValueSuggestionToasts.markedGarbageTitle') : t('useValueSuggestionToasts.markedLowValueTitle')
+          const description = formatValueReasons(reasons) || t('useValueSuggestionToasts.aiAssessedFallback')
           toast.info(title, description, {
             action: {
-              label: 'Mark personal',
+              label: t('useValueSuggestionToasts.markPersonalActionLabel'),
               onClick: () => {
                 window.electronAPI.recordings
                   .markPersonal(recordingId, true)
@@ -80,13 +90,17 @@ export function useValueSuggestionToasts({ refresh, onReview, debounceMs = 2500 
           })
         } else {
           const n = events.length
-          toast.info(`${n} captures marked low value`, 'Review the Library to see what changed.', {
-            action: {
-              label: 'Review',
-              onClick: () => onReviewRef.current?.()
-            },
-            duration: 10000
-          })
+          toast.info(
+            t('useValueSuggestionToasts.multipleMarkedLowValueMessage', { count: n }),
+            t('useValueSuggestionToasts.reviewLibraryMessage'),
+            {
+              action: {
+                label: t('useValueSuggestionToasts.reviewActionLabel'),
+                onClick: () => onReviewRef.current?.()
+              },
+              duration: 10000
+            }
+          )
         }
       })
     }
@@ -110,5 +124,8 @@ export function useValueSuggestionToasts({ refresh, onReview, debounceMs = 2500 
       if (timerRef.current) clearTimeout(timerRef.current)
       bufferRef.current = []
     }
-  }, [debounceMs])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `t`'s identity only
+    // changes on an actual language switch (react-i18next), so including it here
+    // is a deliberate re-subscribe-on-switch, not a missed dependency.
+  }, [debounceMs, t])
 }

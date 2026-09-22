@@ -1,6 +1,20 @@
-/** Artifact-type facets and capability helpers for the Knowledge Library. */
+/**
+ * Artifact-type facets and capability helpers for the Knowledge Library.
+ *
+ * i18n note (Task 11c): `BUILTIN_ARTIFACT_TYPES`'s `label`/`pluralLabel`
+ * fields are read directly as plain strings by `LibraryFilters.tsx` (Part B,
+ * already committed) — `type.pluralLabel` — so they cannot become functions.
+ * They are resolved once via the shared `i18n` singleton at module-eval time
+ * (task brief "approach 2", "value needed at module scope"); see the
+ * file-level note in utils/deletionCopy.ts for the full reasoning and the
+ * known non-reactive-to-live-language-switch limitation. `sourceTypeLabel()`
+ * itself is a function and is called fresh by SourceRow.tsx on every render,
+ * but it can only be as fresh as the (module-scope) descriptor it reads
+ * `.label` from.
+ */
 
 import type { UnifiedRecording } from '@/types/unified-recording'
+import i18n from '@/i18n'
 
 export type ArtifactCapability =
   | 'timed'
@@ -21,32 +35,35 @@ export interface LibraryArtifactTypeDescriptor {
 export type LibrarySourceType = string
 export type SourceTypeFilter = 'all' | (string & {})
 
+const NOTE_LABEL = i18n.t('library:sourceType.noteLabel')
+const NOTE_PLURAL_LABEL = i18n.t('library:sourceType.notePluralLabel')
+
 export const BUILTIN_ARTIFACT_TYPES: LibraryArtifactTypeDescriptor[] = [
   {
     id: 'audio',
-    label: 'Audio',
-    pluralLabel: 'Audio',
+    label: i18n.t('library:sourceType.audioLabel'),
+    pluralLabel: i18n.t('library:sourceType.audioPluralLabel'),
     extensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'webm', 'hda', 'opus', 'wma'],
     capabilities: ['timed', 'conversation', 'rateable', 'transcribable', 'device-backed', 'previewable']
   },
   {
     id: 'image',
-    label: 'Image',
-    pluralLabel: 'Images',
+    label: i18n.t('library:sourceType.imageLabel'),
+    pluralLabel: i18n.t('library:sourceType.imagePluralLabel'),
     extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif', 'tiff'],
     capabilities: ['rateable', 'previewable']
   },
   {
     id: 'pdf',
-    label: 'PDF',
-    pluralLabel: 'PDFs',
+    label: i18n.t('library:sourceType.pdfLabel'),
+    pluralLabel: i18n.t('library:sourceType.pdfPluralLabel'),
     extensions: ['pdf'],
     capabilities: ['rateable', 'previewable']
   },
   {
     id: 'note',
-    label: 'Note',
-    pluralLabel: 'Notes',
+    label: NOTE_LABEL,
+    pluralLabel: NOTE_PLURAL_LABEL,
     extensions: ['md', 'markdown', 'txt', 'text', 'rtf', 'json', 'csv', 'tsv', 'yaml', 'yml'],
     capabilities: ['rateable', 'previewable']
   }
@@ -77,7 +94,7 @@ export function normalizeArtifactTypeDescriptors(
       byId.set(
         id,
         id === 'note'
-          ? { ...descriptor, id: 'note', label: 'Note', pluralLabel: 'Notes' }
+          ? { ...descriptor, id: 'note', label: NOTE_LABEL, pluralLabel: NOTE_PLURAL_LABEL }
           : { ...descriptor, extensions: [...descriptor.extensions], capabilities: [...descriptor.capabilities] }
       )
     }
@@ -120,7 +137,7 @@ export function sourceTypeHasDuration(type: LibrarySourceType): boolean {
 }
 
 export function sourceTypeLabel(type: LibrarySourceType): string {
-  return getArtifactTypeDescriptor(type)?.label ?? (type === 'unknown' ? 'File' : type)
+  return getArtifactTypeDescriptor(type)?.label ?? (type === 'unknown' ? i18n.t('library:sourceType.fileFallback') : type)
 }
 
 export function matchesSourceTypeFilter(type: LibrarySourceType, filter: SourceTypeFilter): boolean {
