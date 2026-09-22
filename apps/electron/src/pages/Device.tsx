@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Usb, Download, RefreshCw, HardDrive, Mic, AlertCircle, Radio, Battery, Bluetooth, Play, Pause, Square, X, Terminal, ChevronDown, ChevronUp, Check, Copy, RotateCcw, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -24,6 +25,7 @@ import { shouldLogQa } from '@/services/qa-monitor'
 const CONNECTION_TIMEOUT_MS = 10000 // 10 second timeout (BUG-006)
 
 export function Device() {
+  const { t } = useTranslation()
   // B-DEV-001: Unified syncing state - use only store as single source of truth
   const storeSyncing = useAppStore(state => state.deviceSyncing)
   const deviceState = useAppStore(state => state.deviceState)
@@ -126,7 +128,7 @@ export function Device() {
   const handleCancelConnection = useCallback(() => {
     clearConnectionTimers()
     setConnecting(false)
-    setError('Connection cancelled')
+    setError(t('device:errors.connectionCancelled'))
     deviceService.stopAutoConnect()
     deviceService.disconnect()
   }, [clearConnectionTimers, deviceService])
@@ -421,7 +423,7 @@ export function Device() {
       if (!deviceService.isConnected()) {
         clearConnectionTimers()
         setConnecting(false)
-        setError('Connection timed out. Make sure your HiDock is connected via USB and not in use by another application.')
+        setError(t('device:errors.connectionTimedOut'))
         deviceService.disconnect()
       }
     }, CONNECTION_TIMEOUT_MS)
@@ -429,10 +431,10 @@ export function Device() {
     try {
       const success = await connectDevice()
       if (!success) {
-        setError('Failed to connect to device. Check if the device is connected and not in use.')
+        setError(t('device:errors.connectFailed'))
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Connection failed')
+      setError(e instanceof Error ? e.message : t('device:errors.connectionFailedFallback'))
     } finally {
       // connect() has resolved (success or failure), so always clear timers -
       // the timeout is no longer relevant for this attempt
@@ -452,17 +454,17 @@ export function Device() {
     try {
       const success = await deviceService.resetDevice()
       if (!success) {
-        setError('Device reset failed. Try disconnecting and reconnecting the USB cable.')
+        setError(t('device:errors.resetFailed'))
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Device reset failed')
+      setError(e instanceof Error ? e.message : t('device:errors.resetFailedFallback'))
     }
   }
 
   const handleSyncAll = async () => {
     // Validate connection before starting
     if (!deviceService.isConnected()) {
-      setError('Device not connected. Please connect your HiDock first.')
+      setError(t('device:errors.notConnected'))
       return
     }
 
@@ -498,8 +500,8 @@ export function Device() {
 
       if (toSync.length === 0) {
         toast({
-          title: 'All synced',
-          description: 'All recordings are already downloaded',
+          title: t('device:toast.allSyncedTitle'),
+          description: t('device:toast.allSyncedDescription'),
           variant: 'success'
         })
         setDeviceSyncState({ deviceSyncing: false })
@@ -525,24 +527,24 @@ export function Device() {
         await refreshSyncedFilenames()
 
         toast({
-          title: 'Sync started',
-          description: `Queued ${queuedIds.length} recording${queuedIds.length !== 1 ? 's' : ''} for download`,
+          title: t('device:toast.syncStartedTitle'),
+          description: t('device:toast.syncStartedDescription', { count: queuedIds.length }),
           variant: 'default'
         })
       } else {
         toast({
-          title: 'Nothing to sync',
-          description: 'All files are already queued or downloaded',
+          title: t('device:toast.nothingToSyncTitle'),
+          description: t('device:toast.nothingToSyncDescription'),
           variant: 'default'
         })
         setDeviceSyncState({ deviceSyncing: false })
       }
       // Note: deviceSyncing is not cleared here for queued files - the download orchestrator will manage sync state
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Sync failed')
+      setError(e instanceof Error ? e.message : t('device:errors.syncFailedFallback'))
       toast({
-        title: 'Sync failed',
-        description: e instanceof Error ? e.message : 'Unknown error',
+        title: t('device:toast.syncFailedTitle'),
+        description: e instanceof Error ? e.message : t('device:toast.unknownErrorFallback'),
         variant: 'error'
       })
       setDeviceSyncState({ deviceSyncing: false })
@@ -557,16 +559,16 @@ export function Device() {
       const success = await deviceService.setAutoRecord(enabled)
       if (!success) {
         toast({
-          title: 'Setting not applied',
-          description: 'Failed to update auto-record on device. The switch has been reverted.',
+          title: t('device:toast.settingNotAppliedTitle'),
+          description: t('device:toast.settingNotAppliedDescription'),
           variant: 'error'
         })
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update setting')
+      setError(e instanceof Error ? e.message : t('device:errors.updateSettingFailedFallback'))
       toast({
-        title: 'Setting error',
-        description: e instanceof Error ? e.message : 'Failed to update auto-record setting',
+        title: t('device:toast.settingErrorTitle'),
+        description: e instanceof Error ? e.message : t('device:toast.settingErrorDescriptionFallback'),
         variant: 'error'
       })
     } finally {
@@ -589,7 +591,7 @@ export function Device() {
       await window.electronAPI.config.updateSection('device', { autoDownload: enabled })
       setAutoDownload(enabled)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update auto-download setting')
+      setError(e instanceof Error ? e.message : t('device:errors.autoDownloadUpdateFailedFallback'))
     } finally {
       setConfigLoading(prev => ({ ...prev, autoDownload: false }))
     }
@@ -601,7 +603,7 @@ export function Device() {
       await window.electronAPI.config.updateSection('transcription', { autoTranscribe: enabled })
       setAutoTranscribe(enabled)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update auto-transcribe setting')
+      setError(e instanceof Error ? e.message : t('device:errors.autoTranscribeUpdateFailedFallback'))
     } finally {
       setConfigLoading(prev => ({ ...prev, autoTranscribe: false }))
     }
@@ -611,10 +613,7 @@ export function Device() {
   const [formatting, setFormatting] = useState(false)
   const handleFormatStorage = async () => {
     // Use window.confirm for confirmation since no dialog component exists
-    const confirmed = window.confirm(
-      'WARNING: This will permanently erase ALL recordings on the device.\n\n' +
-      'This action cannot be undone. Are you sure you want to format the device storage?'
-    )
+    const confirmed = window.confirm(t('device:confirm.formatStorageMessage'))
     if (!confirmed) return
 
     setFormatting(true)
@@ -622,8 +621,8 @@ export function Device() {
       const success = await deviceService.formatStorage()
       if (success) {
         toast({
-          title: 'Storage formatted',
-          description: 'All recordings have been erased from the device.',
+          title: t('device:toast.storageFormattedTitle'),
+          description: t('device:toast.storageFormattedDescription'),
           variant: 'success'
         })
         // Refresh recordings after format
@@ -633,15 +632,15 @@ export function Device() {
         }
       } else {
         toast({
-          title: 'Format failed',
-          description: 'Could not format device storage. Please try again.',
+          title: t('device:toast.formatFailedTitle'),
+          description: t('device:toast.formatFailedDescription'),
           variant: 'error'
         })
       }
     } catch (e) {
       toast({
-        title: 'Format error',
-        description: e instanceof Error ? e.message : 'Unknown error',
+        title: t('device:toast.formatErrorTitle'),
+        description: e instanceof Error ? e.message : t('device:toast.unknownErrorFallback'),
         variant: 'error'
       })
     } finally {
@@ -656,26 +655,26 @@ export function Device() {
       const result = await window.electronAPI.downloadService.retryFailed(deviceConnected)
       if (result.error) {
         toast({
-          title: 'Cannot retry downloads',
+          title: t('device:toast.cannotRetryDownloadsTitle'),
           description: result.error,
           variant: 'error'
         })
       } else if (result.count > 0) {
         toast({
-          title: 'Retrying downloads',
-          description: `Re-queued ${result.count} failed download${result.count !== 1 ? 's' : ''}`,
+          title: t('device:toast.retryingDownloadsTitle'),
+          description: t('device:toast.retryingDownloadsDescription', { count: result.count }),
           variant: 'default'
         })
         setDeviceSyncState({ deviceSyncing: true })
       } else {
         toast({
-          title: 'No failed downloads',
-          description: 'All downloads completed successfully',
+          title: t('device:toast.noFailedDownloadsTitle'),
+          description: t('device:toast.noFailedDownloadsDescription'),
           variant: 'success'
         })
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to retry downloads')
+      setError(e instanceof Error ? e.message : t('device:errors.retryDownloadsFailedFallback'))
     }
   }
 
@@ -698,10 +697,10 @@ export function Device() {
         // Start polling for realtime data
         startRealtimePolling()
       } else {
-        setError('Failed to start realtime streaming')
+        setError(t('device:errors.startRealtimeFailed'))
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start realtime streaming')
+      setError(e instanceof Error ? e.message : t('device:errors.startRealtimeFailed'))
     }
   }
 
@@ -713,10 +712,10 @@ export function Device() {
         setRealtimePaused(true)
         stopRealtimePolling()
       } else {
-        setError('Failed to pause realtime streaming')
+        setError(t('device:errors.pauseRealtimeFailed'))
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to pause realtime streaming')
+      setError(e instanceof Error ? e.message : t('device:errors.pauseRealtimeFailed'))
     }
   }
 
@@ -728,10 +727,10 @@ export function Device() {
         setRealtimePaused(false)
         startRealtimePolling()
       } else {
-        setError('Failed to resume realtime streaming')
+        setError(t('device:errors.resumeRealtimeFailed'))
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to resume realtime streaming')
+      setError(e instanceof Error ? e.message : t('device:errors.resumeRealtimeFailed'))
     }
   }
 
@@ -746,7 +745,7 @@ export function Device() {
       realtimeDataOffsetRef.current = 0
       setRealtimeDataReceived(0)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to stop realtime streaming')
+      setError(e instanceof Error ? e.message : t('device:errors.stopRealtimeFailed'))
     }
   }
 
@@ -810,7 +809,7 @@ export function Device() {
   const handleBluetoothScan = async () => {
     // B-DEV-012: Check connection before starting scan
     if (!deviceService.isConnected()) {
-      setError('Device not connected. Cannot start Bluetooth scan.')
+      setError(t('device:errors.bluetoothNotConnected'))
       return
     }
     setError(null)
@@ -818,7 +817,7 @@ export function Device() {
     try {
       const success = await deviceService.startBluetoothScan(30)
       if (!success) {
-        setError('Failed to start Bluetooth scan')
+        setError(t('device:errors.bluetoothScanFailed'))
       }
       // DV-10: Track timeout via ref so it can be cleaned up on unmount
       if (btScanTimeoutRef.current) clearTimeout(btScanTimeoutRef.current)
@@ -827,7 +826,7 @@ export function Device() {
         btScanTimeoutRef.current = null
       }, 30000)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Bluetooth scan failed')
+      setError(e instanceof Error ? e.message : t('device:errors.bluetoothScanFailedFallback'))
       setBluetoothScanning(false)
     }
   }
@@ -838,8 +837,8 @@ export function Device() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <header className="border-b px-6 py-4">
-        <h1 className="text-2xl font-bold">Device Sync</h1>
-        <p className="text-sm text-muted-foreground">Manage your HiDock device and sync recordings</p>
+        <h1 className="text-2xl font-bold">{t('device:page.title')}</h1>
+        <p className="text-sm text-muted-foreground">{t('device:page.description')}</p>
       </header>
 
       {/* Content */}
@@ -851,7 +850,7 @@ export function Device() {
               <AlertCircle className="h-5 w-5" />
               <p>{error}</p>
               <Button variant="ghost" size="sm" onClick={() => setError(null)} className="ml-auto">
-                Dismiss
+                {t('device:page.dismissButton')}
               </Button>
             </div>
           )}
@@ -861,12 +860,12 @@ export function Device() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Usb className="h-5 w-5" />
-                Device Connection
+                {t('device:connection.title')}
               </CardTitle>
               <CardDescription>
                 {deviceState.connected
-                  ? `${deviceState.model} connected (SN: ${deviceState.serialNumber})`
-                  : 'No device connected'}
+                  ? t('device:connection.connectedDescription', { model: deviceState.model, serialNumber: deviceState.serialNumber })
+                  : t('device:connection.notConnectedDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -882,12 +881,12 @@ export function Device() {
                         <Progress value={connectionStatus.progress} className="h-2" />
                       )}
                       <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                        <span>Elapsed: {(connectionElapsed / 1000).toFixed(1)}s</span>
+                        <span>{t('device:connection.elapsedLabel', { seconds: (connectionElapsed / 1000).toFixed(1) })}</span>
                         <span className="text-muted-foreground/50">|</span>
-                        <span>Timeout in {Math.max(0, (CONNECTION_TIMEOUT_MS - connectionElapsed) / 1000).toFixed(0)}s</span>
+                        <span>{t('device:connection.timeoutLabel', { seconds: Math.max(0, (CONNECTION_TIMEOUT_MS - connectionElapsed) / 1000).toFixed(0) })}</span>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Make sure your HiDock is connected via USB...
+                        {t('device:connection.usbHint')}
                       </p>
                       <Button
                         variant="outline"
@@ -896,22 +895,22 @@ export function Device() {
                         className="mt-2"
                       >
                         <X className="h-4 w-4 mr-2" />
-                        Cancel
+                        {t('device:connection.cancelButton')}
                       </Button>
                     </div>
                   ) : (
                     <>
                       <p className="text-muted-foreground mb-4">
-                        Connect your HiDock device via USB to begin syncing recordings
+                        {t('device:connection.connectHint')}
                       </p>
                       <Button onClick={handleConnect} disabled={connecting}>
                         <Usb className="h-4 w-4 mr-2" />
-                        Connect Device
+                        {t('device:connection.connectButton')}
                       </Button>
                       <div className="mt-6 pt-4 border-t space-y-3">
                         <div className="flex items-center justify-center gap-3">
                           <Label htmlFor="auto-connect" className="text-sm text-muted-foreground">
-                            Auto-connect on startup
+                            {t('device:connection.autoConnectLabel')}
                           </Label>
                           <Switch
                             id="auto-connect"
@@ -921,12 +920,12 @@ export function Device() {
                         </div>
                         {autoConnectConfig.enabled && (
                           <p className="text-xs text-muted-foreground mt-1 text-center">
-                            Will automatically connect to previously authorized devices
+                            {t('device:connection.autoConnectHint')}
                           </p>
                         )}
                         <div className="flex items-center justify-center gap-3">
                           <Label htmlFor="auto-download-disconnected" className="text-sm text-muted-foreground">
-                            Auto-download recordings
+                            {t('device:connection.autoDownloadLabel')}
                           </Label>
                           <Switch
                             id="auto-download-disconnected"
@@ -937,7 +936,7 @@ export function Device() {
                         </div>
                         <div className="flex items-center justify-center gap-3">
                           <Label htmlFor="auto-transcribe-disconnected" className="text-sm text-muted-foreground">
-                            Auto-transcribe recordings
+                            {t('device:connection.autoTranscribeLabel')}
                           </Label>
                           <Switch
                             id="auto-transcribe-disconnected"
@@ -972,16 +971,16 @@ export function Device() {
                       <div>
                         <p className="font-medium capitalize">{deviceState.model.replace('-', ' ')}</p>
                         <p className="text-sm text-muted-foreground">
-                          {storeSyncing ? 'Syncing...' : `Firmware ${deviceState.firmwareVersion}`}
+                          {storeSyncing ? t('device:connection.syncingStatus') : t('device:connection.firmwareStatus', { version: deviceState.firmwareVersion })}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={handleResetDevice} title="Reset USB connection if device is unresponsive">
+                      <Button variant="outline" size="sm" onClick={handleResetDevice} title={t('device:connection.resetTitle')}>
                         <RotateCcw className="h-4 w-4" />
                       </Button>
                       <Button variant="outline" size="sm" onClick={handleDisconnect}>
-                        Disconnect
+                        {t('device:connection.disconnectButton')}
                       </Button>
                     </div>
                   </div>
@@ -991,7 +990,7 @@ export function Device() {
                     <div className="p-4 border rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <HardDrive className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Storage</span>
+                        <span className="text-sm font-medium">{t('device:storage.title')}</span>
                       </div>
                       {deviceState.storage ? (
                         deviceState.storage.capacity > 0 ? (
@@ -1000,10 +999,10 @@ export function Device() {
                               {formatBytes(deviceState.storage.capacity - deviceState.storage.used)}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              free of {formatBytes(deviceState.storage.capacity)}
+                              {t('device:storage.freeOfLabel', { total: formatBytes(deviceState.storage.capacity) })}
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
-                              {formatBytes(deviceState.storage.used)} used
+                              {t('device:storage.usedLabel', { used: formatBytes(deviceState.storage.used) })}
                             </p>
                             <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
                               <div
@@ -1016,18 +1015,18 @@ export function Device() {
                           </>
                         ) : (
                           <p className="text-sm text-muted-foreground">
-                            Storage info unavailable
+                            {t('device:storage.unavailable')}
                           </p>
                         )
                       ) : (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <RefreshCw className="h-4 w-4 animate-spin" />
-                            <span className="text-sm">Loading...</span>
+                            <span className="text-sm">{t('device:storage.loading')}</span>
                           </div>
                           <Button variant="ghost" size="sm" onClick={handleResetDevice} className="text-xs">
                             <RotateCcw className="h-3 w-3 mr-1" />
-                            Reset if stuck
+                            {t('device:storage.resetIfStuckButton')}
                           </Button>
                         </div>
                       )}
@@ -1035,10 +1034,10 @@ export function Device() {
                     <div className="p-4 border rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <Mic className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Recordings</span>
+                        <span className="text-sm font-medium">{t('device:recordings.title')}</span>
                       </div>
                       <p className="text-2xl font-bold">{deviceState.recordingCount}</p>
-                      <p className="text-xs text-muted-foreground">files on device</p>
+                      <p className="text-xs text-muted-foreground">{t('device:recordings.filesOnDevice')}</p>
                     </div>
                   </div>
 
@@ -1047,11 +1046,11 @@ export function Device() {
                       Bluetooth pairing mode) pending Jensen protocol integration. Currently only
                       auto-record is exposed from the device firmware settings. */}
                   <div className="p-4 border rounded-lg">
-                    <p className="font-medium mb-3">Device Settings</p>
+                    <p className="font-medium mb-3">{t('device:settings.title')}</p>
                     {deviceState.settings && (
                       <div className="flex items-center justify-between mb-3">
                         <Label htmlFor="auto-record" className="flex items-center gap-2">
-                          Auto-record meetings
+                          {t('device:settings.autoRecordLabel')}
                           {configLoading.autoRecord && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
                         </Label>
                         <Switch
@@ -1064,7 +1063,7 @@ export function Device() {
                     )}
                     <div className="flex items-center justify-between mb-3">
                       <Label htmlFor="auto-connect-connected" className="text-sm">
-                        Auto-connect on startup
+                        {t('device:settings.autoConnectLabel')}
                       </Label>
                       <Switch
                         id="auto-connect-connected"
@@ -1074,7 +1073,7 @@ export function Device() {
                     </div>
                     <div className="flex items-center justify-between mb-3">
                       <Label htmlFor="auto-download" className="text-sm flex items-center gap-2">
-                        Auto-download recordings
+                        {t('device:settings.autoDownloadLabel')}
                         {configLoading.autoDownload && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
                       </Label>
                       <Switch
@@ -1086,7 +1085,7 @@ export function Device() {
                     </div>
                     <div className="flex items-center justify-between">
                       <Label htmlFor="auto-transcribe" className="text-sm flex items-center gap-2">
-                        Auto-transcribe recordings
+                        {t('device:settings.autoTranscribeLabel')}
                         {configLoading.autoTranscribe && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
                       </Label>
                       <Switch
@@ -1107,10 +1106,10 @@ export function Device() {
                         disabled={formatting || storeSyncing}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
-                        {formatting ? 'Formatting...' : 'Format Storage'}
+                        {formatting ? t('device:settings.formatting') : t('device:settings.formatStorageButton')}
                       </Button>
                       <p className="text-[10px] text-muted-foreground mt-1 text-center">
-                        Erases all recordings from device
+                        {t('device:settings.formatStorageHint')}
                       </p>
                     </div>
                   </div>
@@ -1145,27 +1144,27 @@ export function Device() {
                               <X className="h-4 w-4 mr-2" />
                               {deviceSyncProgress ? (
                                 <span className="flex flex-col items-start text-left">
-                                  <span>Cancel Sync ({deviceSyncProgress.current}/{deviceSyncProgress.total})</span>
+                                  <span>{t('device:sync.cancelWithProgress', { current: deviceSyncProgress.current, total: deviceSyncProgress.total })}</span>
                                   {deviceSyncEta && <span className="text-xs opacity-80">{formatEta(deviceSyncEta, true)}</span>}
                                 </span>
                               ) : (
-                                'Cancel Sync'
+                                t('device:sync.cancel')
                               )}
                             </>
                           ) : isLoadingList ? (
                             <>
                               <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Loading File List...
+                              {t('device:sync.loadingFileList')}
                             </>
                           ) : allSynced ? (
                             <>
                               <Check className="h-4 w-4 mr-2" />
-                              All Recordings Synced
+                              {t('device:sync.allSynced')}
                             </>
                           ) : (
                             <>
                               <Download className="h-4 w-4 mr-2" />
-                              Sync {unsyncedCount} Recording{unsyncedCount !== 1 ? 's' : ''}
+                              {t('device:sync.syncButton', { count: unsyncedCount })}
                             </>
                           )}
                         </Button>
@@ -1178,7 +1177,7 @@ export function Device() {
                             disabled={storeSyncing}
                           >
                             <RotateCcw className="h-4 w-4 mr-2" />
-                            Retry {failedDownloadCount} Failed Download{failedDownloadCount !== 1 ? 's' : ''}
+                            {t('device:sync.retryFailedButton', { count: failedDownloadCount })}
                           </Button>
                         )}
                       </>
@@ -1207,7 +1206,7 @@ export function Device() {
                 <CardTitle className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Terminal className="h-5 w-5" />
-                    Activity Log
+                    {t('device:activityLog.title')}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -1223,21 +1222,21 @@ export function Device() {
                             second: '2-digit',
                             fractionalSecondDigits: 3
                           })
-                          const typeLabel = entry.type === 'usb-out' ? '[OUT]'
-                            : entry.type === 'usb-in' ? '[IN]'
-                            : entry.type === 'error' ? '[ERR]'
-                            : entry.type === 'success' ? '[OK]'
-                            : '[INFO]'
-                          const details = entry.details ? ` - ${entry.details}` : ''
+                          const typeLabel = entry.type === 'usb-out' ? t('device:activityLog.typeOut')
+                            : entry.type === 'usb-in' ? t('device:activityLog.typeIn')
+                            : entry.type === 'error' ? t('device:activityLog.typeError')
+                            : entry.type === 'success' ? t('device:activityLog.typeSuccess')
+                            : t('device:activityLog.typeInfo')
+                          const details = entry.details ? ` ${t('device:activityLog.detailsSeparator')}${entry.details}` : ''
                           return `${timestamp}\n${typeLabel}\n${entry.message}${details}`
                         }).join('\n')
                         navigator.clipboard.writeText(logText)
                       }}
                       disabled={activityLog.length === 0}
-                      title="Copy log to clipboard"
+                      title={t('device:activityLog.copyTitle')}
                     >
                       <Copy className="h-4 w-4 mr-1" />
-                      Copy
+                      {t('device:activityLog.copyButton')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -1249,7 +1248,7 @@ export function Device() {
                       }}
                       disabled={activityLog.length === 0}
                     >
-                      Clear
+                      {t('device:activityLog.clearButton')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -1265,7 +1264,7 @@ export function Device() {
                   </div>
                 </CardTitle>
                 <CardDescription>
-                  Real-time USB communication and device operations
+                  {t('device:activityLog.description')}
                 </CardDescription>
               </CardHeader>
               {logExpanded && (
@@ -1276,7 +1275,7 @@ export function Device() {
                   >
                     {activityLog.length === 0 ? (
                       <p className="text-muted-foreground text-center py-4">
-                        No activity yet. Device operations will appear here.
+                        {t('device:activityLog.empty')}
                       </p>
                     ) : (
                       activityLog.map((entry, index) => (
@@ -1307,23 +1306,23 @@ export function Device() {
                           </span>
                           <span className="shrink-0 w-12">
                             {entry.type === 'usb-out'
-                              ? '[OUT]'
+                              ? t('device:activityLog.typeOut')
                               : entry.type === 'usb-in'
-                                ? '[IN]'
+                                ? t('device:activityLog.typeIn')
                                 : entry.type === 'error'
-                                  ? '[ERR]'
+                                  ? t('device:activityLog.typeError')
                                   : entry.type === 'success'
-                                    ? '[OK]'
+                                    ? t('device:activityLog.typeSuccess')
                                     : entry.type === 'warning'
-                                      ? '[WARN]'
-                                      : '[INFO]'}
+                                      ? t('device:activityLog.typeWarning')
+                                      : t('device:activityLog.typeInfo')}
                           </span>
                           <span className="flex-1">
                             {entry.message}
                             {entry.details && (
                               <span className="text-muted-foreground/80">
                                 {' '}
-                                - {entry.details}
+                                {t('device:activityLog.detailsSeparator')}{entry.details}
                               </span>
                             )}
                           </span>
@@ -1341,10 +1340,10 @@ export function Device() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Radio className="h-5 w-5" />
-                  Realtime Audio Streaming
+                  {t('device:realtime.title')}
                 </CardTitle>
                 <CardDescription>
-                  Stream live audio from your HiDock device
+                  {t('device:realtime.description')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1365,13 +1364,13 @@ export function Device() {
                         <p className="font-medium">
                           {realtimeActive
                             ? realtimePaused
-                              ? 'Paused'
-                              : 'Streaming'
-                            : 'Idle'}
+                              ? t('device:realtime.statusPaused')
+                              : t('device:realtime.statusStreaming')
+                            : t('device:realtime.statusIdle')}
                         </p>
                         {realtimeActive && (
                           <p className="text-xs text-muted-foreground">
-                            Received: {formatBytes(realtimeDataReceived)}
+                            {t('device:realtime.receivedLabel', { bytes: formatBytes(realtimeDataReceived) })}
                           </p>
                         )}
                       </div>
@@ -1380,36 +1379,36 @@ export function Device() {
                       {!realtimeActive ? (
                         <Button onClick={handleStartRealtime} size="sm">
                           <Play className="h-4 w-4 mr-2" />
-                          Start
+                          {t('device:realtime.startButton')}
                         </Button>
                       ) : (
                         <>
                           {realtimePaused ? (
                             <Button onClick={handleResumeRealtime} size="sm" variant="outline">
                               <Play className="h-4 w-4 mr-2" />
-                              Resume
+                              {t('device:realtime.resumeButton')}
                             </Button>
                           ) : (
                             <Button onClick={handlePauseRealtime} size="sm" variant="outline">
                               <Pause className="h-4 w-4 mr-2" />
-                              Pause
+                              {t('device:realtime.pauseButton')}
                             </Button>
                           )}
                           <Button onClick={handleStopRealtime} size="sm" variant="destructive">
                             <Square className="h-4 w-4 mr-2" />
-                            Stop
+                            {t('device:realtime.stopButton')}
                           </Button>
                         </>
                       )}
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    HiDock stereo audio is mixed to 16kHz 16-bit mono and transcribed by Gemini 3.5 Flash Live Transcribe.
+                    {t('device:realtime.hint')}
                   </p>
                   {(realtimeActive || liveTranscriptionFinal.length > 0) && (
                     <div className="rounded-lg border bg-muted/30 p-4" aria-live="polite">
                       <div className="mb-2 flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium">Live transcript</p>
+                        <p className="text-sm font-medium">{t('device:realtime.liveTranscriptTitle')}</p>
                         <span className="text-xs capitalize text-muted-foreground">{liveTranscriptionStatus}</span>
                       </div>
                       <div className="max-h-56 space-y-2 overflow-y-auto text-sm">
@@ -1418,7 +1417,7 @@ export function Device() {
                           <p className="italic text-muted-foreground">{liveTranscriptionInterim}</p>
                         )}
                         {liveTranscriptionFinal.length === 0 && !liveTranscriptionInterim && (
-                          <p className="text-muted-foreground">Listening for speech…</p>
+                          <p className="text-muted-foreground">{t('device:realtime.listeningForSpeech')}</p>
                         )}
                       </div>
                     </div>
@@ -1436,10 +1435,10 @@ export function Device() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Battery className="h-5 w-5" />
-                    Battery Status
+                    {t('device:battery.title')}
                   </CardTitle>
                   <CardDescription>
-                    P1 device battery information
+                    {t('device:battery.description')}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1470,10 +1469,10 @@ export function Device() {
                       </div>
                       <div>
                         <p className="font-medium">
-                          {batteryStatus ? `${batteryStatus.batteryLevel}%` : 'Loading...'}
+                          {batteryStatus ? t('device:battery.percentLabel', { level: batteryStatus.batteryLevel }) : t('device:battery.loading')}
                         </p>
                         <p className="text-xs text-muted-foreground capitalize">
-                          {batteryStatus?.status ?? 'Unknown'}
+                          {batteryStatus?.status ?? t('device:battery.statusUnknown')}
                         </p>
                       </div>
                     </div>
@@ -1489,10 +1488,10 @@ export function Device() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Bluetooth className="h-5 w-5" />
-                    Bluetooth
+                    {t('device:bluetooth.title')}
                   </CardTitle>
                   <CardDescription>
-                    Manage Bluetooth connections
+                    {t('device:bluetooth.description')}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1506,12 +1505,12 @@ export function Device() {
                         />
                         <div>
                           <p className="font-medium">
-                            {bluetoothScanning ? 'Scanning...' : 'Bluetooth Ready'}
+                            {bluetoothScanning ? t('device:bluetooth.scanningStatus') : t('device:bluetooth.readyStatus')}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {bluetoothScanning
-                              ? 'Looking for nearby devices'
-                              : 'Tap Scan to find devices'}
+                              ? t('device:bluetooth.scanningHint')
+                              : t('device:bluetooth.readyHint')}
                           </p>
                         </div>
                       </div>
@@ -1524,15 +1523,15 @@ export function Device() {
                         {bluetoothScanning ? (
                           <>
                             <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                            Scanning
+                            {t('device:bluetooth.scanningButton')}
                           </>
                         ) : (
-                          'Scan'
+                          t('device:bluetooth.scanButton')
                         )}
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      P1 devices can connect to Bluetooth audio devices for wireless playback.
+                      {t('device:bluetooth.hint')}
                     </p>
                   </div>
                 </CardContent>
@@ -1544,25 +1543,25 @@ export function Device() {
           {!deviceState.connected && (
             <Card>
               <CardHeader>
-                <CardTitle>How Device Sync Works</CardTitle>
+                <CardTitle>{t('device:instructions.title')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <h3 className="font-medium">1. Connect your device</h3>
+                  <h3 className="font-medium">{t('device:instructions.step1Title')}</h3>
                   <p className="text-sm text-muted-foreground">
-                    Plug in your HiDock via USB and click &quot;Connect Device&quot; to establish a connection
+                    {t('device:instructions.step1Hint')}
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <h3 className="font-medium">2. Sync automatically</h3>
+                  <h3 className="font-medium">{t('device:instructions.step2Title')}</h3>
                   <p className="text-sm text-muted-foreground">
-                    Enable auto-download to automatically sync new recordings when your device connects
+                    {t('device:instructions.step2Hint')}
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <h3 className="font-medium">3. Auto-transcribe</h3>
+                  <h3 className="font-medium">{t('device:instructions.step3Title')}</h3>
                   <p className="text-sm text-muted-foreground">
-                    Recordings are automatically transcribed and linked to your calendar meetings
+                    {t('device:instructions.step3Hint')}
                   </p>
                 </div>
               </CardContent>

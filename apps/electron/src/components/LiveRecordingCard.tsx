@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation, Trans } from 'react-i18next'
 import { Mic, CalendarClock, CircleSlash, Check, Pencil, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -72,15 +73,16 @@ function formatElapsed(seconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
-function meetingTimeLabel(m: LiveMeeting): string {
+function meetingTimeLabel(m: LiveMeeting, separator: string): string {
   const fmt = (iso: string) => {
     const d = new Date(iso)
     return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
-  return `${fmt(m.start_time)}–${fmt(m.end_time)}`
+  return `${fmt(m.start_time)}${separator}${fmt(m.end_time)}`
 }
 
 export function LiveRecordingCard({ inProgressMeetings, allMeetings }: LiveRecordingCardProps) {
+  const { t } = useTranslation()
   const deviceRecording = useAppStore((s) => s.deviceRecording)
   const filename = useAppStore((s) => s.activeRecordingFilename)
 
@@ -189,8 +191,8 @@ export function LiveRecordingCard({ inProgressMeetings, allMeetings }: LiveRecor
             >
               {active && <Check className="h-3 w-3" />}
             </span>
-            <span className="min-w-0 flex-1 truncate font-medium">{m.subject || 'Untitled meeting'}</span>
-            <span className="flex-shrink-0 text-xs text-muted-foreground">{meetingTimeLabel(m)}</span>
+            <span className="min-w-0 flex-1 truncate font-medium">{m.subject || t('device:liveRecording.untitledMeeting')}</span>
+            <span className="flex-shrink-0 text-xs text-muted-foreground">{meetingTimeLabel(m, t('device:liveRecording.timeRangeSeparator'))}</span>
           </button>
         )
       })}
@@ -212,7 +214,7 @@ export function LiveRecordingCard({ inProgressMeetings, allMeetings }: LiveRecor
           {isStandalone && <Check className="h-3 w-3" />}
         </span>
         <CircleSlash className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1">Not a calendar meeting (standalone)</span>
+        <span className="min-w-0 flex-1">{t('device:liveRecording.notCalendarMeetingOption')}</span>
       </button>
     </div>
   )
@@ -230,10 +232,10 @@ export function LiveRecordingCard({ inProgressMeetings, allMeetings }: LiveRecor
             <div className="flex items-center gap-2">
               <Mic className="h-4 w-4 text-red-600 dark:text-red-500 flex-shrink-0" />
               <span className="text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-500">
-                Recording now
+                {t('device:liveRecording.recordingNowLabel')}
               </span>
               {elapsed && (
-                <span className="text-xs font-mono text-foreground/60" aria-label="Elapsed recording time">
+                <span className="text-xs font-mono text-foreground/60" aria-label={t('device:liveRecording.elapsedAriaLabel')}>
                   {elapsed}
                 </span>
               )}
@@ -249,12 +251,14 @@ export function LiveRecordingCard({ inProgressMeetings, allMeetings }: LiveRecor
             <div className="flex items-center gap-2">
               <CalendarClock className="h-4 w-4 flex-shrink-0 text-primary" />
               <div className="min-w-0 flex-1 text-sm">
-                <span className="text-muted-foreground">Will be attributed to </span>
-                <span className="font-medium text-foreground">{explicitMeeting.subject || 'Untitled meeting'}</span>
+                <Trans i18nKey="device:liveRecording.attributedTo" values={{ subject: explicitMeeting.subject || t('device:liveRecording.untitledMeeting') }}>
+                  <span className="text-muted-foreground">Will be attributed to </span>
+                  <span className="font-medium text-foreground">{{ subject: explicitMeeting.subject || t('device:liveRecording.untitledMeeting') } as unknown as string}</span>
+                </Trans>
               </div>
               <Button size="sm" variant="ghost" className="flex-shrink-0" onClick={() => setPicking(true)}>
                 <Pencil className="h-3.5 w-3.5 mr-1" />
-                Change
+                {t('device:liveRecording.changeButton')}
               </Button>
             </div>
           )}
@@ -264,11 +268,11 @@ export function LiveRecordingCard({ inProgressMeetings, allMeetings }: LiveRecor
             <div className="flex items-center gap-2">
               <CircleSlash className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1 text-sm text-muted-foreground">
-                Standalone — won&apos;t be linked to any meeting.
+                {t('device:liveRecording.standaloneMessage')}
               </div>
               <Button size="sm" variant="ghost" className="flex-shrink-0" onClick={() => setPicking(true)}>
                 <Pencil className="h-3.5 w-3.5 mr-1" />
-                Change
+                {t('device:liveRecording.changeButton')}
               </Button>
             </div>
           )}
@@ -279,18 +283,20 @@ export function LiveRecordingCard({ inProgressMeetings, allMeetings }: LiveRecor
               <div className="flex items-center gap-2">
                 <CalendarClock className="h-4 w-4 flex-shrink-0 text-primary" />
                 <div className="min-w-0 flex-1 text-sm">
-                  <span className="text-muted-foreground">Will be attributed to </span>
-                  <span className="font-medium text-foreground">{autoSingle.subject || 'Untitled meeting'}</span>
+                  <Trans i18nKey="device:liveRecording.attributedTo" values={{ subject: autoSingle.subject || t('device:liveRecording.untitledMeeting') }}>
+                    <span className="text-muted-foreground">Will be attributed to </span>
+                    <span className="font-medium text-foreground">{{ subject: autoSingle.subject || t('device:liveRecording.untitledMeeting') } as unknown as string}</span>
+                  </Trans>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 pl-6">
                 <Button size="sm" variant="outline" onClick={() => setPicking(true)}>
                   <Pencil className="h-3.5 w-3.5 mr-1" />
-                  Change
+                  {t('device:liveRecording.changeButton')}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={markStandalone}>
                   <CircleSlash className="h-3.5 w-3.5 mr-1" />
-                  Not a calendar meeting
+                  {t('device:liveRecording.notCalendarMeetingButton')}
                 </Button>
               </div>
             </div>
@@ -299,7 +305,7 @@ export function LiveRecordingCard({ inProgressMeetings, allMeetings }: LiveRecor
           {/* Undecided: two or more in-progress meetings */}
           {undecided && !picking && (
             <div className="space-y-2">
-              <div className="text-sm font-medium">Which meeting is this?</div>
+              <div className="text-sm font-medium">{t('device:liveRecording.whichMeetingQuestion')}</div>
               {renderOptions()}
             </div>
           )}
@@ -309,12 +315,12 @@ export function LiveRecordingCard({ inProgressMeetings, allMeetings }: LiveRecor
             <div className="flex items-center gap-2">
               <CircleSlash className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1 text-sm text-muted-foreground">
-                No calendar meeting right now — will be standalone.
+                {t('device:liveRecording.noCalendarMeetingNow')}
               </div>
               {allMeetings.length > 0 && (
                 <Button size="sm" variant="ghost" className="flex-shrink-0" onClick={() => setPicking(true)}>
                   <Pencil className="h-3.5 w-3.5 mr-1" />
-                  Assign
+                  {t('device:liveRecording.assignButton')}
                 </Button>
               )}
             </div>
@@ -324,13 +330,13 @@ export function LiveRecordingCard({ inProgressMeetings, allMeetings }: LiveRecor
           {picking && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Attribute this recording to…</div>
+                <div className="text-sm font-medium">{t('device:liveRecording.attributeToPrompt')}</div>
                 <Button size="sm" variant="ghost" onClick={() => setPicking(false)}>
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
               {options.length === 0 ? (
-                <div className="text-xs text-muted-foreground">No meetings today. It will be standalone.</div>
+                <div className="text-xs text-muted-foreground">{t('device:liveRecording.noMeetingsToday')}</div>
               ) : (
                 renderOptions()
               )}
