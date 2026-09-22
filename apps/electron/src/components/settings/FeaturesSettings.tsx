@@ -17,8 +17,8 @@ import { useConfigStore } from '@/store/domain/useConfigStore'
 import { usePendingRestart, useFeatureStore, describeDisableReason } from '@/store/useFeatureStore'
 import {
   ALL_FEATURE_IDS,
-  FEATURES,
-  PRESET_INFO,
+  translatedFeatureInfo,
+  translatedPresetInfo,
   type PresetId,
 } from '@/shared/feature-registry'
 import { toast } from '@/components/ui/toaster'
@@ -44,7 +44,7 @@ export function FeaturesSettings(): React.ReactElement {
       await updateConfig('features', { preset: next, flags })
       toast({
         title: t('settings:features.presetAppliedTitle'),
-        description: PRESET_INFO[next].label,
+        description: translatedPresetInfo(t, next).label,
         variant: 'success',
       })
     } catch (e) {
@@ -82,11 +82,11 @@ export function FeaturesSettings(): React.ReactElement {
           >
             {SELECTABLE_PRESETS.map((id) => (
               <option key={id} value={id}>
-                {PRESET_INFO[id].label}
+                {translatedPresetInfo(t, id).label}
               </option>
             ))}
           </select>
-          <p className="text-xs text-muted-foreground">{PRESET_INFO[preset].description}</p>
+          <p className="text-xs text-muted-foreground">{translatedPresetInfo(t, preset).description}</p>
         </div>
 
         {disabled.length > 0 && (
@@ -95,7 +95,7 @@ export function FeaturesSettings(): React.ReactElement {
             <ul className="mt-1 space-y-0.5">
               {disabled.map((id) => (
                 <li key={id} className="text-xs text-muted-foreground">
-                  {FEATURES[id].label}
+                  {translatedFeatureInfo(t, id).label}
                   {resolved[id]?.reason?.startsWith('requires:') && (
                     <span className="ml-1 text-muted-foreground/70">
                       — {describeDisableReason(resolved[id]?.reason)}
@@ -123,8 +123,8 @@ export function FeaturesSettings(): React.ReactElement {
                   <span className="font-medium">
                     {pendingRestart
                       .filter((id) => resolved[id]?.enabled)
-                      .map((id) => FEATURES[id].label)
-                      .join(', ')}
+                      .map((id) => translatedFeatureInfo(t, id).label)
+                      .join(t('settings:features.listSeparator'))}
                   </span>
                 </p>
               )}
@@ -134,8 +134,8 @@ export function FeaturesSettings(): React.ReactElement {
                   <span className="font-medium">
                     {pendingRestart
                       .filter((id) => !resolved[id]?.enabled)
-                      .map((id) => FEATURES[id].label)
-                      .join(', ')}
+                      .map((id) => translatedFeatureInfo(t, id).label)
+                      .join(t('settings:features.listSeparator'))}
                   </span>
                 </p>
               )}

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Star, Pencil, Check, X, Trash2 } from 'lucide-react'
 import {
   Dialog,
@@ -31,6 +32,7 @@ export function RecordingLinkDialog({
   onClose,
   onResolved
 }: RecordingLinkDialogProps) {
+  const { t } = useTranslation()
   // Transcript-derived context fetched alongside candidates, so the header can
   // say what the recording is ABOUT (title/summary/speakers) even when the
   // opener (e.g. the Calendar) only had the filename to hand.
@@ -102,7 +104,7 @@ export function RecordingLinkDialog({
         if (cancelled) return
 
         if (!candidatesResult.success) {
-          setLinkError(candidatesResult.error || 'Failed to load candidates')
+          setLinkError(candidatesResult.error || t('library:recordingLinkDialog.loadCandidatesFailed'))
           return
         }
 
@@ -131,7 +133,7 @@ export function RecordingLinkDialog({
         }
       } catch (err) {
         if (cancelled) return
-        setLinkError(err instanceof Error ? err.message : 'Failed to load data')
+        setLinkError(err instanceof Error ? err.message : t('library:recordingLinkDialog.loadDataFailed'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -166,13 +168,13 @@ export function RecordingLinkDialog({
         [field]: field === 'location' ? (value || null) : value
       })
       if (!result.success) {
-        toast.error(`Failed to update meeting ${field}`)
+        toast.error(field === 'subject' ? t('library:recordingLinkDialog.updateSubjectFailed') : t('library:recordingLinkDialog.updateLocationFailed'))
       } else {
-        toast.success(`Meeting ${field} updated`)
+        toast.success(field === 'subject' ? t('library:recordingLinkDialog.subjectUpdated') : t('library:recordingLinkDialog.locationUpdated'))
         onResolved()
       }
     } catch {
-      toast.error(`Failed to update meeting ${field}`)
+      toast.error(field === 'subject' ? t('library:recordingLinkDialog.updateSubjectFailed') : t('library:recordingLinkDialog.updateLocationFailed'))
     } finally {
       setSavingMeeting(false)
       if (field === 'subject') setEditingSubject(false)
@@ -185,13 +187,13 @@ export function RecordingLinkDialog({
     try {
       const result = await window.electronAPI.recordings.selectMeeting(recordingId, null)
       if (!result.success) {
-        toast.error('Failed to unlink recording')
+        toast.error(t('library:recordingLinkDialog.unlinkFailed'))
       } else {
         setLinkedRecordings(prev => prev.filter(r => r.id !== recordingId))
-        toast.success('Recording unlinked')
+        toast.success(t('library:recordingLinkDialog.recordingUnlinked'))
       }
     } catch {
-      toast.error('Failed to unlink recording')
+      toast.error(t('library:recordingLinkDialog.unlinkFailed'))
     } finally {
       setUnlinkingId(null)
     }
@@ -208,14 +210,14 @@ export function RecordingLinkDialog({
       const result = await window.electronAPI.recordings.selectMeeting(recording.id, meetingId)
 
       if (!result.success) {
-        setLinkError(result.error || 'Failed to save')
+        setLinkError(result.error || t('library:recordingLinkDialog.saveFailed'))
         return
       }
 
       onResolved()
       onClose()
     } catch (err) {
-      setLinkError(err instanceof Error ? err.message : 'Failed to save')
+      setLinkError(err instanceof Error ? err.message : t('library:recordingLinkDialog.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -231,7 +233,7 @@ export function RecordingLinkDialog({
   const metaLine = [
     recording.filename,
     recording.duration_seconds ? formatDuration(recording.duration_seconds) : null,
-    speakerCount ? `${speakerCount} speaker${speakerCount === 1 ? '' : 's'}` : null
+    speakerCount ? t('library:recordingLinkDialog.speakerCount', { count: speakerCount }) : null
   ]
     .filter(Boolean)
     .join('  ·  ')
@@ -257,7 +259,7 @@ export function RecordingLinkDialog({
       <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>
-            {meeting ? 'Meeting Details' : (hasCandidates ? 'Verify Recording Match' : 'Link Recording to Meeting')}
+            {meeting ? t('library:recordingLinkDialog.meetingDetailsTitle') : (hasCandidates ? t('library:recordingLinkDialog.verifyMatchTitle') : t('library:recordingLinkDialog.linkToMeetingTitle'))}
           </DialogTitle>
           <DialogDescription className="text-sm space-y-1">
             {/* Lead with what the recording IS (transcript-derived title/summary)
@@ -292,11 +294,11 @@ export function RecordingLinkDialog({
           {/* ── Section 1: Edit meeting details (only when linked) ── */}
           {meeting && (
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-1">Meeting Details</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-1">{t('library:recordingLinkDialog.meetingDetailsTitle')}</p>
               <div className="rounded-lg border p-3 space-y-3">
                 {/* Subject */}
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Title</p>
+                  <p className="text-xs text-muted-foreground">{t('library:recordingLinkDialog.titleFieldLabel')}</p>
                   {editingSubject ? (
                     <div className="flex items-center gap-2">
                       <Input
@@ -332,7 +334,7 @@ export function RecordingLinkDialog({
 
                 {/* Location */}
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Location</p>
+                  <p className="text-xs text-muted-foreground">{t('library:recordingLinkDialog.locationFieldLabel')}</p>
                   {editingLocation ? (
                     <div className="flex items-center gap-2">
                       <Input
@@ -343,7 +345,7 @@ export function RecordingLinkDialog({
                           if (e.key === 'Escape') { setEditingLocation(false); setLocationDraft(meeting.location ?? '') }
                         }}
                         className="h-7 text-sm"
-                        placeholder="No location"
+                        placeholder={t('library:recordingLinkDialog.noLocationPlaceholder')}
                         autoFocus
                         disabled={savingMeeting}
                       />
@@ -369,7 +371,7 @@ export function RecordingLinkDialog({
 
                 {/* Date (display only) */}
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Date</p>
+                  <p className="text-xs text-muted-foreground">{t('library:recordingLinkDialog.dateFieldLabel')}</p>
                   <p className="text-sm">{formatDateTime(meeting.start_time)}</p>
                 </div>
               </div>
@@ -380,7 +382,7 @@ export function RecordingLinkDialog({
           {meeting && linkedRecordings.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-1">
-                Other Recordings Linked to This Meeting ({linkedRecordings.length})
+                {t('library:recordingLinkDialog.otherRecordingsLinkedHeading', { count: linkedRecordings.length })}
               </p>
               <div className="rounded-lg border divide-y">
                 {linkedRecordings.map(r => (
@@ -393,8 +395,8 @@ export function RecordingLinkDialog({
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                      title="Remove meeting link (meeting is not deleted)"
-                      aria-label={`Remove meeting link for ${(r as any).title || r.filename}`}
+                      title={t('library:recordingLinkDialog.removeMeetingLinkTitle')}
+                      aria-label={t('library:recordingLinkDialog.removeMeetingLinkAriaLabel', { name: (r as any).title || r.filename })}
                       disabled={unlinkingId === r.id}
                       onClick={() => handleUnlinkOther(r.id)}
                     >
@@ -410,12 +412,12 @@ export function RecordingLinkDialog({
           <div className="space-y-2">
             {meeting && (
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-1">
-                Change Meeting Link
+                {t('library:recordingLinkDialog.changeMeetingLinkHeading')}
               </p>
             )}
 
             {loading && (
-              <div className="py-8 text-center text-muted-foreground">Loading...</div>
+              <div className="py-8 text-center text-muted-foreground">{t('library:recordingLinkDialog.loading')}</div>
             )}
 
             {linkError && (
@@ -432,13 +434,13 @@ export function RecordingLinkDialog({
               >
                 {!hasCandidates && options.length === 0 && !meeting && (
                   <p className="text-sm text-muted-foreground italic py-4 text-center">
-                    No meetings found near this recording time
+                    {t('library:recordingLinkDialog.noMeetingsFound')}
                   </p>
                 )}
 
                 {!hasCandidates && options.length > 0 && (
                   <p className="text-sm text-muted-foreground mb-2">
-                    {meeting ? 'Select a different meeting:' : 'No automatic match found. Select a meeting:'}
+                    {meeting ? t('library:recordingLinkDialog.selectDifferentMeeting') : t('library:recordingLinkDialog.noAutoMatchFound')}
                   </p>
                 )}
 
@@ -457,7 +459,7 @@ export function RecordingLinkDialog({
                         {option.isAiSelected && (
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary flex-shrink-0">
                             <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                            Best match
+                            {t('library:recordingLinkDialog.bestMatch')}
                           </span>
                         )}
                         <span className="font-medium truncate">{option.subject}</span>
@@ -482,7 +484,7 @@ export function RecordingLinkDialog({
                             'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
                           option.confidenceScore <= 0.4 && 'bg-muted text-muted-foreground'
                         )}
-                        title="Match confidence"
+                        title={t('library:recordingLinkDialog.matchConfidenceTitle')}
                       >
                         {Math.round(option.confidenceScore * 100)}%
                       </span>
@@ -499,7 +501,7 @@ export function RecordingLinkDialog({
                   )}
                 >
                   <RadioGroupItem value="none" />
-                  <span className="text-muted-foreground">No meeting — standalone recording</span>
+                  <span className="text-muted-foreground">{t('library:recordingLinkDialog.standaloneOption')}</span>
                 </label>
               </RadioGroup>
             )}
@@ -508,10 +510,10 @@ export function RecordingLinkDialog({
 
         <DialogFooter className="flex-shrink-0">
           <Button variant="outline" onClick={onClose} disabled={saving}>
-            Cancel
+            {t('library:recordingLinkDialog.cancel')}
           </Button>
           <Button onClick={handleSaveLink} disabled={saving || loading || selectedId === null}>
-            {saving ? 'Saving...' : (meeting ? 'Change Link' : 'Confirm')}
+            {saving ? t('library:recordingLinkDialog.saving') : (meeting ? t('library:recordingLinkDialog.changeLink') : t('library:recordingLinkDialog.confirm'))}
           </Button>
         </DialogFooter>
       </DialogContent>
