@@ -48,7 +48,9 @@ export function ActivityLogButton() {
         onClick={() => setOpen(true)}
         aria-label={
           count > 0
-            ? `${t('layout:activityLogButton.countAriaLabel', { count })}${hasErrors ? t('layout:activityLogButton.hasErrorsSuffix') : ''}`
+            ? hasErrors
+              ? t('layout:activityLogButton.countAriaLabelWithErrors', { count })
+              : t('layout:activityLogButton.countAriaLabel', { count })
             : t('layout:activityLogButton.title')
         }
         title={t('layout:activityLogButton.title')}

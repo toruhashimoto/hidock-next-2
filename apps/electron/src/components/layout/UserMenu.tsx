@@ -137,7 +137,7 @@ export function UserMenu() {
           <DropdownMenuItem onSelect={() => setAboutOpen(true)}>
             <Info className="mr-2 h-4 w-4" />
             {t('layout:userMenu.about')}
-            {version && <span className="ml-auto text-[10px] text-muted-foreground">v{version}</span>}
+            {version && <span className="ml-auto text-[10px] text-muted-foreground">{t('layout:userMenu.versionValue', { version })}</span>}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

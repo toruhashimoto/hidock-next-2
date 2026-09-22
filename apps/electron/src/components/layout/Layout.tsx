@@ -244,7 +244,7 @@ export function Layout({ children }: LayoutProps) {
     // Show toast on connection state change
     if (wasConnected !== isNowConnected) {
       if (isNowConnected) {
-        const modelName = deviceState.model?.replace('hidock-', '').toUpperCase() || 'Device'
+        const modelName = deviceState.model?.replace('hidock-', '').toUpperCase() || t('layout:toast.deviceConnectedFallbackModel')
         toast({
           title: t('layout:toast.deviceConnectedTitle'),
           description: t('layout:toast.deviceConnectedDescription', { model: modelName }),

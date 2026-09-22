@@ -154,7 +154,9 @@ export function NotificationsButton() {
           type="button"
           aria-label={
             active > 0 || errors > 0
-              ? `${t('layout:notifications.ariaLabelActive', { count: active })}${errors ? t('layout:notifications.ariaLabelErrorsSuffix', { count: errors }) : ''}`
+              ? errors > 0
+                ? t('layout:notifications.ariaLabelWithErrors', { count: active, errors })
+                : t('layout:notifications.ariaLabelActive', { count: active })
               : t('layout:notifications.title')
           }
           aria-haspopup="dialog"
