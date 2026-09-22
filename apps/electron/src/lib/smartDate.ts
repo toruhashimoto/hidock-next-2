@@ -4,6 +4,17 @@
  * not read like this week's) and, where useful, a relative "x days ago" hint.
  */
 
+import i18n from '@/i18n'
+
+/**
+ * The BCP 47 tag to format dates with. Derived from the active UI language
+ * rather than the OS locale: a user who picked English in Settings expects
+ * English dates even on a Japanese Windows.
+ */
+function dateLocale(): string {
+  return i18n.language === 'ja' ? 'ja-JP' : 'en-US'
+}
+
 function toDate(value: Date | string | number | null | undefined): Date | null {
   if (value == null) return null
   const d = value instanceof Date ? value : new Date(value)
@@ -25,11 +36,43 @@ export function formatSmartDate(
   opts: { time?: boolean; fallback?: string } = {}
 ): string {
   const d = toDate(value)
-  if (!d) return opts.fallback ?? 'Unknown date'
-  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  if (!d) return opts.fallback ?? i18n.t('common:date.unknown')
+  const locale = dateLocale()
+  const date = d.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })
   if (opts.time === false) return date
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const time = d.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
   return `${date} · ${time}`
+}
+
+/** Thresholds in seconds, largest first, with the Intl unit to report them in. */
+const RELATIVE_UNITS: ReadonlyArray<[Intl.RelativeTimeFormatUnit, number]> = [
+  ['year', 60 * 60 * 24 * 365],
+  ['month', 60 * 60 * 24 * 30],
+  ['week', 60 * 60 * 24 * 7],
+  ['day', 60 * 60 * 24],
+  ['hour', 60 * 60],
+  ['minute', 60]
+]
+
+/**
+ * Japanese relative hint via Intl. Only reached when the UI language is ja, so
+ * the English branch below keeps producing its established short forms
+ * ("5 min ago", "2 wks ago") byte-for-byte.
+ */
+function formatRelativeJa(d: Date, now: Date): string {
+  const deltaSeconds = (d.getTime() - now.getTime()) / 1000
+  const abs = Math.abs(deltaSeconds)
+  if (abs < 45) return i18n.t('common:date.justNow')
+
+  // style: 'narrow' — the default 'long' inserts a half-width space between the
+  // numeral and the unit in this ICU's ja-JP data (e.g. "3 日前"), which reads
+  // as unnatural Japanese. 'narrow' drops the space ("3日前") without changing
+  // the unit words or numerals themselves.
+  const rtf = new Intl.RelativeTimeFormat('ja-JP', { numeric: 'always', style: 'narrow' })
+  for (const [unit, seconds] of RELATIVE_UNITS) {
+    if (abs >= seconds) return rtf.format(Math.round(deltaSeconds / seconds), unit)
+  }
+  return rtf.format(Math.round(deltaSeconds / 60), 'minute')
 }
 
 /**
@@ -42,6 +85,10 @@ export function formatRelativeDate(
 ): string | null {
   const d = toDate(value)
   if (!d) return null
+
+  // Japanese takes the Intl path; English keeps its own short forms unchanged.
+  if (i18n.language === 'ja') return formatRelativeJa(d, now)
+
   const diffMs = now.getTime() - d.getTime()
   const future = diffMs < 0
   const abs = Math.abs(diffMs)
