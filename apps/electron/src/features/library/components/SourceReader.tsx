@@ -1514,7 +1514,7 @@ export function SourceReader({
                       disabled={isTranscribeBusy}
                       className="rounded-l-none px-2"
                       aria-label={t('library:sourceReader.chooseTranscriptionMethodAriaLabel')}
-                      title={t('library:sourceReader.chooseTranscriptionMethodTitle')}
+                      title={t('library:sourceReader.chooseTranscriptionMethodAriaLabel')}
                     >
                       <ChevronDown className="h-4 w-4" />
                     </Button>
@@ -2080,13 +2080,15 @@ function processingStageLabel(t: TFunction, stage: ReaderProcessingRun['stage'])
   }
 }
 
-function formatProcessingDuration(durationMs: number | null | undefined): string | null {
+function formatProcessingDuration(t: TFunction, durationMs: number | null | undefined): string | null {
   if (durationMs == null || !Number.isFinite(durationMs) || durationMs < 0) return null
-  if (durationMs < 1000) return `${Math.round(durationMs)} ms`
-  if (durationMs < 60_000) return `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)} s`
+  if (durationMs < 1000) return t('library:sourceReader.durationMs', { value: Math.round(durationMs) })
+  if (durationMs < 60_000) {
+    return t('library:sourceReader.durationSeconds', { value: (durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0) })
+  }
   const minutes = Math.floor(durationMs / 60_000)
   const seconds = Math.round((durationMs % 60_000) / 1000)
-  return `${minutes}m ${seconds}s`
+  return t('library:sourceReader.durationMinutesSeconds', { minutes, seconds })
 }
 
 function processingProviderLabel(t: TFunction, run: ReaderProcessingRun): string {
@@ -2131,7 +2133,7 @@ function formatProviderTimeline(t: TFunction, usageJson: string | null | undefin
           ? ` (${formatAudioOffset(event.audioStartSec!)}-${formatAudioOffset(event.audioEndSec!)})`
           : ''
         const phase = (event.phase || 'request').replaceAll('-', ' ')
-        const duration = formatProcessingDuration(event.elapsedMs)
+        const duration = formatProcessingDuration(t, event.elapsedMs)
         const status = event.status === 'failed' ? t('library:sourceReader.providerTimelineFailedStatus') : duration
         return `${chunk}${bounds} ${phase}: ${status || t('library:sourceReader.providerTimelineDurationNotReported')}${event.detail ? ` - ${event.detail}` : ''}`
       })
@@ -2152,7 +2154,7 @@ function ProcessingRunChips({ runs }: { runs: ReaderProcessingRun[] }) {
       <span className="mr-0.5 text-[11px] font-medium text-muted-foreground">{t('library:sourceReader.processingTimelineHeading')}</span>
       {visible.map((run) => {
         const provider = processingProviderLabel(t, run)
-        const duration = formatProcessingDuration(run.duration_ms)
+        const duration = formatProcessingDuration(t, run.duration_ms)
         const providerTimeline = run.stage === 'transcription' ? formatProviderTimeline(t, run.usage_json) : []
         const blocked = run.quality_status === 'blocked'
         const chipSep = t('library:sourceReader.processingChipSeparator')
@@ -2177,7 +2179,7 @@ function ProcessingRunChips({ runs }: { runs: ReaderProcessingRun[] }) {
             : null,
           run.estimated_cost_amount != null
             ? t('library:sourceReader.processingCostLabel', {
-                value: `${run.estimated_cost_currency || ''} ${run.estimated_cost_amount}`.trim()
+                value: `${run.estimated_cost_currency || ''} ${run.estimated_cost_amount}`
               })
             : t('library:sourceReader.processingCostNotReported')
         ].filter(Boolean).join('\n')
