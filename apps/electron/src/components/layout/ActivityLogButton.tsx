@@ -92,6 +92,13 @@ function ActivityLogOverlay({ open, onClose, entries, onClear }: ActivityLogOver
   const { t } = useTranslation()
   const listRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  // The button hands us a new onClose on every render, and every new log entry
+  // re-renders it. Read onClose through a ref so the effect below runs only when
+  // the overlay opens or closes, instead of pulling focus back onto the panel.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   // A modal takes the keyboard with it: focus moves into the panel on open,
   // Tab cycles inside it, and focus returns to whatever opened it on close.
@@ -101,7 +108,7 @@ function ActivityLogOverlay({ open, onClose, entries, onClear }: ActivityLogOver
     panelRef.current?.focus()
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose()
+        onCloseRef.current()
         return
       }
       if (e.key !== 'Tab' || !panelRef.current) return
@@ -126,7 +133,7 @@ function ActivityLogOverlay({ open, onClose, entries, onClear }: ActivityLogOver
       window.removeEventListener('keydown', onKey)
       opener?.focus()
     }
-  }, [open, onClose])
+  }, [open])
 
   useEffect(() => {
     if (open && listRef.current) {

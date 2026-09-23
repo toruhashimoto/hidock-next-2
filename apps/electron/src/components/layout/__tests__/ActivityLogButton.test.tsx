@@ -103,6 +103,25 @@ describe('ActivityLogButton', () => {
     expect(document.activeElement).toBe(opener)
   })
 
+  it('leaves focus where the user put it when a new entry re-renders the log', () => {
+    // Entries keep arriving while the overlay is open (a sync logs every step),
+    // and each one re-renders the button with a fresh onClose. That must not
+    // pull focus off the control the user tabbed to and back onto the panel.
+    setupLog([entry({ message: 'First' })])
+    const { rerender } = render(<ActivityLogButton />)
+    fireEvent.click(screen.getByRole('button', { name: /activity log/i }))
+    const clear = screen.getByRole('button', { name: 'Clear activity log' })
+    clear.focus()
+
+    act(() => {
+      setupLog([entry({ message: 'First' }), entry({ message: 'Second' })])
+    })
+    rerender(<ActivityLogButton />)
+
+    expect(screen.getByText('Second')).toBeInTheDocument()
+    expect(document.activeElement).toBe(clear)
+  })
+
   it('clears the log from the overlay', () => {
     setupLog([entry({ message: 'Boom', type: 'error' })])
     render(<ActivityLogButton />)
