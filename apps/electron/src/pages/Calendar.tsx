@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Mic, RefreshCw, Play, X, LayoutGrid, Square, CheckSquare, FileText, Trash2, List, FileAudio, Download, Link2Off } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn, formatTime, isToday, formatDuration } from '@/lib/utils'
+import i18n from '@/i18n'
 import {
   useAppStore,
   useMeetings,
@@ -71,17 +73,24 @@ import {
   OVERLAP_MAX_INDENT_LANES,
 } from '@/lib/calendar-utils'
 
+// The BCP 47 tag to format calendar dates/times with, derived from the active
+// UI language (mirrors lib/smartDate.ts's dateLocale — that helper isn't
+// exported, and this page's date formatting needs are local to it).
+function calendarDateLocale(): string {
+  return i18n.language === 'ja' ? 'ja-JP' : 'en-US'
+}
+
 // Helper functions for date/time formatting in list views. An undated recording
 // (UNKNOWN_DATE epoch sentinel) has no real date, so it renders honestly instead
 // of a bogus "Dec 31" / "Jan 1" 1970 short date (#58).
 function formatShortDate(date: Date): string {
-  if (isUnknownDate(date)) return 'Unknown'
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  if (isUnknownDate(date)) return i18n.t('calendar:list.unknownDateFallback')
+  return date.toLocaleDateString(calendarDateLocale(), { month: 'short', day: 'numeric' })
 }
 
 function formatShortTime(date: Date): string {
   if (isUnknownDate(date)) return ''
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return date.toLocaleTimeString(calendarDateLocale(), { hour: 'numeric', minute: '2-digit' })
 }
 
 // CA-05: Current time indicator that updates every 60 seconds
@@ -108,6 +117,7 @@ function CurrentTimeIndicator({ startHour, hourHeight }: { startHour: number; ho
 }
 
 export function Calendar() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   // Use useToday hook to ensure "today" updates at midnight
@@ -516,15 +526,15 @@ export function Calendar() {
     return { top, height }
   }
 
-  const monthYear = currentDate instanceof Date 
-    ? currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const monthYear = currentDate instanceof Date
+    ? currentDate.toLocaleDateString(calendarDateLocale(), { month: 'long', year: 'numeric' })
     : ''
 
   // Format last sync time (memoized)
   const formatLastSync = useCallback(() => {
     if (!lastSync) return ''
     const syncDate = new Date(lastSync)
-    return syncDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    return syncDate.toLocaleTimeString(calendarDateLocale(), { hour: 'numeric', minute: '2-digit' })
   }, [lastSync])
 
   // Handle sync button click
@@ -538,12 +548,12 @@ export function Calendar() {
       const result = await window.electronAPI.calendar.clearAndSync()
       console.log('[Calendar] Clear and sync result:', result)
       if (result && !result.success) {
-        toast.error('Calendar sync failed', result.error || 'Unknown error occurred')
+        toast.error(t('calendar:page.calendarSyncFailedTitle'), result.error || t('calendar:page.unknownErrorOccurred'))
       } else if (result && result.success) {
         // CA-03 FIX: Update lastSync state after successful sync
         // CS-002: Always update — don't guard on result.lastSync which may be absent
         setLastCalendarSync(result.lastSync ?? new Date().toISOString())
-        toast.success(`Calendar synced successfully: ${result.meetingsCount || 0} meetings`)
+        toast.success(t('calendar:page.calendarSyncedSuccess', { count: result.meetingsCount || 0 }))
       }
       // Reload meetings for current view
       // CA-08 FIX: Guard against empty viewDates array
@@ -557,11 +567,11 @@ export function Calendar() {
     } catch (err) {
       console.error('[Calendar] Clear and sync failed:', err)
       // CA-07 FIX: Already showing error to user via toast
-      toast.error('Calendar sync failed', err instanceof Error ? err.message : 'An unexpected error occurred')
+      toast.error(t('calendar:page.calendarSyncFailedTitle'), err instanceof Error ? err.message : t('calendar:page.unexpectedErrorOccurred'))
     } finally {
       releaseCalendarSync(true)
     }
-  }, [viewDates, loadMeetings, acquireCalendarSync, releaseCalendarSync, setLastCalendarSync])
+  }, [viewDates, loadMeetings, acquireCalendarSync, releaseCalendarSync, setLastCalendarSync, t])
 
   // Handle navigation (memoized)
   const handleNavigatePrev = useCallback(() => {
@@ -645,7 +655,7 @@ export function Calendar() {
     if (!deviceService.isConnected()) return
 
     // Confirm deletion
-    const confirmed = window.confirm(`Delete "${recording.filename}" from device? This cannot be undone.`)
+    const confirmed = window.confirm(t('calendar:page.deleteDeviceConfirm', { filename: recording.filename }))
     if (!confirmed) return
 
     setDeleting(recording.id)
@@ -657,7 +667,7 @@ export function Calendar() {
     } finally {
       setDeleting(null)
     }
-  }, [refreshRecordings])
+  }, [refreshRecordings, t])
 
   // Move to Trash — soft delete (spec-005/F17 T5 §D3b, memoized). Routes through
   // the cascade IPC that hides the recording (restorable) and pulls it from AI
@@ -669,10 +679,7 @@ export function Calendar() {
   const handleDeleteLocal = useCallback(async (recording: UnifiedRecording) => {
     if (!hasLocalPath(recording)) return
 
-    const confirmed = window.confirm(
-      `Move "${recording.filename}" to Trash? It will be hidden and excluded from all AI processing. ` +
-        'Nothing is erased — restore it from Trash, or delete it permanently later.'
-    )
+    const confirmed = window.confirm(t('calendar:page.moveToTrashConfirm', { filename: recording.filename }))
     if (!confirmed) return
 
     setDeleting(recording.id)
@@ -680,10 +687,10 @@ export function Calendar() {
       const res = await window.electronAPI.recordings.deleteCascade(recording.id, false)
       if (!res?.success) throw new Error(res?.error || 'Delete failed')
       await refreshRecordings(false)
-      toast.success('Moved to Trash', `"${recording.filename}" is hidden and excluded from processing.`, {
+      toast.success(t('calendar:page.moveToTrashSuccessTitle'), t('calendar:page.moveToTrashSuccessBody', { filename: recording.filename }), {
         duration: 8000,
         action: {
-          label: 'Undo',
+          label: t('calendar:page.undoButton'),
           onClick: async () => {
             await window.electronAPI.recordings.restore(recording.id)
             await refreshRecordings(false)
@@ -692,11 +699,11 @@ export function Calendar() {
       })
     } catch (e) {
       console.error('Delete failed:', e)
-      toast.error('Delete Failed', `Failed to move "${recording.filename}" to Trash. Please try again.`)
+      toast.error(t('calendar:page.deleteFailedTitle'), t('calendar:page.deleteFailedBody', { filename: recording.filename }))
     } finally {
       setDeleting(null)
     }
-  }, [refreshRecordings])
+  }, [refreshRecordings, t])
 
   // Trigger transcription for a local recording (memoized)
   const handleTranscribe = useCallback(async (recording: UnifiedRecording) => {
@@ -786,7 +793,7 @@ export function Calendar() {
     <div className="flex flex-col h-full">
       {/* Header - using extracted component */}
       <CalendarHeader
-        title={showListView ? 'Recordings' : monthYear}
+        title={showListView ? t('calendar:list.headerTitle') : monthYear}
         showListView={showListView}
         calendarView={calendarView}
         calendarSyncing={calendarSyncing}
@@ -819,14 +826,14 @@ export function Calendar() {
       {/* Main Content */}
       {(meetingsLoading || recordingsLoading) && meetings.length === 0 && unifiedRecordings.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-muted-foreground">{t('calendar:list.loading')}</p>
         </div>
       ) : showListView ? (
         /* C-CAL-003: Show subtle sync indicator when resyncing with existing data */
         <>{calendarSyncing && (
           <div className="flex items-center gap-2 px-6 py-1.5 bg-blue-50 dark:bg-blue-950/30 border-b text-xs text-blue-600 dark:text-blue-400 flex-shrink-0">
             <RefreshCw className="h-3 w-3 animate-spin" />
-            <span>Syncing calendar...</span>
+            <span>{t('calendar:list.syncingCalendar')}</span>
           </div>
         )}
         {/* List/Cards View */}
@@ -834,8 +841,8 @@ export function Calendar() {
           {/* Bulk Actions Bar */}
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-4 px-6 py-2 bg-primary/10 border-b flex-shrink-0">
-              <span className="text-sm font-medium">{selectedIds.size} selected</span>
-              <Button variant="outline" size="sm" onClick={clearSelection}>Clear</Button>
+              <span className="text-sm font-medium">{t('calendar:list.selectedCount', { count: selectedIds.size })}</span>
+              <Button variant="outline" size="sm" onClick={clearSelection}>{t('calendar:list.clearButton')}</Button>
               <Button
                 variant="default"
                 size="sm"
@@ -843,7 +850,7 @@ export function Calendar() {
                 disabled={bulkDownloading || !deviceConnected}
               >
                 {bulkDownloading ? <RefreshCw className="h-3 w-3 animate-spin mr-2" /> : <Download className="h-3 w-3 mr-2" />}
-                Download Selected
+                {t('calendar:list.downloadSelectedButton')}
               </Button>
             </div>
           )}
@@ -852,7 +859,7 @@ export function Calendar() {
           <div className="flex items-center justify-between px-6 py-2 border-b flex-shrink-0">
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={selectAll} className="h-7 text-xs">
-                Select All
+                {t('calendar:list.selectAllButton')}
               </Button>
             </div>
             <div className="flex items-center gap-2">
@@ -861,7 +868,7 @@ export function Calendar() {
                 size="icon"
                 className="h-7 w-7"
                 onClick={() => setViewMode('compact')}
-                title="Compact list"
+                title={t('calendar:list.compactListViewTitle')}
               >
                 <List className="h-4 w-4" />
               </Button>
@@ -870,7 +877,7 @@ export function Calendar() {
                 size="icon"
                 className="h-7 w-7"
                 onClick={() => setViewMode('cards')}
-                title="Card view"
+                title={t('calendar:list.cardViewTitle')}
               >
                 <LayoutGrid className="h-4 w-4" />
               </Button>
@@ -882,9 +889,9 @@ export function Calendar() {
             {filteredRecordings.length === 0 ? (
               <div className="text-center py-16">
                 <Mic className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <h3 className="text-lg font-medium mb-2">No Recordings</h3>
+                <h3 className="text-lg font-medium mb-2">{t('calendar:list.noRecordingsTitle')}</h3>
                 <p className="text-muted-foreground">
-                  {locationFilter !== 'all' ? 'No recordings match the current filter.' : 'No recordings found.'}
+                  {locationFilter !== 'all' ? t('calendar:list.noRecordingsFiltered') : t('calendar:list.noRecordingsEmpty')}
                 </p>
               </div>
             ) : viewMode === 'cards' ? (
@@ -900,7 +907,11 @@ export function Calendar() {
                       role="button"
                       tabIndex={0}
                       aria-pressed={isSelected}
-                      aria-label={`${recording.filename}, ${formatShortDate(recording.dateRecorded)} ${formatShortTime(recording.dateRecorded)}${isSelected ? ', selected' : ''}`}
+                      aria-label={
+                        isSelected
+                          ? t('calendar:list.cardAriaLabelSelected', { filename: recording.filename, date: formatShortDate(recording.dateRecorded), time: formatShortTime(recording.dateRecorded) })
+                          : t('calendar:list.cardAriaLabel', { filename: recording.filename, date: formatShortDate(recording.dateRecorded), time: formatShortTime(recording.dateRecorded) })
+                      }
                       onClick={() => toggleSelection(recording.id)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -961,7 +972,7 @@ export function Calendar() {
                           <Button variant="ghost" size="icon" className="h-6 w-6"
                             onClick={() => handleDownload(recording)}
                             disabled={!deviceConnected || downloadQueue.has(recording.deviceFilename)}
-                            title="Download">
+                            title={t('calendar:list.downloadTitle')}>
                             {downloadQueue.has(recording.deviceFilename) ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
                           </Button>
                         )}
@@ -974,7 +985,7 @@ export function Calendar() {
                                 audioControls.play(recording.id, recording.localPath)
                               }
                             }}
-                            title="Play">
+                            title={t('calendar:list.playTitle')}>
                             {currentlyPlayingId === recording.id ? <X className="h-3 w-3" /> : <Play className="h-3 w-3" />}
                           </Button>
                         )}
@@ -983,7 +994,7 @@ export function Calendar() {
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500 hover:text-blue-600"
                             onClick={() => handleTranscribe(recording)}
                             disabled={transcribing === recording.id}
-                            title="Transcribe">
+                            title={t('calendar:list.transcribeTitle')}>
                             {transcribing === recording.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <FileAudio className="h-3 w-3" />}
                           </Button>
                         )}
@@ -992,7 +1003,7 @@ export function Calendar() {
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive"
                             onClick={() => handleDeleteFromDevice(recording)}
                             disabled={!deviceConnected || deleting === recording.id}
-                            title="Delete from device">
+                            title={t('calendar:list.deleteFromDeviceTitle')}>
                             {deleting === recording.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                           </Button>
                         )}
@@ -1003,7 +1014,7 @@ export function Calendar() {
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-orange-500 hover:text-orange-600"
                             onClick={() => handleDeleteLocal(recording)}
                             disabled={deleting === recording.id}
-                            title="Move to Trash">
+                            title={t('calendar:list.moveToTrashTitle')}>
                             {deleting === recording.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                           </Button>
                         )}
@@ -1012,7 +1023,7 @@ export function Calendar() {
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-orange-500"
                             onClick={() => handleDeleteLocal(recording)}
                             disabled={deleting === recording.id}
-                            title="Move to Trash">
+                            title={t('calendar:list.moveToTrashTitle')}>
                             {deleting === recording.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                           </Button>
                         )}
@@ -1041,7 +1052,7 @@ export function Calendar() {
                         onClick={() => toggleSelection(recording.id)}
                         className="flex-shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                         aria-pressed={isSelected}
-                        aria-label={`${isSelected ? 'Deselect' : 'Select'} ${recording.filename}`}
+                        aria-label={isSelected ? t('calendar:list.deselectAriaLabel', { filename: recording.filename }) : t('calendar:list.selectAriaLabel', { filename: recording.filename })}
                       >
                         {isSelected ? (
                           <CheckSquare className="h-4 w-4 text-primary" />
@@ -1085,7 +1096,7 @@ export function Calendar() {
                           <Button variant="ghost" size="icon" className="h-6 w-6"
                             onClick={(e) => { e.stopPropagation(); handleDownload(recording) }}
                             disabled={!deviceConnected || downloadQueue.has(recording.deviceFilename)}
-                            title="Download from device">
+                            title={t('calendar:list.downloadFromDeviceTitle')}>
                             {downloadQueue.has(recording.deviceFilename) ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
                           </Button>
                         )}
@@ -1099,7 +1110,7 @@ export function Calendar() {
                                 audioControls.play(recording.id, recording.localPath)
                               }
                             }}
-                            title="Play">
+                            title={t('calendar:list.playTitle')}>
                             {currentlyPlayingId === recording.id ? <X className="h-3 w-3" /> : <Play className="h-3 w-3" />}
                           </Button>
                         )}
@@ -1108,7 +1119,7 @@ export function Calendar() {
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500 hover:text-blue-600"
                             onClick={(e) => { e.stopPropagation(); handleTranscribe(recording) }}
                             disabled={transcribing === recording.id}
-                            title="Transcribe">
+                            title={t('calendar:list.transcribeTitle')}>
                             {transcribing === recording.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <FileAudio className="h-3 w-3" />}
                           </Button>
                         )}
@@ -1117,7 +1128,7 @@ export function Calendar() {
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive"
                             onClick={(e) => { e.stopPropagation(); handleDeleteFromDevice(recording) }}
                             disabled={!deviceConnected || deleting === recording.id}
-                            title="Delete from device">
+                            title={t('calendar:list.deleteFromDeviceTitle')}>
                             {deleting === recording.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                           </Button>
                         )}
@@ -1128,7 +1139,7 @@ export function Calendar() {
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-orange-500 hover:text-orange-600"
                             onClick={(e) => { e.stopPropagation(); handleDeleteLocal(recording) }}
                             disabled={deleting === recording.id}
-                            title="Move to Trash">
+                            title={t('calendar:list.moveToTrashTitle')}>
                             {deleting === recording.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                           </Button>
                         )}
@@ -1137,7 +1148,7 @@ export function Calendar() {
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-orange-500"
                             onClick={(e) => { e.stopPropagation(); handleDeleteLocal(recording) }}
                             disabled={deleting === recording.id}
-                            title="Move to Trash">
+                            title={t('calendar:list.moveToTrashTitle')}>
                             {deleting === recording.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                           </Button>
                         )}
@@ -1179,17 +1190,17 @@ export function Calendar() {
           {calendarSyncing && (
             <div className="flex items-center gap-2 px-6 py-1.5 bg-blue-50 dark:bg-blue-950/30 border-b text-xs text-blue-600 dark:text-blue-400 flex-shrink-0">
               <RefreshCw className="h-3 w-3 animate-spin" />
-              <span>Syncing calendar...</span>
+              <span>{t('calendar:list.syncingCalendar')}</span>
             </div>
           )}
           {/* Day of Week Headers */}
           <div className="grid grid-cols-7 border-b flex-shrink-0">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, idx) => (
-              <div key={day} className={cn(
+            {(['weekdaySun', 'weekdayMon', 'weekdayTue', 'weekdayWed', 'weekdayThu', 'weekdayFri', 'weekdaySat'] as const).map((dayKey, idx) => (
+              <div key={dayKey} className={cn(
                 'text-center py-2 text-xs font-medium border-l first:border-l-0',
                 !workDays.includes(idx) && 'text-muted-foreground bg-muted/30'
               )}>
-                {day}
+                {t(`calendar:monthView.${dayKey}`)}
               </div>
             ))}
           </div>
@@ -1283,7 +1294,7 @@ export function Calendar() {
                       ))}
                       {dayMeetings.length > 3 && (
                         <div className="text-xs text-muted-foreground pl-1">
-                          +{dayMeetings.length - 3} more
+                          {t('calendar:monthView.moreCount', { count: dayMeetings.length - 3 })}
                         </div>
                       )}
                     </div>
@@ -1300,7 +1311,7 @@ export function Calendar() {
           {calendarSyncing && (
             <div className="flex items-center gap-2 px-6 py-1.5 bg-blue-50 dark:bg-blue-950/30 border-b text-xs text-blue-600 dark:text-blue-400 flex-shrink-0">
               <RefreshCw className="h-3 w-3 animate-spin" />
-              <span>Syncing calendar...</span>
+              <span>{t('calendar:list.syncingCalendar')}</span>
             </div>
           )}
           {/* Day Headers - fixed, with scrollbar gutter to match content */}
@@ -1324,7 +1335,7 @@ export function Calendar() {
                     'text-xs font-semibold uppercase tracking-wide',
                     today ? 'text-primary' : 'text-foreground/70'
                   )}>
-                    {date.toLocaleDateString('en-US', { weekday: calendarView === 'day' ? 'long' : 'short' })}
+                    {date.toLocaleDateString(calendarDateLocale(), { weekday: calendarView === 'day' ? 'long' : 'short' })}
                   </div>
                   <div
                     className={cn(
@@ -1351,7 +1362,11 @@ export function Calendar() {
                     style={{ height: HOUR_HEIGHT }}
                   >
                     <span className="absolute -top-2 right-2 text-xs text-muted-foreground font-medium">
-                      {hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
+                      {hour === 12
+                        ? t('calendar:weekView.hourNoon', { hour24: hour })
+                        : hour > 12
+                          ? t('calendar:weekView.hourPm', { hour: hour - 12, hour24: hour })
+                          : t('calendar:weekView.hourAm', { hour, hour24: hour })}
                     </span>
                   </div>
                 ))}
@@ -1412,7 +1427,7 @@ export function Calendar() {
                           <TooltipTrigger asChild>
                             <button
                               onClick={() => handleMeetingClick({ id: meeting.id } as Meeting)}
-                              aria-label={`Scheduled meeting, not recorded: ${buildEventAriaLabel(meeting.subject, meeting.startTime, meeting.endTime)}`}
+                              aria-label={t('calendar:weekView.notRecordedAriaLabel', { label: buildEventAriaLabel(meeting.subject, meeting.startTime, meeting.endTime) })}
                               className={cn(
                                 'absolute rounded-md px-2 py-1 text-xs overflow-hidden transition-colors text-left',
                                 'border-2 border-dashed border-slate-300 dark:border-slate-600',
@@ -1524,7 +1539,7 @@ export function Calendar() {
                             {/* Recorded badge: mic + where the audio lives */}
                             <span
                               className="flex flex-shrink-0 items-center gap-0.5 rounded bg-background/40 px-1 py-0.5"
-                              title="Recorded"
+                              title={t('calendar:weekView.recordedBadgeTitle')}
                             >
                               <Mic className="h-3 w-3" aria-hidden="true" />
                               <StatusIcon location={recording.location} />

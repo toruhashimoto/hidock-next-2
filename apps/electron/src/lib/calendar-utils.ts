@@ -6,6 +6,7 @@ import type { Meeting } from '@/types'
 import type { UnifiedRecording } from '@/types/unified-recording'
 import { categorizeMeeting, isAllDayMeeting, type MeetingCategory } from './meeting-timing'
 import { isUnknownDate } from './unknownDate'
+import i18n from '@/i18n'
 
 /**
  * A meeting this long (or flagged all-day) is a low-precision "bridge" window. A
@@ -327,8 +328,8 @@ export function assignOverlapLanes<T extends { startTime: Date; endTime: Date }>
 export function buildEventAriaLabel(subject: string, start: Date, end: Date): string {
   const fmt = (d: Date) =>
     d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-  const name = subject && subject.trim().length > 0 ? subject.trim() : 'Untitled event'
-  return `${name}, ${fmt(start)} to ${fmt(end)}`
+  const name = subject && subject.trim().length > 0 ? subject.trim() : i18n.t('calendar:ariaLabel.untitledEvent')
+  return i18n.t('calendar:ariaLabel.eventTimeRange', { name, start: fmt(start), end: fmt(end) })
 }
 
 /**
@@ -525,7 +526,7 @@ export function createPlaceholderMeetings(orphanRecordings: UnifiedRecording[]):
 
     return {
       id: `placeholder_${rec.id}`,
-      subject: rec.filename || 'Recording',
+      subject: rec.filename || i18n.t('calendar:recordingBlock.placeholderSubjectFallback'),
       start_time: recDate.toISOString(),
       end_time: endDate.toISOString(),
       location: null,
@@ -613,7 +614,7 @@ export function buildCalendarRecordings(
       linkedMeeting: linkedMeetingData
         ? {
             id: linkedMeetingData.id,
-            subject: linkedMeetingData.subject || 'Untitled Meeting',
+            subject: linkedMeetingData.subject || i18n.t('calendar:recordingBlock.untitledMeetingFallback'),
             startTime: new Date(linkedMeetingData.start_time),
             endTime: new Date(linkedMeetingData.end_time),
             location: linkedMeetingData.location,
@@ -625,7 +626,7 @@ export function buildCalendarRecordings(
 
   const meetingOverlays: CalendarMeetingOverlay[] = meetings.map((meeting) => ({
     id: meeting.id,
-    subject: meeting.subject || 'Untitled Meeting',
+    subject: meeting.subject || i18n.t('calendar:recordingBlock.untitledMeetingFallback'),
     startTime: new Date(meeting.start_time),
     endTime: new Date(meeting.end_time),
     location: meeting.location,
@@ -660,7 +661,7 @@ export function recordingBlockTitle(recording: CalendarRecording): string {
   const title = recording.title?.trim()
   if (title) return title
   const time = recording.startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-  return `Recording · ${time}`
+  return i18n.t('calendar:recordingBlock.unnamedTitle', { time })
 }
 
 /**
@@ -670,7 +671,7 @@ export function recordingBlockTitle(recording: CalendarRecording): string {
 export function formatUnmatchedRecordingMeta(recording: CalendarRecording): string {
   const duration = formatDurationStr(recording.durationSeconds)
   const time = recording.startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-  return `${duration} · ${time}`
+  return i18n.t('calendar:recordingBlock.unmatchedMeta', { duration, time })
 }
 
 /**
@@ -693,10 +694,12 @@ export function sortMeetingsByProximity<T extends { start_time: string }>(meetin
  * Handles zero, negative, and NaN gracefully.
  */
 export function formatDurationStr(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '0m'
+  if (!Number.isFinite(seconds) || seconds <= 0) return i18n.t('calendar:duration.zero')
   const hours = Math.floor(seconds / 3600)
   const mins = Math.round((seconds % 3600) / 60)
-  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+  return hours > 0
+    ? i18n.t('calendar:duration.hoursMinutes', { h: hours, m: mins })
+    : i18n.t('calendar:duration.minutesOnly', { m: mins })
 }
 
 /**

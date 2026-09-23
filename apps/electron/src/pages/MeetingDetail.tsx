@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Clock, MapPin, Users, Mic, FileText, Play, X, Edit, Check, Loader2, Link, Unlink, ChevronDown, ChevronUp, AlertCircle, Plus, Video } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -32,6 +34,7 @@ import { useUIStore } from '@/store/useUIStore'
 import { toast } from '@/components/ui/toaster'
 import { EntityMention } from '@/components/entity'
 import type { MeetingDetails } from '@/types'
+import i18n from '@/i18n'
 
 const ATTENDEES_COLLAPSED_LIMIT = 8
 
@@ -42,20 +45,31 @@ const JOIN_GRACE_MS = 15 * 60 * 1000
 // The recording row badge shows the recording's processing/transcription
 // lifecycle `status`. Device captures default to the literal string 'none',
 // which is meaningless to a user — map every value to a plain-language label
-// (and a title tooltip that names what the badge represents).
-const RECORDING_STATUS_LABELS: Record<string, string> = {
-  none: 'Not transcribed',
-  pending: 'Queued',
-  queued: 'Queued',
-  // Support both the standard enum ('processing'/'complete') and the legacy
-  // vocabulary ('transcribing'/'transcribed') — the pipeline writes 'complete'
-  // (transcription.ts AI-13) while older rows use 'transcribed'.
-  processing: 'Transcribing',
-  transcribing: 'Transcribing',
-  complete: 'Transcribed',
-  transcribed: 'Transcribed',
-  error: 'Failed',
-  failed: 'Failed'
+// (and a title tooltip that names what the badge represents). A plain module
+// object would freeze its English strings at import time (the module-scope-
+// constant trap — see Phase 1), so this is a function taking `t` instead.
+function getRecordingStatusLabel(status: string, t: TFunction): string {
+  switch (status) {
+    case 'none':
+      return t('calendar:meetingDetail.statusNotTranscribed')
+    case 'pending':
+    case 'queued':
+      return t('calendar:meetingDetail.statusQueued')
+    // Support both the standard enum ('processing'/'complete') and the legacy
+    // vocabulary ('transcribing'/'transcribed') — the pipeline writes 'complete'
+    // (transcription.ts AI-13) while older rows use 'transcribed'.
+    case 'processing':
+    case 'transcribing':
+      return t('calendar:meetingDetail.statusTranscribing')
+    case 'complete':
+    case 'transcribed':
+      return t('calendar:meetingDetail.statusTranscribed')
+    case 'error':
+    case 'failed':
+      return t('calendar:meetingDetail.statusFailed')
+    default:
+      return status
+  }
 }
 
 /** Parse a transcript's stored `speakers` JSON into timestamped turns for the
@@ -74,28 +88,35 @@ function parseStoredSegments(speakers: string | null | undefined): StoredSegment
  * C-MTG-005: Safe date formatting that returns a fallback for invalid dates.
  * Prevents RangeError from Intl.DateTimeFormat when date strings are malformed.
  */
+// The BCP 47 tag to format meeting dates/times with, derived from the active
+// UI language (mirrors lib/smartDate.ts's dateLocale — that helper isn't
+// exported, and this page's date formatting needs are local to it).
+function meetingDetailDateLocale(): string {
+  return i18n.language === 'ja' ? 'ja-JP' : 'en-US'
+}
+
 function safeFormatTime(date: Date, options: Intl.DateTimeFormatOptions): string {
   try {
-    if (isNaN(date.getTime())) return '--:--'
-    return date.toLocaleTimeString('en-US', options)
+    if (isNaN(date.getTime())) return i18n.t('calendar:meetingDetail.timeUnavailable')
+    return date.toLocaleTimeString(meetingDetailDateLocale(), options)
   } catch {
-    return '--:--'
+    return i18n.t('calendar:meetingDetail.timeUnavailable')
   }
 }
 
 function safeFormatDate(date: Date, options: Intl.DateTimeFormatOptions): string {
   try {
-    if (isNaN(date.getTime())) return 'Unknown date'
-    return date.toLocaleDateString('en-US', options)
+    if (isNaN(date.getTime())) return i18n.t('common:date.unknown')
+    return date.toLocaleDateString(meetingDetailDateLocale(), options)
   } catch {
-    return 'Unknown date'
+    return i18n.t('common:date.unknown')
   }
 }
 
 function safeGetTimezoneName(date: Date): string {
   try {
     if (isNaN(date.getTime())) return ''
-    return Intl.DateTimeFormat('en-US', { timeZoneName: 'short' })
+    return Intl.DateTimeFormat(meetingDetailDateLocale(), { timeZoneName: 'short' })
       .formatToParts(date)
       .find(p => p.type === 'timeZoneName')?.value || ''
   } catch {
@@ -123,6 +144,7 @@ function renderTokens(tokens: DescToken[]): ReactNode {
 }
 
 export function MeetingDetail() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [details, setDetails] = useState<MeetingDetails | null>(null)
@@ -186,7 +208,7 @@ export function MeetingDetail() {
     try {
       const data = await window.electronAPI.meetings.getDetails(meetingId)
       if (!data) {
-        throw new Error('Meeting not found')
+        throw new Error(t('calendar:meetingDetail.notFound'))
       }
 
       // Load actionables separately with error handling (AUD2-009)
@@ -197,7 +219,7 @@ export function MeetingDetail() {
       } catch (actErr) {
         console.error('Failed to load actionables:', actErr)
         data.actionables = []
-        setActionablesError('Failed to load actionables')
+        setActionablesError(t('calendar:meetingDetail.actionablesLoadFailed'))
       }
 
       setDetails(data)
@@ -228,11 +250,11 @@ export function MeetingDetail() {
       }
     } catch (error) {
       console.error('Failed to load meeting details:', error)
-      setError((error as Error).message || 'Failed to load meeting')
+      setError((error as Error).message || t('calendar:meetingDetail.loadFailedFallback'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     if (id) {
@@ -271,7 +293,7 @@ export function MeetingDetail() {
         { start_time: editForm.start_time, end_time: editForm.end_time }
       )
       if (!timeDiff.ok) {
-        toast.error('Invalid time', timeDiff.error)
+        toast.error(t('calendar:meetingDetail.toastInvalidTimeTitle'), timeDiff.error)
         return
       }
       Object.assign(updates, timeDiff.updates)
@@ -283,15 +305,15 @@ export function MeetingDetail() {
 
       const result = await window.electronAPI.meetings.update({ id, ...updates })
       if (result.success) {
-        toast.success('Meeting updated', 'Meeting details have been saved.')
+        toast.success(t('calendar:meetingDetail.toastMeetingUpdatedTitle'), t('calendar:meetingDetail.toastMeetingUpdatedBody'))
         setIsEditing(false)
         await loadMeetingDetails(id)
       } else {
-        toast.error('Failed to update meeting', (result as any).error?.message || 'Unknown error')
+        toast.error(t('calendar:meetingDetail.toastUpdateFailedTitle'), (result as any).error?.message || t('common:errors.unknown'))
       }
     } catch (err) {
       console.error('Failed to update meeting:', err)
-      toast.error('Failed to update meeting', err instanceof Error ? err.message : 'Unknown error')
+      toast.error(t('calendar:meetingDetail.toastUpdateFailedTitle'), err instanceof Error ? err.message : t('common:errors.unknown'))
     }
   }
 
@@ -330,11 +352,11 @@ export function MeetingDetail() {
   const handleUnlinkRecording = async (recordingId: string) => {
     try {
       await window.electronAPI.recordings.selectMeeting(recordingId, null)
-      toast.success('Recording unlinked', 'Recording has been unlinked from this meeting.')
+      toast.success(t('calendar:meetingDetail.toastRecordingUnlinkedTitle'), t('calendar:meetingDetail.toastRecordingUnlinkedBody'))
       if (id) await loadMeetingDetails(id)
     } catch (err) {
       console.error('Failed to unlink recording:', err)
-      toast.error('Failed to unlink recording', err instanceof Error ? err.message : 'Unknown error')
+      toast.error(t('calendar:meetingDetail.toastUnlinkFailedTitle'), err instanceof Error ? err.message : t('common:errors.unknown'))
     }
   }
 
@@ -359,15 +381,15 @@ export function MeetingDetail() {
     try {
       const result = await window.electronAPI.recordings.selectMeeting(linkRecordingId, meetingId)
       if (result.success) {
-        toast.success('Recording linked', 'Recording has been linked to the meeting.')
+        toast.success(t('calendar:meetingDetail.toastRecordingLinkedTitle'), t('calendar:meetingDetail.toastRecordingLinkedBody'))
         setLinkDialogOpen(false)
         if (id) await loadMeetingDetails(id)
       } else {
-        toast.error('Failed to link recording', result.error || 'Unknown error')
+        toast.error(t('calendar:meetingDetail.toastLinkFailedTitle'), result.error || t('common:errors.unknown'))
       }
     } catch (err) {
       console.error('Failed to link recording:', err)
-      toast.error('Failed to link recording', err instanceof Error ? err.message : 'Unknown error')
+      toast.error(t('calendar:meetingDetail.toastLinkFailedTitle'), err instanceof Error ? err.message : t('common:errors.unknown'))
     }
   }
 
@@ -388,11 +410,11 @@ export function MeetingDetail() {
     const name = newAttendee.name.trim()
     const email = newAttendee.email.trim()
     if (!name && !email) {
-      toast.error('Add attendee', 'Provide a name or an email.')
+      toast.error(t('calendar:meetingDetail.toastAddAttendeeTitle'), t('calendar:meetingDetail.toastProvideNameOrEmail'))
       return
     }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error('Add attendee', 'Please enter a valid email address.')
+      toast.error(t('calendar:meetingDetail.toastAddAttendeeTitle'), t('calendar:meetingDetail.toastInvalidEmail'))
       return
     }
     setAttendeeBusy(true)
@@ -403,15 +425,15 @@ export function MeetingDetail() {
         email: email || undefined
       })
       if (result.success) {
-        toast.success('Attendee added')
+        toast.success(t('calendar:meetingDetail.toastAttendeeAdded'))
         setNewAttendee({ name: '', email: '' })
         await loadMeetingDetails(id)
       } else {
-        toast.error('Failed to add attendee', (result as any).error?.message || 'Unknown error')
+        toast.error(t('calendar:meetingDetail.toastAddAttendeeFailedTitle'), (result as any).error?.message || t('common:errors.unknown'))
       }
     } catch (err) {
       console.error('Failed to add attendee:', err)
-      toast.error('Failed to add attendee', err instanceof Error ? err.message : 'Unknown error')
+      toast.error(t('calendar:meetingDetail.toastAddAttendeeFailedTitle'), err instanceof Error ? err.message : t('common:errors.unknown'))
     } finally {
       setAttendeeBusy(false)
     }
@@ -423,14 +445,14 @@ export function MeetingDetail() {
     try {
       const result = await window.electronAPI.meetings.removeAttendee({ meetingId: id, contactId })
       if (result.success) {
-        toast.success('Attendee removed')
+        toast.success(t('calendar:meetingDetail.toastAttendeeRemoved'))
         await loadMeetingDetails(id)
       } else {
-        toast.error('Failed to remove attendee', (result as any).error?.message || 'Unknown error')
+        toast.error(t('calendar:meetingDetail.toastRemoveAttendeeFailedTitle'), (result as any).error?.message || t('common:errors.unknown'))
       }
     } catch (err) {
       console.error('Failed to remove attendee:', err)
-      toast.error('Failed to remove attendee', err instanceof Error ? err.message : 'Unknown error')
+      toast.error(t('calendar:meetingDetail.toastRemoveAttendeeFailedTitle'), err instanceof Error ? err.message : t('common:errors.unknown'))
     } finally {
       setAttendeeBusy(false)
     }
@@ -439,7 +461,7 @@ export function MeetingDetail() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">Loading meeting details...</p>
+        <p className="text-muted-foreground">{t('calendar:meetingDetail.loading')}</p>
       </div>
     )
   }
@@ -450,11 +472,11 @@ export function MeetingDetail() {
         <p className="text-destructive">{error}</p>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => id && loadMeetingDetails(id)}>
-            Retry
+            {t('calendar:meetingDetail.retryButton')}
           </Button>
           <Button variant="outline" onClick={() => navigate('/calendar')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Calendar
+            {t('calendar:meetingDetail.backToCalendar')}
           </Button>
         </div>
       </div>
@@ -464,10 +486,10 @@ export function MeetingDetail() {
   if (!details) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <p className="text-muted-foreground">Meeting not found</p>
+        <p className="text-muted-foreground">{t('calendar:meetingDetail.notFound')}</p>
         <Button variant="outline" onClick={() => navigate('/calendar')}>
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Calendar
+          {t('calendar:meetingDetail.backToCalendar')}
         </Button>
       </div>
     )
@@ -562,24 +584,24 @@ export function MeetingDetail() {
               className={cn(buttonVariants({ size: 'sm', variant: 'default' }))}
             >
               <Video className="h-4 w-4 mr-2" />
-              Join meeting
+              {t('calendar:meetingDetail.joinMeetingButton')}
             </a>
           )}
           {isEditing ? (
             <>
               <Button size="sm" variant="default" onClick={handleSaveEdit}>
                 <Check className="h-4 w-4 mr-2" />
-                Save
+                {t('calendar:meetingDetail.saveButton')}
               </Button>
               <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
                 <X className="h-4 w-4 mr-2" />
-                Cancel
+                {t('calendar:meetingDetail.cancelButton')}
               </Button>
             </>
           ) : (
             <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
               <Edit className="h-4 w-4 mr-2" />
-              Edit
+              {t('calendar:meetingDetail.editButton')}
             </Button>
           )}
         </div>
@@ -591,7 +613,7 @@ export function MeetingDetail() {
           {/* Meeting Info */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Meeting Details</CardTitle>
+              <CardTitle className="text-lg">{t('calendar:meetingDetail.detailsCardTitle')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-start gap-3">
@@ -600,38 +622,38 @@ export function MeetingDetail() {
                   <div className="flex-1 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                        Date
+                        {t('calendar:meetingDetail.dateLabel')}
                         <Input
                           type="date"
                           value={startDateValue}
                           onChange={(e) => handleDateChange(e.target.value)}
-                          aria-label="Meeting date"
+                          aria-label={t('calendar:meetingDetail.meetingDateAriaLabel')}
                           className="w-40 h-8"
                         />
                       </label>
                       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                        Start
+                        {t('calendar:meetingDetail.startLabel')}
                         <Input
                           type="time"
                           value={startTimeValue}
                           onChange={(e) => handleStartTimeChange(e.target.value)}
-                          aria-label="Start time"
+                          aria-label={t('calendar:meetingDetail.startTimeAriaLabel')}
                           className="w-28 h-8"
                         />
                       </label>
                       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                        End
+                        {t('calendar:meetingDetail.endLabel')}
                         <Input
                           type="time"
                           value={endTimeValue}
                           onChange={(e) => handleEndTimeChange(e.target.value)}
-                          aria-label="End time"
+                          aria-label={t('calendar:meetingDetail.endTimeAriaLabel')}
                           className="w-28 h-8"
                         />
                       </label>
                     </div>
                     <p className={cn('text-xs', editDurationMins > 0 ? 'text-muted-foreground' : 'text-destructive')}>
-                      {editDurationMins > 0 ? `${editDurationMins} minutes` : 'End time must be after start time'}
+                      {editDurationMins > 0 ? t('calendar:meetingDetail.durationMinutes', { count: editDurationMins }) : t('calendar:meetingDetail.endTimeMustBeAfterStart')}
                     </p>
                   </div>
                 ) : (
@@ -647,7 +669,7 @@ export function MeetingDetail() {
                       )}
                     </p>
                     <p className="text-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
-                      <span>{durationMins} minutes</span>
+                      <span>{t('calendar:meetingDetail.durationMinutes', { count: durationMins })}</span>
                       {isValidDate && (
                         <>
                           <span aria-hidden>{'\u00b7'}</span>
@@ -670,7 +692,7 @@ export function MeetingDetail() {
                     <Input
                       value={editForm.location}
                       onChange={(e) => setEditForm(prev => ({ ...prev, location: e.target.value }))}
-                      placeholder="Location..."
+                      placeholder={t('calendar:meetingDetail.locationPlaceholder')}
                       className="flex-1"
                     />
                   ) : (
@@ -684,23 +706,23 @@ export function MeetingDetail() {
                   <Users className="h-5 w-5 text-muted-foreground mt-0.5" />
                   {isEditing ? (
                     <div className="flex-1 space-y-2">
-                      <p className="text-xs text-muted-foreground">Organizer</p>
+                      <p className="text-xs text-muted-foreground">{t('calendar:meetingDetail.organizerEditLabel')}</p>
                       <Input
                         value={editForm.organizer_name}
                         onChange={(e) => setEditForm(prev => ({ ...prev, organizer_name: e.target.value }))}
-                        placeholder="Organizer name..."
-                        aria-label="Organizer name"
+                        placeholder={t('calendar:meetingDetail.organizerNamePlaceholder')}
+                        aria-label={t('calendar:meetingDetail.organizerNameAriaLabel')}
                       />
                       <Input
                         value={editForm.organizer_email}
                         onChange={(e) => setEditForm(prev => ({ ...prev, organizer_email: e.target.value }))}
-                        placeholder="Organizer email..."
-                        aria-label="Organizer email"
+                        placeholder={t('calendar:meetingDetail.organizerEmailPlaceholder')}
+                        aria-label={t('calendar:meetingDetail.organizerEmailAriaLabel')}
                       />
                     </div>
                   ) : (
                     <div>
-                      <p className="font-medium">Organizer: {meeting.organizer_name}</p>
+                      <p className="font-medium">{t('calendar:meetingDetail.organizerDisplay', { name: meeting.organizer_name })}</p>
                       {meeting.organizer_email && (
                         <p className="text-sm text-muted-foreground">{meeting.organizer_email}</p>
                       )}
@@ -714,7 +736,7 @@ export function MeetingDetail() {
                   edit mode, expose remove (X) + an inline add form. */}
               {(attendees.length > 0 || isEditing) && (
                 <div>
-                  <p className="font-medium mb-2">Attendees ({attendees.length})</p>
+                  <p className="font-medium mb-2">{t('calendar:meetingDetail.attendeesLabel', { count: attendees.length })}</p>
                   <div className="max-h-40 overflow-auto">
                     <div className="flex flex-wrap gap-2">
                       {visibleAttendees.map((attendee, i) => {
@@ -730,7 +752,7 @@ export function MeetingDetail() {
                                 type="button"
                                 onClick={() => navigate(`/person/${contact.id}`)}
                                 className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
-                                title={`View ${contact.name}`}
+                                title={t('calendar:meetingDetail.viewContactTitle', { name: contact.name })}
                               >
                                 {labelText}
                               </button>
@@ -743,7 +765,7 @@ export function MeetingDetail() {
                                 onClick={() => handleRemoveAttendee(contact.id)}
                                 disabled={attendeeBusy}
                                 className="text-muted-foreground hover:text-destructive disabled:opacity-50"
-                                aria-label={`Remove ${labelText}`}
+                                aria-label={t('calendar:meetingDetail.removeAttendeeAriaLabel', { name: labelText })}
                               >
                                 <X className="h-3 w-3" />
                               </button>
@@ -763,12 +785,12 @@ export function MeetingDetail() {
                       {showAllAttendees ? (
                         <>
                           <ChevronUp className="h-3 w-3 mr-1" />
-                          Show less
+                          {t('calendar:meetingDetail.showLess')}
                         </>
                       ) : (
                         <>
                           <ChevronDown className="h-3 w-3 mr-1" />
-                          Show all {attendees.length} attendees
+                          {t('calendar:meetingDetail.showAllAttendees', { count: attendees.length })}
                         </>
                       )}
                     </Button>
@@ -778,20 +800,20 @@ export function MeetingDetail() {
                       <Input
                         value={newAttendee.name}
                         onChange={(e) => setNewAttendee(prev => ({ ...prev, name: e.target.value }))}
-                        placeholder="Name"
-                        aria-label="New attendee name"
+                        placeholder={t('calendar:meetingDetail.newAttendeeNamePlaceholder')}
+                        aria-label={t('calendar:meetingDetail.newAttendeeNameAriaLabel')}
                         className="w-32 h-8 text-sm"
                       />
                       <Input
                         value={newAttendee.email}
                         onChange={(e) => setNewAttendee(prev => ({ ...prev, email: e.target.value }))}
-                        placeholder="Email"
-                        aria-label="New attendee email"
+                        placeholder={t('calendar:meetingDetail.newAttendeeEmailPlaceholder')}
+                        aria-label={t('calendar:meetingDetail.newAttendeeEmailAriaLabel')}
                         className="w-48 h-8 text-sm"
                       />
                       <Button size="sm" variant="outline" onClick={handleAddAttendee} disabled={attendeeBusy}>
                         <Plus className="h-3.5 w-3.5 mr-1" />
-                        Add
+                        {t('calendar:meetingDetail.addButton')}
                       </Button>
                     </div>
                   )}
@@ -804,8 +826,8 @@ export function MeetingDetail() {
               {attendees.length === 0 && !isEditing && meetingContacts.length > 0 && (
                 <div>
                   <p className="font-medium mb-2">
-                    Participants ({meetingContacts.length})
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">From transcripts</span>
+                    {t('calendar:meetingDetail.participantsLabel', { count: meetingContacts.length })}
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">{t('calendar:meetingDetail.fromTranscriptsLabel')}</span>
                   </p>
                   <div className="max-h-40 overflow-auto">
                     <div className="flex flex-wrap gap-2">
@@ -815,7 +837,7 @@ export function MeetingDetail() {
                           type="button"
                           onClick={() => navigate(`/person/${contact.id}`)}
                           className="inline-flex items-center gap-1 px-2 py-1 bg-secondary text-secondary-foreground rounded-full text-xs hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                          title={`View ${contact.name}`}
+                          title={t('calendar:meetingDetail.viewContactTitle', { name: contact.name })}
                         >
                           {contact.name || contact.email}
                         </button>
@@ -828,13 +850,13 @@ export function MeetingDetail() {
               {/* Description (editable) — ICS pseudo-markdown normalized on display */}
               {(meeting.description || isEditing) && (
                 <div>
-                  <p className="font-medium mb-1">Description</p>
+                  <p className="font-medium mb-1">{t('calendar:meetingDetail.descriptionLabel')}</p>
                   {isEditing ? (
                     <textarea
                       value={editForm.description}
                       onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
                       className="text-sm w-full border rounded px-3 py-2 bg-background min-h-[80px]"
-                      placeholder="Meeting description..."
+                      placeholder={t('calendar:meetingDetail.descriptionPlaceholder')}
                     />
                   ) : descriptionBlocks.length > 0 ? (
                     <div className="text-sm text-muted-foreground [overflow-wrap:anywhere] max-h-64 overflow-y-auto space-y-2">
@@ -867,17 +889,16 @@ export function MeetingDetail() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Mic className="h-5 w-5" />
-                Recordings ({recordings.length})
+                {t('calendar:meetingDetail.recordingsCardTitle', { count: recordings.length })}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {recordings.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Mic className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                  <p className="text-muted-foreground font-medium mb-1">No recordings linked</p>
+                  <p className="text-muted-foreground font-medium mb-1">{t('calendar:meetingDetail.noRecordingsLinked')}</p>
                   <p className="text-sm text-muted-foreground/70 max-w-sm">
-                    Recordings are automatically linked when they overlap with the meeting time.
-                    You can also manually link recordings from the Calendar view.
+                    {t('calendar:meetingDetail.noRecordingsHint')}
                   </p>
                   <Button
                     variant="outline"
@@ -885,7 +906,7 @@ export function MeetingDetail() {
                     className="mt-4"
                     onClick={() => navigate('/calendar', { state: { date: meeting.start_time } })}
                   >
-                    Go to Calendar
+                    {t('calendar:meetingDetail.goToCalendarButton')}
                   </Button>
                 </div>
               ) : (
@@ -908,7 +929,7 @@ export function MeetingDetail() {
                             // over a visible transcript.
                             const isTranscribed = !!recording.transcript?.full_text?.trim()
                             const effectiveStatus = isTranscribed ? 'transcribed' : recording.status
-                            const statusLabel = RECORDING_STATUS_LABELS[effectiveStatus] ?? effectiveStatus
+                            const statusLabel = getRecordingStatusLabel(effectiveStatus, t)
                             const statusStyle = effectiveStatus === 'transcribed'
                               ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
                               : effectiveStatus === 'error'
@@ -919,7 +940,7 @@ export function MeetingDetail() {
                             return (
                               <span
                                 className={`text-xs px-2 py-1 rounded-full ${statusStyle}`}
-                                title={`Transcription status: ${statusLabel}`}
+                                title={t('calendar:meetingDetail.transcriptionStatusTitle', { status: statusLabel })}
                               >
                                 {statusLabel}
                               </span>
@@ -930,7 +951,7 @@ export function MeetingDetail() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleUnlinkRecording(recording.id)}
-                            title="Unlink recording from meeting"
+                            title={t('calendar:meetingDetail.unlinkRecordingTitle')}
                           >
                             <Unlink className="h-4 w-4" />
                           </Button>
@@ -939,7 +960,7 @@ export function MeetingDetail() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleOpenLinkDialog(recording.id)}
-                            title="Link to a different meeting"
+                            title={t('calendar:meetingDetail.linkDifferentMeetingTitle')}
                           >
                             <Link className="h-4 w-4" />
                           </Button>
@@ -960,7 +981,7 @@ export function MeetingDetail() {
                               size="icon"
                               onClick={() => recording.file_path && handlePlay(recording.id, recording.file_path)}
                               disabled={!recording.file_path}
-                              title={recording.file_path ? 'Play recording' : 'Recording not available locally'}
+                              title={recording.file_path ? t('calendar:meetingDetail.playRecordingTitle') : t('calendar:meetingDetail.recordingNotAvailableTitle')}
                             >
                               <Play className="h-4 w-4" />
                             </Button>
@@ -980,7 +1001,7 @@ export function MeetingDetail() {
 
                       {recording.duration_seconds && (
                         <p className="text-sm text-muted-foreground">
-                          Duration: {formatDuration(recording.duration_seconds)}
+                          {t('calendar:meetingDetail.durationLabel', { value: formatDuration(recording.duration_seconds) })}
                         </p>
                       )}
 
@@ -991,7 +1012,7 @@ export function MeetingDetail() {
                         <div className="mt-4 pt-4 border-t">
                           <div className="flex items-center gap-2 mb-2">
                             <FileText className="h-4 w-4" />
-                            <span className="font-medium text-sm">Transcript</span>
+                            <span className="font-medium text-sm">{t('calendar:meetingDetail.transcriptLabel')}</span>
                           </div>
                           <TranscriptViewer
                             transcript={recording.transcript.full_text}
@@ -1025,7 +1046,7 @@ export function MeetingDetail() {
                   <AlertCircle className="h-4 w-4 text-destructive" />
                   <span>{actionablesError}</span>
                   <Button variant="ghost" size="sm" onClick={() => id && loadMeetingDetails(id)}>
-                    Retry
+                    {t('calendar:meetingDetail.retryButton')}
                   </Button>
                 </div>
               </CardContent>
@@ -1040,9 +1061,9 @@ export function MeetingDetail() {
       <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Link Recording to Meeting</DialogTitle>
+            <DialogTitle>{t('calendar:meetingDetail.linkDialogTitle')}</DialogTitle>
             <DialogDescription>
-              Select a meeting to link this recording to.
+              {t('calendar:meetingDetail.linkDialogDescription')}
             </DialogDescription>
           </DialogHeader>
           {linkLoading ? (
@@ -1051,7 +1072,7 @@ export function MeetingDetail() {
             </div>
           ) : availableMeetings.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              No candidate meetings found.
+              {t('calendar:meetingDetail.noCandidateMeetings')}
             </p>
           ) : (
             <div className="max-h-64 overflow-auto space-y-2">
@@ -1067,7 +1088,7 @@ export function MeetingDetail() {
                   </p>
                   {m.confidenceScore !== undefined && (
                     <p className="text-xs text-primary">
-                      Confidence: {Math.round(m.confidenceScore * 100)}%
+                      {t('calendar:meetingDetail.confidenceTemplate', { percent: Math.round(m.confidenceScore * 100) })}
                     </p>
                   )}
                 </button>
@@ -1076,7 +1097,7 @@ export function MeetingDetail() {
           )}
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{t('calendar:meetingDetail.cancelButton')}</Button>
             </DialogClose>
           </DialogFooter>
         </DialogContent>

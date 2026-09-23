@@ -28,15 +28,19 @@ import enToday from './locales/en/today.json'
 import jaToday from './locales/ja/today.json'
 import enDomain from './locales/en/domain.json'
 import jaDomain from './locales/ja/domain.json'
+import enPeople from './locales/en/people.json'
+import jaPeople from './locales/ja/people.json'
+import enCalendar from './locales/en/calendar.json'
+import jaCalendar from './locales/ja/calendar.json'
 
 export const SUPPORTED_LANGUAGES = ['en', 'ja'] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 
-export const NAMESPACES = ['common', 'layout', 'library', 'device', 'settings', 'today', 'domain'] as const
+export const NAMESPACES = ['common', 'layout', 'library', 'device', 'settings', 'today', 'domain', 'people', 'calendar'] as const
 
 const resources = {
-  en: { common: enCommon, layout: enLayout, library: enLibrary, settings: enSettings, device: enDevice, today: enToday, domain: enDomain },
-  ja: { common: jaCommon, layout: jaLayout, library: jaLibrary, settings: jaSettings, device: jaDevice, today: jaToday, domain: jaDomain }
+  en: { common: enCommon, layout: enLayout, library: enLibrary, settings: enSettings, device: enDevice, today: enToday, domain: enDomain, people: enPeople, calendar: enCalendar },
+  ja: { common: jaCommon, layout: jaLayout, library: jaLibrary, settings: jaSettings, device: jaDevice, today: jaToday, domain: jaDomain, people: jaPeople, calendar: jaCalendar }
 }
 
 export function initI18n(lng: SupportedLanguage): typeof i18n {
