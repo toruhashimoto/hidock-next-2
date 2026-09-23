@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, Search, BookOpen, Clock, RefreshCw } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { formatDateTime } from '@/lib/utils'
@@ -12,6 +13,7 @@ interface ContextPickerProps {
 }
 
 export function ContextPicker({ onSelect, selectedIds, className }: ContextPickerProps) {
+  const { t } = useTranslation('chat')
   const [knowledge, setKnowledge] = useState<KnowledgeCapture[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -25,11 +27,11 @@ export function ContextPicker({ onSelect, selectedIds, className }: ContextPicke
       setKnowledge(data)
     } catch (err) {
       console.error('Failed to load knowledge for picker:', err)
-      setError('Failed to load knowledge items')
+      setError(t('contextPicker.loadError'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadKnowledge()
@@ -45,7 +47,7 @@ export function ContextPicker({ onSelect, selectedIds, className }: ContextPicke
       <div className="relative">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search knowledge..."
+          placeholder={t('contextPicker.searchPlaceholder')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-9 h-9"
@@ -54,7 +56,7 @@ export function ContextPicker({ onSelect, selectedIds, className }: ContextPicke
 
       <div className="h-[300px] overflow-auto pr-2 space-y-1 custom-scrollbar">
         {loading ? (
-          <p className="text-center text-sm text-muted-foreground py-8">Loading knowledge...</p>
+          <p className="text-center text-sm text-muted-foreground py-8">{t('contextPicker.loading')}</p>
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-8 gap-2">
             <p className="text-sm text-muted-foreground">{error}</p>
@@ -63,11 +65,11 @@ export function ContextPicker({ onSelect, selectedIds, className }: ContextPicke
               className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
             >
               <RefreshCw className="h-3 w-3" />
-              Retry
+              {t('contextPicker.retryButton')}
             </button>
           </div>
         ) : filteredKnowledge.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground py-8">No results found</p>
+          <p className="text-center text-sm text-muted-foreground py-8">{t('contextPicker.noResults')}</p>
         ) : (
           filteredKnowledge.map((item) => {
             const isSelected = selectedIds.includes(item.id)

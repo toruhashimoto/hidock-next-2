@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { User, FolderKanban, Lightbulb, CalendarRange, Compass, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { entityColor } from './graph-theme'
+import { entityColor, nodeTypeLabel } from './graph-theme'
+import i18n from '@/i18n'
 
 export type LensKind = 'you' | 'person' | 'project' | 'decision' | 'week'
 
@@ -29,20 +31,30 @@ interface LensPickerProps {
   ownerLabel?: string | null
 }
 
-const KINDS: Array<{ kind: LensKind; label: string; icon: typeof User; entityType?: string }> = [
-  { kind: 'you', label: 'Your context', icon: Compass },
-  { kind: 'person', label: 'Person', icon: User, entityType: 'person' },
-  { kind: 'project', label: 'Project', icon: FolderKanban, entityType: 'project' },
-  { kind: 'decision', label: 'Decision', icon: Lightbulb, entityType: 'decision' },
-  { kind: 'week', label: 'This week', icon: CalendarRange },
-]
+// i18n note (Task 17-D): these are FUNCTIONS, not frozen module-scope arrays.
+// A `const KINDS = [...]` built once at import time with `i18n.t(...)` baked
+// into each `label` would freeze in whatever language was active at import
+// and never follow a runtime language switch. Calling `getKinds()`/
+// `getWindows()` fresh inside the component body on every render re-reads
+// i18n.t() each time, so the labels stay live.
+function getKinds(): Array<{ kind: LensKind; label: string; icon: typeof User; entityType?: string }> {
+  return [
+    { kind: 'you', label: i18n.t('chat:graph.lens.kindYou'), icon: Compass },
+    { kind: 'person', label: i18n.t('chat:graph.lens.kindPerson'), icon: User, entityType: 'person' },
+    { kind: 'project', label: i18n.t('chat:graph.lens.kindProject'), icon: FolderKanban, entityType: 'project' },
+    { kind: 'decision', label: i18n.t('chat:graph.lens.kindDecision'), icon: Lightbulb, entityType: 'decision' },
+    { kind: 'week', label: i18n.t('chat:graph.lens.kindThisWeek'), icon: CalendarRange },
+  ]
+}
 
-const WINDOWS: Array<{ days: number | null; label: string }> = [
-  { days: 7, label: '7d' },
-  { days: 30, label: '30d' },
-  { days: 90, label: '90d' },
-  { days: null, label: 'All' },
-]
+function getWindows(): Array<{ days: number | null; label: string }> {
+  return [
+    { days: 7, label: i18n.t('chat:graph.lens.window7d') },
+    { days: 30, label: i18n.t('chat:graph.lens.window30d') },
+    { days: 90, label: i18n.t('chat:graph.lens.window90d') },
+    { days: null, label: i18n.t('chat:graph.lens.windowAll') },
+  ]
+}
 
 /**
  * Lens-first entry: choose the PERSPECTIVE (whose/what context) and the TIME
@@ -57,10 +69,16 @@ export function LensPicker({
   onSearch,
   ownerLabel,
 }: LensPickerProps) {
+  const { t } = useTranslation('chat')
   const [pending, setPending] = useState<LensKind | null>(null) // kind awaiting an entity pick
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<LensSearchHit[]>([])
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Recomputed every render (cheap, tiny arrays) so the labels stay live — see
+  // the i18n note on getKinds()/getWindows() above.
+  const KINDS = getKinds()
+  const WINDOWS = getWindows()
 
   const activeEntityType = KINDS.find((k) => k.kind === pending)?.entityType
 
@@ -88,9 +106,9 @@ export function LensPicker({
     setPending(null)
     if (kind === 'week') {
       onWindowChange(7)
-      onSelect({ kind: 'week', centerId: null, label: 'This week' })
+      onSelect({ kind: 'week', centerId: null, label: t('graph.lens.kindThisWeek') })
     } else {
-      onSelect({ kind: 'you', centerId: null, label: ownerLabel ? `You · ${ownerLabel}` : 'Your context' })
+      onSelect({ kind: 'you', centerId: null, label: ownerLabel ? t('graph.lens.labelYouWithOwner', { owner: ownerLabel }) : t('graph.lens.kindYou') })
     }
   }
 
@@ -131,7 +149,7 @@ export function LensPicker({
         </div>
 
         {/* Time-window chips */}
-        <div className="flex items-center rounded-lg border overflow-hidden text-xs" role="group" aria-label="Time range">
+        <div className="flex items-center rounded-lg border overflow-hidden text-xs" role="group" aria-label={t('graph.lens.timeRangeGroupLabel')}>
           {WINDOWS.map(({ days, label }) => {
             const active = windowDays === days
             return (
@@ -155,7 +173,7 @@ export function LensPicker({
         {/* Current lens label */}
         {!pending && (
           <span className="text-xs text-muted-foreground truncate max-w-[240px]">
-            Lens: <strong className="text-foreground">{selection.label}</strong>
+            {t('graph.lens.prefixLabel')} <strong className="text-foreground">{selection.label}</strong>
           </span>
         )}
       </div>
@@ -166,7 +184,7 @@ export function LensPicker({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             autoFocus
-            placeholder={`Search a ${activeEntityType.replace('_', ' ')}…`}
+            placeholder={t('graph.lens.searchPlaceholder', { type: nodeTypeLabel(activeEntityType) })}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -174,7 +192,7 @@ export function LensPicker({
               if (e.key === 'Escape') setPending(null)
             }}
             className="pl-9"
-            aria-label={`Search a ${activeEntityType}`}
+            aria-label={t('graph.lens.searchAriaLabel', { type: nodeTypeLabel(activeEntityType) })}
           />
           {hits.length > 0 && (
             <div className="absolute z-20 mt-1 w-full rounded-lg border bg-popover shadow-lg overflow-hidden max-h-64 overflow-y-auto">
@@ -189,7 +207,7 @@ export function LensPicker({
                     style={{ backgroundColor: entityColor(h.type).light }}
                   />
                   <span className="truncate flex-1">{h.label}</span>
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{h.type}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{nodeTypeLabel(h.type)}</span>
                 </button>
               ))}
             </div>

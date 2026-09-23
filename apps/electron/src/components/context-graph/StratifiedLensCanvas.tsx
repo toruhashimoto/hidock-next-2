@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import ForceGraph2D, { type ForceGraphMethods, type NodeObject } from 'react-force-graph-2d'
 import type { ContextLensData, ContextLensNode } from './types'
-import { colorForType, STRATUM_STYLES } from './graph-theme'
+import { colorForType, nodeTypeLabel, STRATUM_STYLES } from './graph-theme'
 import { computeStratifiedLayout, type BandRect, type AxisTick } from './layout'
 import { formatSmartDate } from '@/lib/smartDate'
+import i18n from '@/i18n'
 
 type GNode = ContextLensNode & NodeObject
 interface GLink {
@@ -344,7 +345,7 @@ export function StratifiedLensCanvas({
         onRenderFramePre={paintBands}
         nodeCanvasObject={paintNode}
         nodePointerAreaPaint={paintPointerArea}
-        nodeLabel={(n: GNode) => `${escapeHtml(n.label)} · ${n.type.replace(/_/g, ' ')}`}
+        nodeLabel={(n: GNode) => i18n.t('chat:graph.canvas.nodeTooltip', { label: escapeHtml(n.label), type: nodeTypeLabel(n.type) })}
         linkColor={(l: GLink) => {
           if (hasHighlight) {
             const on = highlightIds!.has(endpointId(l.source)) && highlightIds!.has(endpointId(l.target))

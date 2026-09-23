@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Search,
   RefreshCw,
@@ -65,6 +66,7 @@ interface RecurringTopic {
 }
 
 export function Explore() {
+  const { t } = useTranslation('chat')
   const navigate = useNavigate()
   const location = useLocation()
   // Seed the search box from the titlebar global-search handoff (navigate('/explore', { state: { query } })).
@@ -145,9 +147,9 @@ export function Explore() {
         setResults(result.data)
       } else {
         // Handle error from Result wrapper
-        const errorMsg = result.error.message || 'Search failed'
+        const errorMsg = result.error.message || t('explore.error.fallback')
         setSearchError(errorMsg)
-        toast.error('Search failed', errorMsg)
+        toast.error(t('explore.error.title'), errorMsg)
         setResults({ knowledge: [], people: [], projects: [] })
       }
     } catch (error) {
@@ -155,16 +157,16 @@ export function Explore() {
       if (controller.signal.aborted || cancelledRef.current) return
 
       console.error('Search failed:', error)
-      const message = error instanceof Error ? error.message : 'An unexpected error occurred'
+      const message = error instanceof Error ? error.message : t('explore.error.unexpected')
       setSearchError(message)
-      toast.error('Search failed', message)
+      toast.error(t('explore.error.title'), message)
       setResults({ knowledge: [], people: [], projects: [] })
     } finally {
       if (!controller.signal.aborted && !cancelledRef.current) {
         setLoading(false)
       }
     }
-  }, [query])
+  }, [query, t])
 
   useEffect(() => {
     // C-EXP-M04: Clear stale results when query is empty
@@ -222,8 +224,8 @@ export function Explore() {
       <header className="border-b px-6 py-8 bg-muted/5">
         <div className="max-w-4xl mx-auto space-y-6">
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight">Explore Knowledge</h1>
-            <p className="text-muted-foreground">Search, discover, and connect your knowledge across all captures, people, and projects.</p>
+            <h1 className="text-3xl font-bold tracking-tight">{t('explore.header.title')}</h1>
+            <p className="text-muted-foreground">{t('explore.header.subtitle')}</p>
           </div>
 
           <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="relative">
@@ -231,7 +233,7 @@ export function Explore() {
             {/* C-EXP-004: Search input with ref for autofocus */}
             <Input
               ref={searchInputRef}
-              placeholder="Search anything... (e.g. 'Amazon Connect', 'Mario', 'API decisions')"
+              placeholder={t('explore.searchPlaceholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="pl-12 py-7 text-lg rounded-2xl shadow-lg border-border bg-background focus-visible:ring-primary/20"
@@ -253,7 +255,7 @@ export function Explore() {
             <div className="flex items-center gap-3 p-4 rounded-xl border border-destructive/50 bg-destructive/5 text-sm">
               <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0" />
               <div>
-                <p className="font-semibold text-destructive">Search failed</p>
+                <p className="font-semibold text-destructive">{t('explore.error.title')}</p>
                 <p className="text-muted-foreground mt-0.5">{searchError}</p>
               </div>
             </div>
@@ -265,13 +267,13 @@ export function Explore() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider">
                     <TrendingUp className="h-4 w-4 text-primary" />
-                    Recurring Topics
+                    {t('explore.recurringTopics.heading')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">Topics frequently mentioned in your recent meetings.</p>
+                  <p className="text-sm text-muted-foreground">{t('explore.recurringTopics.subtitle')}</p>
                   {topicsLoading ? (
-                    <p className="text-sm text-muted-foreground animate-pulse">Loading recurring topics...</p>
+                    <p className="text-sm text-muted-foreground animate-pulse">{t('explore.recurringTopics.loading')}</p>
                   ) : recurringTopics.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {recurringTopics.map(({ topic }) => (
@@ -285,7 +287,7 @@ export function Explore() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">Topics appear as your meetings are analyzed</p>
+                    <p className="text-sm text-muted-foreground">{t('explore.recurringTopics.empty')}</p>
                   )}
                 </CardContent>
               </Card>
@@ -294,7 +296,7 @@ export function Explore() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider">
                     <Zap className="h-4 w-4 text-blue-500" />
-                    Quick Actions
+                    {t('explore.quickActions.heading')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -302,18 +304,18 @@ export function Explore() {
                     variant="ghost"
                     size="sm"
                     className="w-full justify-between hover:bg-blue-500/10 h-10 px-3"
-                    onClick={() => { setQuery('summarize recent recordings'); }}
+                    onClick={() => { setQuery(t('explore.quickActions.summarizeQuery')); }}
                   >
-                    <span className="text-sm">Summarize recent activity</span>
+                    <span className="text-sm">{t('explore.quickActions.summarizeLabel')}</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
                     className="w-full justify-between hover:bg-blue-500/10 h-10 px-3"
-                    onClick={() => { setQuery('find unresolved tasks and action items'); }}
+                    onClick={() => { setQuery(t('explore.quickActions.unresolvedQuery')); }}
                   >
-                    <span className="text-sm">Find unresolved tasks</span>
+                    <span className="text-sm">{t('explore.quickActions.unresolvedLabel')}</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </CardContent>
@@ -331,26 +333,26 @@ export function Explore() {
               <div className="flex items-center justify-between border-b pb-4">
                 <div className="flex items-center gap-3">
                   <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
-                    Search Results ({totalResults})
+                    {t('explore.results.heading', { count: totalResults })}
                   </h2>
                   {/* C-EXP-002: Search performance metrics */}
                   {searchDurationMs !== null && (
                     <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded-full">
-                      {searchDurationMs}ms
+                      {t('explore.results.durationMs', { ms: searchDurationMs })}
                     </span>
                   )}
                 </div>
                 <div className="flex bg-muted p-1 rounded-lg gap-1">
-                  {(['all', 'knowledge', 'people', 'projects'] as const).map((t) => (
+                  {(['all', 'knowledge', 'people', 'projects'] as const).map((tabKey) => (
                     <button
-                      key={t}
-                      onClick={() => setActiveTab(t)}
+                      key={tabKey}
+                      onClick={() => setActiveTab(tabKey)}
                       className={cn(
                         "px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all",
-                        activeTab === t ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                        activeTab === tabKey ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                       )}
                     >
-                      {t}
+                      {t(`explore.tabs.${tabKey}`)}
                     </button>
                   ))}
                 </div>
@@ -367,7 +369,7 @@ export function Explore() {
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <FileText className="h-4 w-4" />
-                      <h3 className="text-sm font-bold uppercase tracking-wider">Knowledge ({results.knowledge.length})</h3>
+                      <h3 className="text-sm font-bold uppercase tracking-wider">{t('explore.knowledge.heading', { count: results.knowledge.length })}</h3>
                     </div>
                     <div className="grid grid-cols-1 gap-3">
                       {/* B-EXP-002: Navigate to /library with selectedId in navigation state */}
@@ -382,7 +384,7 @@ export function Explore() {
                               />
                               <p
                                 className="text-xs text-muted-foreground line-clamp-1 mt-1 [&_mark]:bg-yellow-200 dark:[&_mark]:bg-yellow-800 [&_mark]:rounded-sm [&_mark]:px-0.5"
-                                dangerouslySetInnerHTML={{ __html: highlightMatch(k.summary || 'No summary available', query) }}
+                                dangerouslySetInnerHTML={{ __html: highlightMatch(k.summary || t('explore.knowledge.noSummary'), query) }}
                               />
                               <div className="flex items-center gap-2 mt-2">
                                 <Clock className="h-3 w-3 text-muted-foreground" />
@@ -402,7 +404,7 @@ export function Explore() {
                         <Button variant="outline" size="sm" disabled={resultPage <= 1} onClick={() => setResultPage(p => Math.max(1, p - 1))}>
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <span className="text-xs px-2">Page {resultPage} of {knowledgeTotalPages}</span>
+                        <span className="text-xs px-2">{t('explore.pagination.pageOf', { page: resultPage, total: knowledgeTotalPages })}</span>
                         <Button variant="outline" size="sm" disabled={resultPage >= knowledgeTotalPages} onClick={() => setResultPage(p => Math.min(knowledgeTotalPages, p + 1))}>
                           <ChevronRight className="h-4 w-4" />
                         </Button>
@@ -417,7 +419,7 @@ export function Explore() {
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Users className="h-4 w-4" />
-                      <h3 className="text-sm font-bold uppercase tracking-wider">People ({results.people.length})</h3>
+                      <h3 className="text-sm font-bold uppercase tracking-wider">{t('explore.people.heading', { count: results.people.length })}</h3>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {results.people.map(p => (
@@ -453,7 +455,7 @@ export function Explore() {
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Folder className="h-4 w-4" />
-                      <h3 className="text-sm font-bold uppercase tracking-wider">Projects ({results.projects.length})</h3>
+                      <h3 className="text-sm font-bold uppercase tracking-wider">{t('explore.projects.heading', { count: results.projects.length })}</h3>
                     </div>
                     <div className="grid grid-cols-1 gap-3">
                       {/* B-EXP-002: Navigate to /projects with selectedId in navigation state */}
@@ -494,7 +496,7 @@ export function Explore() {
                 {totalResults === 0 && !loading && (
                   <div className="text-center py-20 border-2 border-dashed rounded-3xl opacity-30">
                     <Search className="h-12 w-12 mx-auto mb-4" />
-                    <p className="text-sm">No results found for &quot;{query}&quot;</p>
+                    <p className="text-sm">{t('explore.emptyState.noResults', { query })}</p>
                   </div>
                 )}
                 {totalResults > 0 && !loading && activeTab !== 'all' && (() => {
@@ -506,8 +508,8 @@ export function Explore() {
                     return (
                       <div className="text-center py-12 border-2 border-dashed rounded-3xl opacity-30">
                         <Search className="h-10 w-10 mx-auto mb-3" />
-                        <p className="text-sm">No {activeTab} results for &quot;{query}&quot;</p>
-                        <p className="text-xs text-muted-foreground mt-1">Try the &quot;all&quot; tab to see results in other categories.</p>
+                        <p className="text-sm">{t('explore.emptyState.noCategoryResults', { category: t(`explore.tabs.${activeTab}`), query })}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{t('explore.emptyState.tryAllTab', { all: t('explore.tabs.all') })}</p>
                       </div>
                     )
                   }

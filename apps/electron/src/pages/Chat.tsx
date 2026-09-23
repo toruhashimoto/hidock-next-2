@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import {
   Send,
@@ -120,19 +121,22 @@ function parseMessageSources(sourcesJson?: string | null): Source[] {
 }
 
 // Human-readable label for the active chat backend shown in the status badge.
-function backendLabel(backend?: 'gemini' | 'ollama' | 'none'): string {
+// Uses i18n.t() directly (not a frozen module-scope constant) so it always
+// reads the current language, even though it lives outside the component.
+function backendLabel(t: (key: string) => string, backend?: 'gemini' | 'ollama' | 'none'): string {
   switch (backend) {
     case 'gemini':
-      return 'Gemini'
+      return t('chat.backend.gemini')
     case 'ollama':
-      return 'Ollama'
+      return t('chat.backend.ollama')
     default:
-      return 'AI'
+      return t('chat.backend.genericAi')
   }
 }
 
 export function Chat() {
   // Hooks
+  const { t } = useTranslation('chat')
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -261,7 +265,7 @@ export function Chat() {
       setInitError(null)
       try {
         if (!window.electronAPI?.rag?.status) {
-          throw new Error('Electron API not available. Please restart the application.')
+          throw new Error(t('chat.errors.electronApiUnavailable'))
         }
 
         await Promise.all([
@@ -270,7 +274,7 @@ export function Chat() {
         ])
       } catch (error) {
         console.error('Failed to initialize Chat:', error)
-        setInitError(error instanceof Error ? error.message : 'Failed to initialize chat')
+        setInitError(error instanceof Error ? error.message : t('chat.errors.initFailed'))
       } finally {
         setInitialLoading(false)
       }
@@ -287,14 +291,14 @@ export function Chat() {
       // Validate knowledge capture exists
       const capture = await window.electronAPI.knowledge.getById(contextId)
       if (!capture) {
-        setContextError('Recording not found')
+        setContextError(t('chat.contextBanner.recordingNotFound'))
         return
       }
 
       // Auto-create or select conversation for this context
       if (!activeConversation) {
         const newConv = await window.electronAPI.assistant.createConversation(
-          capture.title || 'Chat about recording'
+          capture.title || t('chat.defaultTitle.aboutRecording')
         )
         setConversations(prev => [newConv, ...prev])
         setActiveConversation(newConv)
@@ -307,7 +311,7 @@ export function Chat() {
         // instead of accumulating every previously asked one (2026-07-24).
         const result = await window.electronAPI.assistant.setContext(newConv.id, contextId)
         if (!result?.success) {
-          setContextError('That item is no longer available')
+          setContextError(t('chat.contextBanner.itemUnavailable'))
           return
         }
         const fresh = await window.electronAPI.knowledge.getById(contextId)
@@ -320,7 +324,7 @@ export function Chat() {
         // (same "about THIS source" model), only install/display on success.
         const result = await window.electronAPI.assistant.setContext(activeConversation.id, contextId)
         if (!result?.success) {
-          setContextError('That item is no longer available')
+          setContextError(t('chat.contextBanner.itemUnavailable'))
           return
         }
         const fresh = await window.electronAPI.knowledge.getById(contextId)
@@ -333,7 +337,7 @@ export function Chat() {
         setContextRecording(capture)
       }
     } catch (error) {
-      setContextError('Failed to load recording context')
+      setContextError(t('chat.contextBanner.loadFailed'))
       console.error('Context loading failed:', error)
     } finally {
       setContextLoading(false)
@@ -389,7 +393,7 @@ export function Chat() {
       } catch (error) {
         console.error('Failed to remove context:', error)
         // B-CHAT-003: Use toast instead of browser alert
-        toast.error('Failed to remove context', 'Please try again.')
+        toast.error(t('chat.toast.removeContextFailedTitle'), t('chat.common.pleaseTryAgain'))
         // Don't clear UI if server operation failed
         return
       }
@@ -441,7 +445,7 @@ export function Chat() {
 
       // B-CHAT-001: Check if getMessages returned an error (invalid conversation)
       if (msgsResult && typeof msgsResult === 'object' && 'error' in msgsResult && !Array.isArray(msgsResult)) {
-        toast.error('Conversation not found', 'This conversation may have been deleted.')
+        toast.error(t('chat.toast.conversationNotFoundTitle'), t('chat.toast.conversationNotFoundDescription'))
         setActiveConversation(null)
         setMessages([])
         setContextIds([])
@@ -469,7 +473,7 @@ export function Chat() {
       // AUD3-004: Discard error handling if a newer conversation was selected
       if (conversationLoadIdRef.current !== loadId) return
       console.error('Failed to load conversation details:', error)
-      toast.error('Failed to load conversation', 'Could not load conversation details.')
+      toast.error(t('chat.toast.loadConversationFailedTitle'), t('chat.toast.loadConversationFailedDescription'))
     }
   }
 
@@ -477,12 +481,12 @@ export function Chat() {
   const handleNewChat = async () => {
     try {
       setHistoryOpen(false) // F2: close narrow-mode drawer
-      const newConv = await window.electronAPI.assistant.createConversation('New Chat')
+      const newConv = await window.electronAPI.assistant.createConversation(t('chat.defaultTitle.newChat'))
       setConversations(prev => [newConv, ...prev])
       handleSelectConversation(newConv)
     } catch (error) {
       console.error('Failed to create new chat:', error)
-      toast.error('Failed to create chat', 'Could not create a new conversation.')
+      toast.error(t('chat.toast.createChatFailedTitle'), t('chat.toast.createChatFailedDescription'))
     }
   }
 
@@ -514,11 +518,11 @@ export function Chat() {
         setContextIds([])
         setContextItems([])
       }
-      toast.success('Conversation deleted')
+      toast.success(t('chat.toast.conversationDeleted'))
     } catch (error) {
       console.error('Failed to delete conversation:', error)
       // B-CHAT-003: Use toast instead of browser alert
-      toast.error('Failed to delete conversation', 'Please try again.')
+      toast.error(t('chat.toast.deleteConversationFailedTitle'), t('chat.common.pleaseTryAgain'))
     }
   }
 
@@ -544,7 +548,7 @@ export function Chat() {
         // capture that became excluded between fetch and write; do not install or
         // display a capture the write refused.
         if (!result?.success) {
-          toast.error('Unable to add context', 'That item is no longer available.')
+          toast.error(t('chat.toast.addContextUnableTitle'), t('chat.toast.addContextUnableDescription'))
           return
         }
 
@@ -559,8 +563,8 @@ export function Chat() {
       console.error('Failed to toggle context:', error)
       // B-CHAT-003: Use toast instead of browser alert
       toast.error(
-        `Failed to ${isAttached ? 'remove' : 'add'} context`,
-        'Please try again.'
+        isAttached ? t('chat.toast.removeContextFailedTitle') : t('chat.toast.addContextFailedTitle'),
+        t('chat.common.pleaseTryAgain')
       )
     }
   }
@@ -617,7 +621,7 @@ export function Chat() {
   // C-CHAT: Export conversation to markdown
   const handleExportConversation = useCallback(async () => {
     if (!activeConversation || messages.length === 0) {
-      toast.error('No conversation to export')
+      toast.error(t('chat.toast.noConversationToExport'))
       return
     }
 
@@ -625,10 +629,10 @@ export function Chat() {
       name.replace(/[/\\:*?"<>|]/g, '_').trim()
 
     const markdown = [
-      `# ${activeConversation.title || 'Untitled Conversation'}`,
+      `# ${activeConversation.title || t('chat.export.untitledConversation')}`,
       ``,
-      `**Date:** ${new Date(activeConversation.createdAt).toLocaleDateString()}`,
-      `**Messages:** ${messages.length}`,
+      `**${t('chat.export.dateLabel')}** ${new Date(activeConversation.createdAt).toLocaleDateString()}`,
+      `**${t('chat.export.messagesLabel')}** ${messages.length}`,
       ``,
       `---`,
       ``,
@@ -636,26 +640,26 @@ export function Chat() {
         // ADV21 (round-22) — label only EXACT roles. A smuggled/unknown role
         // (main already redacts its content) is exported neutrally, never as
         // 'Assistant'. Main-side gates are authoritative; this is defense-in-depth.
-        const role = msg.role === 'user' ? '**You:**' : msg.role === 'assistant' ? '**Assistant:**' : '**Message:**'
+        const role = msg.role === 'user' ? `**${t('chat.export.roleYou')}**` : msg.role === 'assistant' ? `**${t('chat.export.roleAssistant')}**` : `**${t('chat.export.roleMessage')}**`
         const timestamp = new Date(msg.createdAt).toLocaleString()
         return `### ${role} _(${timestamp})_\n\n${msg.content}\n`
       })
     ].join('\n')
 
-    const filename = sanitizeFilename(activeConversation.title || 'conversation') + '.md'
+    const filename = sanitizeFilename(activeConversation.title || t('chat.export.defaultFilenameBase')) + '.md'
 
     try {
       const result = await window.electronAPI.outputs.saveToFile(markdown, filename)
       if (result.success) {
-        toast.success('Conversation exported', result.data)
+        toast.success(t('chat.toast.conversationExported'), result.data)
       } else {
-        toast.error('Export failed', result.error?.message || 'Unknown error')
+        toast.error(t('chat.toast.exportFailedTitle'), result.error?.message || t('common:errors.unknown'))
       }
     } catch (error) {
       console.error('Export error:', error)
-      toast.error('Export failed', 'Could not save file')
+      toast.error(t('chat.toast.exportFailedTitle'), t('chat.toast.exportFailedCouldNotSave'))
     }
-  }, [activeConversation, messages])
+  }, [activeConversation, messages, t])
 
   // C-CHAT: Sidebar resize handlers (throttled with RAF for performance)
   const handleMouseDown = useCallback(() => {
@@ -712,7 +716,7 @@ export function Chat() {
       await window.electronAPI.rag.cancel(activeConversation.id)
       setLoading(false)
       setIsProcessing(false)
-      toast.info('Request cancelled')
+      toast.info(t('chat.toast.requestCancelled'))
     } catch (error) {
       console.error('Failed to cancel request:', error)
     }
@@ -786,8 +790,17 @@ export function Chat() {
         }
       }
 
-      // Auto-generate title if the conversation still has the default name
-      if (currentConv!.title === 'New Chat' || currentConv!.title === 'New Conversation') {
+      // Auto-generate title if the conversation still has the default name.
+      // Checks both the CURRENT-language default title and the raw English
+      // literal (legacy conversations, or one created before a language
+      // switch) — 'New Conversation' is a historical main-process default
+      // never set by this file, kept as a literal (data sentinel, not
+      // rendered UI) so old conversations still auto-title correctly.
+      if (
+        currentConv!.title === t('chat.defaultTitle.newChat') ||
+        currentConv!.title === 'New Chat' ||
+        currentConv!.title === 'New Conversation'
+      ) {
         const autoTitle = userMessageContent.slice(0, 40) + (userMessageContent.length > 40 ? '...' : '')
         try {
           await window.electronAPI.assistant.updateConversationTitle(currentConv!.id, autoTitle)
@@ -818,7 +831,7 @@ export function Chat() {
       setLoading(false)
       setIsProcessing(false)
     }
-  }, [input, isProcessing, activeConversation])
+  }, [input, isProcessing, activeConversation, t])
 
   // Retry a failed message: find the preceding user message and re-submit it
   const handleRetry = useCallback(async (failedMsgId: string) => {
@@ -838,7 +851,7 @@ export function Chat() {
     }
 
     if (!userMessage) {
-      toast.error('Cannot retry', 'Could not find the original message to retry.')
+      toast.error(t('chat.toast.cannotRetryTitle'), t('chat.toast.cannotRetryDescription'))
       return
     }
 
@@ -898,7 +911,7 @@ export function Chat() {
       setLoading(false)
       setIsProcessing(false)
     }
-  }, [isProcessing, activeConversation, messages])
+  }, [isProcessing, activeConversation, messages, t])
 
   const getMessageSources = (message: Message): Source[] => {
     if (sources.has(message.id)) return sources.get(message.id)!
@@ -917,7 +930,7 @@ export function Chat() {
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-muted-foreground">Initializing Knowledge Assistant...</p>
+          <p className="text-muted-foreground">{t('chat.loading.initializing')}</p>
         </div>
       </div>
     )
@@ -928,11 +941,11 @@ export function Chat() {
       <div className="flex h-full items-center justify-center p-6">
         <div className="flex flex-col items-center gap-4 max-w-md text-center">
           <AlertCircle className="h-12 w-12 text-destructive" />
-          <h2 className="text-lg font-medium">Failed to Initialize</h2>
+          <h2 className="text-lg font-medium">{t('chat.errors.initFailedHeading')}</h2>
           <p className="text-muted-foreground">{initError}</p>
           <Button onClick={() => window.location.reload()}>
             <RefreshCw className="h-4 w-4 mr-2" />
-            Reload Page
+            {t('chat.reloadPageButton')}
           </Button>
         </div>
       </div>
@@ -947,17 +960,17 @@ export function Chat() {
       <div className="p-4 border-b">
         <Button onClick={handleNewChat} className="w-full gap-2" variant="default">
           <Plus className="h-4 w-4" />
-          New Chat
+          {t('chat.newChatButton')}
         </Button>
       </div>
       <div className="flex-1 overflow-auto">
         <div className="p-2 space-y-1">
           <div className="px-2 py-2 text-xs font-semibold text-muted-foreground flex items-center gap-2">
             <History className="h-3 w-3" />
-            HISTORY
+            {t('chat.history.heading')}
           </div>
           {conversations.length === 0 ? (
-            <p className="text-xs text-center text-muted-foreground py-4">No history yet</p>
+            <p className="text-xs text-center text-muted-foreground py-4">{t('chat.history.empty')}</p>
           ) : (
             conversations.map((conv) => (
               <div
@@ -973,7 +986,7 @@ export function Chat() {
                 <div className="flex flex-col gap-0.5 overflow-hidden flex-1">
                   <div className="flex items-center gap-2 overflow-hidden">
                     <MessageSquare className={cn("h-4 w-4 flex-shrink-0", activeConversation?.id === conv.id ? "text-primary-foreground" : "text-muted-foreground")} />
-                    <span className="truncate">{conv.title || 'Untitled'}</span>
+                    <span className="truncate">{conv.title || t('chat.conversationTitleFallback')}</span>
                   </div>
                   <span className={cn(
                     "text-[10px] pl-6",
@@ -1011,18 +1024,18 @@ export function Chat() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+            <AlertDialogTitle>{t('chat.deleteDialog.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this conversation? This action cannot be undone.
+              {t('chat.deleteDialog.description')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('chat.cancelButton')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t('chat.deleteDialog.confirmButton')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1075,9 +1088,9 @@ export function Chat() {
             className="absolute inset-y-0 left-0 z-30 flex w-64 max-w-[80%] flex-col border-r bg-background shadow-xl focus:outline-none"
           >
             <div className="flex shrink-0 items-center justify-between border-b px-3 py-2">
-              <DialogTitle className="text-sm font-semibold leading-none">History</DialogTitle>
+              <DialogTitle className="text-sm font-semibold leading-none">{t('chat.history.drawerTitle')}</DialogTitle>
               <DialogClose asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Close history">
+                <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={t('chat.history.closeAriaLabel')}>
                   <X className="h-4 w-4" />
                 </Button>
               </DialogClose>
@@ -1101,15 +1114,15 @@ export function Chat() {
               size="icon"
               className="@lg:hidden shrink-0 h-8 w-8"
               onClick={() => setHistoryOpen(true)}
-              aria-label="Open conversation history"
+              aria-label={t('chat.history.openAriaLabel')}
               data-testid="chat-history-toggle"
             >
               <History className="h-4 w-4" />
             </Button>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-bold @lg:text-2xl">Knowledge Assistant</h1>
+              <h1 className="truncate text-base font-bold @lg:text-2xl">{t('chat.appTitle')}</h1>
               <p className="hidden @lg:block text-sm text-muted-foreground truncate">
-                {activeConversation ? activeConversation.title : 'Knowledge-powered AI conversations'}
+                {activeConversation ? activeConversation.title : t('chat.subtitleFallback')}
               </p>
             </div>
           </div>
@@ -1120,7 +1133,7 @@ export function Chat() {
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder="Search messages..."
+                  placeholder={t('chat.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-8 w-48"
@@ -1134,7 +1147,7 @@ export function Chat() {
                 variant="outline"
                 size="icon"
                 onClick={handleExportConversation}
-                title="Export conversation"
+                title={t('chat.exportConversationTooltip')}
               >
                 <Download className="h-4 w-4" />
               </Button>
@@ -1158,9 +1171,9 @@ export function Chat() {
                       setSearchOpen(true)
                     }
                   }}
-                  aria-label="Search messages"
+                  aria-label={t('chat.searchMessagesAriaLabel')}
                   aria-expanded={searchOpen}
-                  title="Search messages"
+                  title={t('chat.searchMessagesAriaLabel')}
                   data-testid="chat-search-toggle"
                 >
                   <Search className="h-4 w-4" />
@@ -1170,8 +1183,8 @@ export function Chat() {
                   size="icon"
                   className="h-8 w-8"
                   onClick={handleExportConversation}
-                  aria-label="Export conversation"
-                  title="Export conversation"
+                  aria-label={t('chat.exportConversationTooltip')}
+                  title={t('chat.exportConversationTooltip')}
                   data-testid="chat-export-compact"
                 >
                   <Download className="h-4 w-4" />
@@ -1184,10 +1197,10 @@ export function Chat() {
                   <div className="hidden @lg:flex items-center gap-1.5 text-green-600 dark:text-green-400 bg-green-500/10 px-2 py-1 rounded-full border border-green-500/20">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     <span>
-                      {(status.embedProviderLabel ?? backendLabel(status.backend)) +
-                        ' · ' +
-                        (status.embedDocumentCount ?? status.documentCount) +
-                        ' chunks'}
+                      {t('chat.status.readyBadge', {
+                        provider: status.embedProviderLabel ?? backendLabel(t, status.backend),
+                        count: status.embedDocumentCount ?? status.documentCount
+                      })}
                     </span>
                   </div>
                 ) : status.indexState === 'queued' || status.indexState === 'loading' ? (
@@ -1195,27 +1208,27 @@ export function Chat() {
                     <Database className="h-3.5 w-3.5" />
                     <span>
                       {status.indexTotal
-                        ? `Loading knowledge · ${Math.round(((status.indexLoaded ?? 0) / status.indexTotal) * 100)}%`
-                        : 'Knowledge index queued'}
+                        ? t('chat.status.loadingKnowledgePercent', { percent: Math.round(((status.indexLoaded ?? 0) / status.indexTotal) * 100) })
+                        : t('chat.status.indexQueued')}
                     </span>
                   </div>
                 ) : status.indexState === 'failed' ? (
                   <div
                     className="hidden @lg:flex items-center gap-1.5 text-red-600 dark:text-red-400 bg-red-500/10 px-2 py-1 rounded-full border border-red-500/20"
-                    title={status.indexError ?? 'Knowledge index failed'}
+                    title={status.indexError ?? t('chat.status.indexFailedFallback')}
                   >
                     <AlertCircle className="h-3.5 w-3.5" />
-                    <span>Index failed</span>
+                    <span>{t('chat.status.indexFailedBadge')}</span>
                   </div>
                 ) : status.backend === 'none' ? (
                   <div className="hidden @lg:flex items-center gap-1.5 text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded-full border border-yellow-500/20">
                     <AlertCircle className="h-3.5 w-3.5" />
-                    <span>AI offline</span>
+                    <span>{t('chat.status.aiOffline')}</span>
                   </div>
                 ) : (
                   <div className="hidden @lg:flex items-center gap-1.5 text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded-full border border-yellow-500/20">
                     <Database className="h-3.5 w-3.5" />
-                    <span>Empty knowledge base</span>
+                    <span>{t('chat.status.emptyKnowledgeBase')}</span>
                   </div>
                 )}
               </div>
@@ -1224,9 +1237,9 @@ export function Chat() {
             {/* Context Picker */}
             <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2 h-8" disabled={!activeConversation} title="Add Context">
+                <Button variant="outline" size="sm" className="gap-2 h-8" disabled={!activeConversation} title={t('chat.contextButton.tooltip')}>
                   <Layers className="h-4 w-4" />
-                  <span className="hidden @lg:inline">Context</span>
+                  <span className="hidden @lg:inline">{t('chat.contextButton.label')}</span>
                   {contextIds.length > 0 && (
                     <span className="bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
                       {contextIds.length}
@@ -1236,7 +1249,7 @@ export function Chat() {
               </DialogTrigger>
               <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                  <DialogTitle>Select Knowledge Context</DialogTitle>
+                  <DialogTitle>{t('chat.contextDialog.title')}</DialogTitle>
                 </DialogHeader>
                 <ContextPicker
                   onSelect={handleToggleContext}
@@ -1252,7 +1265,7 @@ export function Chat() {
               className="h-8 gap-2"
             >
               <FileText className="h-4 w-4" />
-              <span className="hidden @lg:inline">Chunks</span>
+              <span className="hidden @lg:inline">{t('chat.chunksButton.label')}</span>
             </Button>
           </div>
         </header>
@@ -1265,7 +1278,7 @@ export function Chat() {
               <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search messages..."
+                placeholder={t('chat.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-8 pl-8"
@@ -1280,7 +1293,7 @@ export function Chat() {
                 setSearchOpen(false)
                 setSearchQuery('') // closing clears the filter — no invisible filtering
               }}
-              aria-label="Close search"
+              aria-label={t('chat.closeSearchAriaLabel')}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -1291,7 +1304,7 @@ export function Chat() {
         {contextLoading && (
           <div className="px-4 py-2 bg-muted/30 border-b flex items-center gap-2">
             <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Loading recording context...</span>
+            <span className="text-sm text-muted-foreground">{t('chat.contextBanner.loading')}</span>
           </div>
         )}
 
@@ -1301,7 +1314,12 @@ export function Chat() {
             <div className="flex items-center gap-2">
               <FileAudio className="h-4 w-4 text-primary" />
               <span className="text-sm">
-                Chatting about: <strong>{contextRecording.title || 'Recording'}</strong>
+                <Trans
+                  i18nKey="chat:chat.contextBanner.chattingAbout"
+                  values={{ title: contextRecording.title || t('chat.contextBanner.recordingFallback') }}
+                >
+                  Chatting about: <strong>{{ title: contextRecording.title || t('chat.contextBanner.recordingFallback') } as unknown as string}</strong>
+                </Trans>
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -1310,10 +1328,10 @@ export function Chat() {
                 size="sm"
                 onClick={() => navigate('/library', { state: { selectedId: contextRecording.id } })}
               >
-                View Recording
+                {t('chat.contextBanner.viewRecordingButton')}
               </Button>
               <Button variant="ghost" size="sm" onClick={clearRecordingContext}>
-                Clear context
+                {t('chat.contextBanner.clearContextButton')}
               </Button>
             </div>
           </div>
@@ -1327,7 +1345,7 @@ export function Chat() {
               <span className="text-sm text-destructive">{contextError}</span>
             </div>
             <Button variant="ghost" size="sm" onClick={() => navigate('/library')}>
-              Return to Library
+              {t('chat.contextBanner.returnToLibraryButton')}
             </Button>
           </div>
         )}
@@ -1337,10 +1355,10 @@ export function Chat() {
           <div className="border-b bg-muted/30 max-h-80 overflow-auto">
             <div className="px-6 py-3">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium text-sm">Indexed Chunks ({chunks.length})</h3>
+                <h3 className="font-medium text-sm">{t('chat.chunksPanel.heading', { count: chunks.length })}</h3>
                 <Button variant="ghost" size="sm" onClick={loadChunks} disabled={loadingChunks}>
                   <RefreshCw className={cn('h-3 w-3 mr-1', loadingChunks && 'animate-spin')} />
-                  Refresh
+                  {t('chat.chunksPanel.refreshButton')}
                 </Button>
               </div>
               {loadingChunks ? (
@@ -1349,7 +1367,7 @@ export function Chat() {
                 </div>
               ) : chunks.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground text-sm">
-                  No chunks indexed yet. Transcribe recordings to populate the knowledge base.
+                  {t('chat.chunksPanel.empty')}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 @md:grid-cols-2 gap-2 pb-4">
@@ -1366,11 +1384,11 @@ export function Chat() {
                           <span className="truncate font-medium">{chunk.subject}</span>
                         )}
                         <span className="ml-auto text-xs opacity-60">
-                          {chunk.embeddingDimensions}d
+                          {t('chat.chunksPanel.dimensions', { count: chunk.embeddingDimensions })}
                         </span>
                       </div>
                       <p className="text-xs line-clamp-3 text-muted-foreground italic">
-                        &quot;{chunk.content}&quot;
+                        {t('chat.chunksPanel.contentQuoted', { content: chunk.content })}
                       </p>
                     </div>
                   ))}
@@ -1383,7 +1401,7 @@ export function Chat() {
         {/* Attached Context Bar */}
         {contextItems.length > 0 && (
           <div className="bg-muted/30 border-b px-6 py-2 flex flex-wrap gap-2 items-center">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mr-1">Context:</span>
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mr-1">{t('chat.attachedContext.label')}</span>
             {contextItems.map(item => (
               <div key={item.id} className="flex items-center gap-1.5 bg-background border rounded-full pl-2 pr-1 py-0.5 text-[10px] shadow-sm animate-in fade-in zoom-in duration-200">
                 <BookOpen className="h-3 w-3 text-primary" />
@@ -1411,13 +1429,13 @@ export function Chat() {
                   } catch (error) {
                     console.error('Failed to clear all context:', error)
                     // B-CHAT-003: Use toast instead of browser alert
-                    toast.error('Failed to clear all context', 'Please try again.')
+                    toast.error(t('chat.toast.clearAllContextFailedTitle'), t('chat.common.pleaseTryAgain'))
                   }
                 }
               }}
               className="text-[10px] text-muted-foreground hover:text-foreground underline underline-offset-2 ml-auto"
             >
-              Clear all
+              {t('chat.attachedContext.clearAllButton')}
             </button>
           </div>
         )}
@@ -1428,16 +1446,16 @@ export function Chat() {
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full py-12 text-center">
                 <Bot className="h-16 w-12 text-muted-foreground/30 mb-4" />
-                <h2 className="text-xl font-semibold mb-2">Knowledge Assistant</h2>
+                <h2 className="text-xl font-semibold mb-2">{t('chat.appTitle')}</h2>
                 <p className="text-muted-foreground max-w-sm mb-8">
-                  I can answer questions based on your captured knowledge and recorded meetings.
+                  {t('chat.emptyState.description')}
                 </p>
                 <div className="grid grid-cols-1 @md:grid-cols-2 gap-3 w-full max-w-lg">
                   {[
-                    'Summarize my recent meetings',
-                    'What are my pending action items?',
-                    'What did Mario say about the project?',
-                    'Explain the API implementation'
+                    t('chat.suggestions.summarizeRecent'),
+                    t('chat.suggestions.pendingActionItems'),
+                    t('chat.suggestions.marioProject'),
+                    t('chat.suggestions.explainApi')
                   ].map((suggestion) => (
                     <button
                       key={suggestion}
@@ -1507,7 +1525,7 @@ export function Chat() {
                           className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive border-destructive/30"
                         >
                           <RotateCcw className="h-3 w-3" />
-                          Retry
+                          {t('chat.retryButton')}
                         </Button>
                       )}
 
@@ -1519,8 +1537,8 @@ export function Chat() {
                             // and a "Screenshot:" prefix so the origin is unmistakable.
                             const isImage = source.sourceType === 'image'
                             const chipLabel = isImage
-                              ? `Screenshot: ${source.subject || 'Screenshot'}`
-                              : source.subject || 'Reference'
+                              ? t('chat.sources.screenshotLabel', { subject: source.subject || t('chat.sources.screenshotFallback') })
+                              : source.subject || t('chat.sources.referenceFallback')
                             const chipInner = (
                               <>
                                 {isImage ? (
@@ -1540,14 +1558,14 @@ export function Chat() {
                                     <button
                                       type="button"
                                       onClick={() => navigate(`/meeting/${source.meetingId}`)}
-                                      aria-label={`Open meeting ${source.subject || 'Reference'}`}
+                                      aria-label={t('chat.sources.openMeetingAriaLabel', { subject: source.subject || t('chat.sources.referenceFallback') })}
                                       className="flex items-center gap-1.5 text-[10px] px-2 py-1 bg-muted rounded-full border border-border/50 hover:bg-muted/80 hover:underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                     >
                                       {chipInner}
                                     </button>
                                   </HoverCardTrigger>
                                   <HoverCardContent>
-                                    <MeetingHoverCard id={source.meetingId} name={source.subject || 'Reference'} visibleFields={['title']} />
+                                    <MeetingHoverCard id={source.meetingId} name={source.subject || t('chat.sources.referenceFallback')} visibleFields={['title']} />
                                   </HoverCardContent>
                                 </HoverCard>
                               )
@@ -1594,10 +1612,10 @@ export function Chat() {
                     size="sm"
                     onClick={handleCancelRequest}
                     className="h-8 gap-1.5 text-muted-foreground hover:text-foreground"
-                    title="Cancel request"
+                    title={t('chat.cancelRequestTooltip')}
                   >
                     <Square className="h-3.5 w-3.5" />
-                    <span className="text-xs">Cancel</span>
+                    <span className="text-xs">{t('chat.cancelButton')}</span>
                   </Button>
                 </div>
               </div>
@@ -1614,12 +1632,12 @@ export function Chat() {
                 ref={inputRef}
                 placeholder={
                   status?.ready
-                    ? 'Ask me anything about your knowledge base...'
+                    ? t('chat.inputPlaceholder.ready')
                     : status?.indexState === 'queued' || status?.indexState === 'loading'
-                      ? 'Knowledge index is loading...'
+                      ? t('chat.inputPlaceholder.indexLoading')
                     : status?.backend === 'none'
-                      ? 'Add a Gemini API key in Settings to enable AI chat'
-                      : 'Index meetings to enable AI conversations'
+                      ? t('chat.inputPlaceholder.noBackend')
+                      : t('chat.inputPlaceholder.needsIndexing')
                 }
                 value={input}
                 onChange={(e) => {
@@ -1645,7 +1663,7 @@ export function Chat() {
                 alone suffices. */}
             <div className="flex items-center justify-between gap-2 mt-3 px-1">
               <p className="hidden @sm:block min-w-0 truncate text-[10px] text-muted-foreground">
-                I answer based on your meeting transcripts and documents.
+                {t('chat.footerCaption')}
               </p>
               <p className={cn(
                 'shrink-0 ml-auto text-[10px] tabular-nums',

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import {
   X,
   ArrowUpRight,
@@ -39,7 +40,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
-import { entityColor } from './graph-theme'
+import { entityColor, nodeTypeLabel } from './graph-theme'
 import type { NodeDetail, Provenance, ProvenanceEntity, MergePreview, ContextGraphNode } from './types'
 import { MergeIntoDialog } from '@/components/identity/MergeIntoDialog'
 
@@ -90,7 +91,23 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-const PRONOUN_PRESETS = ['He/Him', 'She/Her', 'They/Them']
+// Canonical, stored values — these strings are persisted via setPronouns() and
+// echoed back as the node's `pronouns` field, so they stay the fixed English
+// literals regardless of UI language (an identifier the graph stores, not
+// itself a label). pronounPresetLabel() below supplies the translated DISPLAY
+// text for the picker buttons without touching what gets saved.
+const PRONOUN_PRESETS = ['He/Him', 'She/Her', 'They/Them'] as const
+
+function pronounPresetLabel(t: (key: string) => string, preset: (typeof PRONOUN_PRESETS)[number]): string {
+  switch (preset) {
+    case 'He/Him':
+      return t('graph.pronounPreset.heHim')
+    case 'She/Her':
+      return t('graph.pronounPreset.sheHer')
+    case 'They/Them':
+      return t('graph.pronounPreset.theyThem')
+  }
+}
 
 /**
  * The node inspector: what a person (or any entity) IS, where it comes from, and
@@ -111,6 +128,7 @@ export function NodeInspector({
   onProvenanceLoaded,
   onClose,
 }: NodeInspectorProps) {
+  const { t } = useTranslation('chat')
   const [detail, setDetail] = useState<NodeDetail | null>(null)
   const [provenance, setProvenance] = useState<Provenance | null>(null)
   const [loading, setLoading] = useState(true)
@@ -179,28 +197,28 @@ export function NodeInspector({
       if (res.success && res.data) {
         const { outcome, scope, nodeId: keeperId } = res.data
         if (outcome === 'noop') {
-          toast.info('No change', 'The name is already correct.')
+          toast.info(t('graph.toast.renameNoChangeTitle'), t('graph.toast.renameNoChangeDescription'))
         } else if (outcome === 'merged') {
-          toast.success('Names merged', `"${label}" folded into the existing "${next}".`)
+          toast.success(t('graph.toast.namesMergedTitle'), t('graph.toast.namesMergedDescription', { old: label, new: next }))
         } else {
           toast.success(
-            'Name corrected',
+            t('graph.toast.nameCorrectedTitle'),
             scope === 'contact'
-              ? `Updated everywhere "${label}" appears → "${next}".`
-              : `Corrected in the graph → "${next}".`
+              ? t('graph.toast.nameCorrectedDescriptionContact', { label, new: next })
+              : t('graph.toast.nameCorrectedDescriptionGraph', { new: next })
           )
         }
         setRenaming(false)
         refreshAfter({ keeperId })
       } else {
-        toast.error('Rename failed', res.error ?? 'Unexpected error')
+        toast.error(t('graph.toast.renameFailedTitle'), res.error ?? t('graph.unexpectedErrorFallback'))
       }
     } catch (e) {
-      toast.error('Rename failed', e instanceof Error ? e.message : 'Unexpected error')
+      toast.error(t('graph.toast.renameFailedTitle'), e instanceof Error ? e.message : t('graph.unexpectedErrorFallback'))
     } finally {
       setBusy(false)
     }
-  }, [renameValue, node, label, refreshAfter])
+  }, [renameValue, node, label, refreshAfter, t])
 
   const doSetPronouns = useCallback(
     async (value: string) => {
@@ -209,17 +227,20 @@ export function NodeInspector({
       try {
         const res = await window.electronAPI.contextGraph.setPronouns(node.id, value)
         if (res.success) {
-          toast.success(value ? 'Pronouns set' : 'Pronouns cleared', value ? `${label}: ${value}` : undefined)
+          toast.success(
+            value ? t('graph.toast.pronounsSetTitle') : t('graph.toast.pronounsClearedTitle'),
+            value ? t('graph.toast.pronounsSetDescription', { label, value }) : undefined
+          )
           setEditingPronouns(false)
           refreshAfter({})
         } else {
-          toast.error('Could not set pronouns', res.error ?? 'Unexpected error')
+          toast.error(t('graph.toast.setPronounsFailedTitle'), res.error ?? t('graph.unexpectedErrorFallback'))
         }
       } finally {
         setBusy(false)
       }
     },
-    [node, label, refreshAfter]
+    [node, label, refreshAfter, t]
   )
 
   const doConvert = useCallback(async () => {
@@ -229,20 +250,20 @@ export function NodeInspector({
       const res = await window.electronAPI.contextGraph.convertToContact(node.id)
       if (res.success && res.data) {
         toast.success(
-          res.data.reusedExisting ? 'Linked to existing contact' : 'Contact created',
-          `"${label}" is now a saved contact.`
+          res.data.reusedExisting ? t('graph.toast.linkedExistingTitle') : t('graph.toast.contactCreatedTitle'),
+          t('graph.toast.contactCreatedDescription', { label })
         )
         setConfirmConvert(false)
         refreshAfter({ keeperId: res.data.nodeId })
       } else {
-        toast.error('Could not convert', res.error ?? 'Unexpected error')
+        toast.error(t('graph.toast.convertFailedTitle'), res.error ?? t('graph.unexpectedErrorFallback'))
       }
     } catch (e) {
-      toast.error('Could not convert', e instanceof Error ? e.message : 'Unexpected error')
+      toast.error(t('graph.toast.convertFailedTitle'), e instanceof Error ? e.message : t('graph.unexpectedErrorFallback'))
     } finally {
       setBusy(false)
     }
-  }, [node, label, refreshAfter])
+  }, [node, label, refreshAfter, t])
 
   const doLink = useCallback(
     async (contactId: string, contactName: string) => {
@@ -251,16 +272,16 @@ export function NodeInspector({
       try {
         const res = await window.electronAPI.contextGraph.linkContact(node.id, contactId)
         if (res.success && res.data) {
-          toast.success('Identity set', `"${label}" is ${contactName}.`)
+          toast.success(t('graph.toast.identitySetTitle'), t('graph.toast.identitySetDescription', { label, contact: contactName }))
           refreshAfter({ keeperId: res.data.nodeId })
         } else {
-          toast.error('Could not set identity', res.error ?? 'Unexpected error')
+          toast.error(t('graph.toast.setIdentityFailedTitle'), res.error ?? t('graph.unexpectedErrorFallback'))
         }
       } finally {
         setBusy(false)
       }
     },
-    [node, label, refreshAfter]
+    [node, label, refreshAfter, t]
   )
 
   const doDelete = useCallback(async () => {
@@ -269,58 +290,58 @@ export function NodeInspector({
     try {
       const res = await window.electronAPI.contextGraph.deleteNode(node.id)
       if (res.success && res.data?.removed) {
-        toast.success('Removed', `"${label}" and ${res.data.removedEdges} link(s) removed from the graph.`)
+        toast.success(t('graph.toast.removedTitle'), t('graph.toast.removedDescription', { label, count: res.data.removedEdges }))
         setConfirmDelete(false)
         onProvenanceLoaded?.(null)
         refreshAfter({ removed: true })
       } else {
-        toast.error('Could not remove', res.error ?? 'Nothing to remove')
+        toast.error(t('graph.toast.removeFailedTitle'), res.error ?? t('graph.toast.nothingToRemove'))
       }
     } finally {
       setBusy(false)
     }
-  }, [node, label, refreshAfter, onProvenanceLoaded])
+  }, [node, label, refreshAfter, onProvenanceLoaded, t])
 
   const onMerged = useCallback(
     (keeperId: string, loserLabel: string) => {
-      toast.success('Merged', `"${loserLabel}" folded into "${label}".`)
+      toast.success(t('graph.toast.mergedTitle'), t('graph.toast.mergedDescription', { loser: loserLabel, keeper: label }))
       onProvenanceLoaded?.(null)
       refreshAfter({ keeperId })
     },
-    [label, refreshAfter, onProvenanceLoaded]
+    [label, refreshAfter, onProvenanceLoaded, t]
   )
 
   // ---- Render --------------------------------------------------------------
   const sources: Array<{ key: string; title: string; icon: typeof FileText; items: ProvenanceEntity[] }> = useMemo(
     () => [
-      { key: 'meetings', title: 'Appears in', icon: FileText, items: provenance?.meetings ?? [] },
-      { key: 'people', title: 'With', icon: Users, items: provenance?.people ?? [] },
-      { key: 'projects', title: 'Projects', icon: FolderKanban, items: provenance?.projects ?? [] },
-      { key: 'actions', title: 'Led to', icon: ListChecks, items: provenance?.actions ?? [] },
+      { key: 'meetings', title: t('graph.inspector.sources.meetings'), icon: FileText, items: provenance?.meetings ?? [] },
+      { key: 'people', title: t('graph.inspector.sources.people'), icon: Users, items: provenance?.people ?? [] },
+      { key: 'projects', title: t('graph.inspector.sources.projects'), icon: FolderKanban, items: provenance?.projects ?? [] },
+      { key: 'actions', title: t('graph.inspector.sources.actions'), icon: ListChecks, items: provenance?.actions ?? [] },
     ],
-    [provenance]
+    [provenance, t]
   )
 
   return (
-    <aside className="w-80 shrink-0 border-l bg-muted/5 flex flex-col overflow-hidden" aria-label="Node details">
+    <aside className="w-80 shrink-0 border-l bg-muted/5 flex flex-col overflow-hidden" aria-label={t('graph.inspector.ariaLabel')}>
       {/* Header */}
       <div className="flex items-start justify-between gap-2 border-b px-4 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              {type.replace(/_/g, ' ')}
+              {nodeTypeLabel(type)}
             </span>
             {isPerson &&
               (linked ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
                   <BadgeCheck className="h-3 w-3" />
-                  Linked contact
+                  {t('graph.inspector.badge.linkedContact')}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
                   <Sparkle className="h-3 w-3" />
-                  Extracted name
+                  {t('graph.inspector.badge.extractedName')}
                 </span>
               ))}
           </div>
@@ -334,7 +355,7 @@ export function NodeInspector({
         <button
           onClick={onClose}
           className="text-muted-foreground hover:text-foreground shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-          aria-label="Close details"
+          aria-label={t('graph.inspector.closeAriaLabel')}
         >
           <X className="h-4 w-4" />
         </button>
@@ -343,53 +364,51 @@ export function NodeInspector({
       <div className="px-4 py-3 space-y-4 overflow-auto">
         {loading && !detail ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            <Loader2 className="h-4 w-4 animate-spin" /> {t('graph.inspector.loading')}
           </div>
         ) : (
           <>
             {/* What this is — net-new identity facts, never a re-print of the label. */}
-            <section aria-label="Identity" className="rounded-lg border bg-background/40 px-3 py-2">
+            <section aria-label={t('graph.inspector.identitySectionAriaLabel')} className="rounded-lg border bg-background/40 px-3 py-2">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-                What this is
+                {t('graph.inspector.whatThisIsHeading')}
               </p>
               {isPerson && !linked && (
                 <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
-                  A name pulled from transcripts — not a saved contact yet. Convert it or set its identity to
-                  make it real.
+                  {t('graph.inspector.extractedNameHint')}
                 </p>
               )}
               <div className="divide-y divide-border/50">
-                {detail?.role && <Fact label="Role" value={detail.role} />}
-                {detail?.company && <Fact label="Org" value={detail.company} />}
-                {detail?.email && <Fact label="Email" value={detail.email} />}
+                {detail?.role && <Fact label={t('graph.inspector.fact.role')} value={detail.role} />}
+                {detail?.company && <Fact label={t('graph.inspector.fact.org')} value={detail.company} />}
+                {detail?.email && <Fact label={t('graph.inspector.fact.email')} value={detail.email} />}
                 <Fact
-                  label="Meetings"
+                  label={t('graph.inspector.fact.meetings')}
                   value={<span className="tabular-nums">{detail?.meetingCount ?? 0}</span>}
                 />
                 {(detail?.firstSeenMs || detail?.lastSeenMs) && (
                   <Fact
-                    label="Seen"
+                    label={t('graph.inspector.fact.seen')}
                     value={
                       <span className="tabular-nums">
-                        {formatDate(detail?.firstSeenMs ?? null)}
                         {detail?.firstSeenMs && detail?.lastSeenMs && detail.firstSeenMs !== detail.lastSeenMs
-                          ? ` → ${formatDate(detail?.lastSeenMs ?? null)}`
-                          : ''}
+                          ? t('graph.inspector.fact.seenRange', { first: formatDate(detail?.firstSeenMs ?? null), last: formatDate(detail?.lastSeenMs ?? null) })
+                          : formatDate(detail?.firstSeenMs ?? null)}
                       </span>
                     }
                   />
                 )}
                 {(detail?.peopleCount ?? 0) + (detail?.projectCount ?? 0) > 0 && (
                   <Fact
-                    label="Connections"
+                    label={t('graph.inspector.fact.connections')}
                     value={
                       <span className="tabular-nums">
                         {[
-                          detail?.peopleCount ? `${detail.peopleCount} people` : '',
-                          detail?.projectCount ? `${detail.projectCount} projects` : '',
+                          detail?.peopleCount ? t('graph.inspector.fact.peopleCount', { count: detail.peopleCount }) : '',
+                          detail?.projectCount ? t('graph.inspector.fact.projectsCount', { count: detail.projectCount }) : '',
                         ]
                           .filter(Boolean)
-                          .join(' · ')}
+                          .join(t('graph.inspector.fact.listSeparator'))}
                       </span>
                     }
                   />
@@ -397,7 +416,7 @@ export function NodeInspector({
               </div>
               {detail && detail.aliases.length > 0 && (
                 <div className="mt-2">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Also known as</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{t('graph.inspector.aliasesHeading')}</p>
                   <div className="flex flex-wrap gap-1">
                     {detail.aliases.map((a) => (
                       <span key={a} className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
@@ -413,18 +432,18 @@ export function NodeInspector({
             {provenance?.narrative && (
               <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-300 mb-1">
-                  Why this is here
+                  {t('graph.inspector.narrativeHeading')}
                 </p>
                 <p className="text-sm leading-relaxed text-foreground">{provenance.narrative}</p>
               </div>
             )}
 
             {/* Actions */}
-            <section aria-label="Actions" className="space-y-2">
+            <section aria-label={t('graph.inspector.actionsSectionAriaLabel')} className="space-y-2">
               {renaming ? (
                 <div className="rounded-lg border p-2 space-y-2">
                   <label htmlFor="ni-rename" className="text-[11px] font-medium text-muted-foreground">
-                    Correct the name {linked ? '(updates the contact everywhere)' : '(fixes it across the graph)'}
+                    {linked ? t('graph.inspector.rename.promptLinked') : t('graph.inspector.rename.promptUnlinked')}
                   </label>
                   <Input
                     id="ni-rename"
@@ -435,38 +454,38 @@ export function NodeInspector({
                       if (e.key === 'Enter') void doRename()
                       if (e.key === 'Escape') setRenaming(false)
                     }}
-                    aria-label="New name"
+                    aria-label={t('graph.inspector.rename.newNameAriaLabel')}
                   />
                   <div className="flex gap-2">
                     <Button size="sm" onClick={doRename} disabled={busy || !renameValue.trim()} className="gap-1.5">
                       {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      Save correction
+                      {t('graph.inspector.rename.saveButton')}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setRenaming(false)} disabled={busy}>
-                      Cancel
+                      {t('graph.cancelButton')}
                     </Button>
                   </div>
                 </div>
               ) : editingPronouns ? (
                 <div className="rounded-lg border p-2 space-y-2">
-                  <p className="text-[11px] font-medium text-muted-foreground">Set pronouns</p>
+                  <p className="text-[11px] font-medium text-muted-foreground">{t('graph.inspector.pronouns.heading')}</p>
                   <div className="flex flex-wrap gap-1.5">
                     {PRONOUN_PRESETS.map((p) => (
                       <Button key={p} size="sm" variant="outline" onClick={() => void doSetPronouns(p)} disabled={busy}>
-                        {p}
+                        {pronounPresetLabel(t, p)}
                       </Button>
                     ))}
                   </div>
                   <div className="flex gap-2">
                     <Input
                       value={pronounValue}
-                      placeholder="Custom…"
+                      placeholder={t('graph.inspector.pronouns.customPlaceholder')}
                       onChange={(e) => setPronounValue(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && void doSetPronouns(pronounValue)}
-                      aria-label="Custom pronouns"
+                      aria-label={t('graph.inspector.pronouns.customAriaLabel')}
                     />
                     <Button size="sm" variant="ghost" onClick={() => setEditingPronouns(false)} disabled={busy}>
-                      Cancel
+                      {t('graph.cancelButton')}
                     </Button>
                   </div>
                 </div>
@@ -479,12 +498,12 @@ export function NodeInspector({
                     onClick={() => node && onLocate({ id: node.id, type: node.type, label: node.label })}
                   >
                     <Crosshair className="h-3.5 w-3.5" />
-                    Locate
+                    {t('graph.inspector.actions.locate')}
                   </Button>
                   {openTarget && canOpen(openTarget) && (
                     <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onOpenEntity(openTarget)}>
                       <ArrowUpRight className="h-3.5 w-3.5" />
-                      Open page
+                      {t('graph.inspector.actions.openPage')}
                     </Button>
                   )}
                   <Button
@@ -497,7 +516,7 @@ export function NodeInspector({
                     }}
                   >
                     <Pencil className="h-3.5 w-3.5" />
-                    Rename
+                    {t('graph.inspector.actions.rename')}
                   </Button>
                   {isPerson && (
                     <Button
@@ -510,7 +529,7 @@ export function NodeInspector({
                       }}
                     >
                       <BadgeCheck className="h-3.5 w-3.5" />
-                      Pronouns
+                      {t('graph.inspector.actions.pronouns')}
                     </Button>
                   )}
                   {isPerson && !linked && (
@@ -521,18 +540,18 @@ export function NodeInspector({
                       onClick={() => setConfirmConvert(true)}
                     >
                       <UserPlus className="h-3.5 w-3.5" />
-                      To contact
+                      {t('graph.inspector.actions.toContact')}
                     </Button>
                   )}
                   {isPerson && !linked && (
                     <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkOpen(true)}>
                       <Link2 className="h-3.5 w-3.5" />
-                      Set identity
+                      {t('graph.inspector.actions.setIdentity')}
                     </Button>
                   )}
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setMergeOpen(true)}>
                     <GitMerge className="h-3.5 w-3.5" />
-                    Merge
+                    {t('graph.mergeButton')}
                   </Button>
                   <Button
                     variant="outline"
@@ -541,7 +560,7 @@ export function NodeInspector({
                     onClick={() => setConfirmDelete(true)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                    Remove
+                    {t('graph.inspector.actions.remove')}
                   </Button>
                 </div>
               )}
@@ -549,13 +568,13 @@ export function NodeInspector({
 
             {/* Clickable sources */}
             {sources.some((s) => s.items.length > 0) && (
-              <section aria-label="Sources" className="space-y-3">
+              <section aria-label={t('graph.inspector.sourcesSectionAriaLabel')} className="space-y-3">
                 {sources.map(({ key, title, icon: Icon, items }) =>
                   items.length === 0 ? null : (
                     <div key={key}>
                       <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
                         <Icon className="h-3.5 w-3.5" />
-                        {title} ({items.length})
+                        {t('graph.inspector.sources.sectionHeading', { title, count: items.length })}
                       </p>
                       <ul className="space-y-0.5">
                         {items.map((e, i) => {
@@ -579,8 +598,8 @@ export function NodeInspector({
                                       })
                                     : onFocusEntity?.(e)
                                 }
-                                title={navigable ? `Open ${e.type.replace(/_/g, ' ')}` : 'Focus in graph'}
-                                aria-label={`${navigable ? 'Open' : 'Focus'} ${e.label}`}
+                                title={navigable ? t('graph.inspector.sources.openTooltip', { type: nodeTypeLabel(e.type) }) : t('graph.inspector.sources.focusTooltip')}
+                                aria-label={navigable ? t('graph.inspector.sources.openAriaLabel', { label: e.label }) : t('graph.inspector.sources.focusAriaLabel', { label: e.label })}
                               >
                                 <span
                                   className="h-2 w-2 rounded-full shrink-0"
@@ -613,16 +632,15 @@ export function NodeInspector({
       <AlertDialog open={confirmConvert} onOpenChange={setConfirmConvert}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Make &ldquo;{label}&rdquo; a contact?</AlertDialogTitle>
+            <AlertDialogTitle>{t('graph.inspector.convert.title', { label })}</AlertDialogTitle>
             <AlertDialogDescription>
-              This creates a real, saved contact from this extracted name and binds every mention of it to that
-              contact. You can add role and company on the person page afterwards.
+              {t('graph.inspector.convert.description')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>{t('graph.cancelButton')}</AlertDialogCancel>
             <AlertDialogAction onClick={(e) => { e.preventDefault(); void doConvert() }} disabled={busy}>
-              {busy ? 'Creating…' : 'Create contact'}
+              {busy ? t('graph.inspector.convert.confirmButtonBusy') : t('graph.inspector.convert.confirmButton')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -632,20 +650,19 @@ export function NodeInspector({
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove &ldquo;{label}&rdquo; from the graph?</AlertDialogTitle>
+            <AlertDialogTitle>{t('graph.inspector.delete.title', { label })}</AlertDialogTitle>
             <AlertDialogDescription>
-              This deletes the node and its {detail?.degree ?? 0} link(s) from the context graph. It does not
-              delete any meeting, recording, or contact — only this graph node.
+              {t('graph.inspector.delete.description', { degree: detail?.degree ?? 0 })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>{t('graph.cancelButton')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => { e.preventDefault(); void doDelete() }}
               disabled={busy}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {busy ? 'Removing…' : 'Remove'}
+              {busy ? t('graph.inspector.delete.confirmButtonBusy') : t('graph.inspector.delete.confirmButton')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -689,6 +706,7 @@ interface MergeNodeDialogProps {
 }
 
 function MergeNodeDialog({ open, onOpenChange, keeper, isDark, onMerged }: MergeNodeDialogProps) {
+  const { t } = useTranslation('chat')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ContextGraphNode[]>([])
   const [picked, setPicked] = useState<ContextGraphNode | null>(null)
@@ -740,21 +758,20 @@ function MergeNodeDialog({ open, onOpenChange, keeper, isDark, onMerged }: Merge
         onMerged(res.data.keeperId, picked.label)
         onOpenChange(false)
       } else {
-        toast.error('Merge failed', res.error ?? 'Unexpected error')
+        toast.error(t('graph.toast.mergeFailedTitle'), res.error ?? t('graph.unexpectedErrorFallback'))
       }
     } finally {
       setBusy(false)
     }
-  }, [picked, keeper.id, onMerged, onOpenChange])
+  }, [picked, keeper.id, onMerged, onOpenChange, t])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Merge into &ldquo;{keeper.label}&rdquo;</DialogTitle>
+          <DialogTitle>{t('graph.merge.title', { keeper: keeper.label })}</DialogTitle>
           <DialogDescription>
-            Fold another {keeper.type.replace(/_/g, ' ')} that is the same as &ldquo;{keeper.label}&rdquo; into it.
-            &ldquo;{keeper.label}&rdquo; is kept.
+            {t('graph.merge.description', { type: nodeTypeLabel(keeper.type), keeper: keeper.label })}
           </DialogDescription>
         </DialogHeader>
 
@@ -763,14 +780,14 @@ function MergeNodeDialog({ open, onOpenChange, keeper, isDark, onMerged }: Merge
             <Input
               value={query}
               autoFocus
-              placeholder={`Search a ${keeper.type.replace(/_/g, ' ')}…`}
+              placeholder={t('graph.merge.searchPlaceholder', { type: nodeTypeLabel(keeper.type) })}
               onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search a node to merge"
+              aria-label={t('graph.merge.searchAriaLabel')}
             />
             <div className="max-h-64 overflow-y-auto -mx-1 px-1">
               {results.length === 0 ? (
                 <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-                  {query.trim() ? 'No matching nodes' : 'Type to search'}
+                  {query.trim() ? t('graph.merge.noMatches') : t('graph.merge.typeToSearch')}
                 </p>
               ) : (
                 results.map((n) => (
@@ -801,29 +818,35 @@ function MergeNodeDialog({ open, onOpenChange, keeper, isDark, onMerged }: Merge
               {preview ? (
                 <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                   <p>
-                    <span className="tabular-nums text-foreground">{preview.b?.edges ?? 0}</span> link(s) from
-                    &ldquo;{picked.label}&rdquo; move onto &ldquo;{keeper.label}&rdquo;.
+                    <Trans i18nKey="chat:graph.merge.previewEdgesFromLoser" values={{ count: preview.b?.edges ?? 0, loser: picked.label, keeper: keeper.label }}>
+                      <span className="tabular-nums text-foreground">{{ count: preview.b?.edges ?? 0 } as unknown as string}</span> link(s) from
+                      “{{ loser: picked.label } as unknown as string}” move onto “{{ keeper: keeper.label } as unknown as string}”.
+                    </Trans>
                   </p>
                   {preview.shared > 0 && (
                     <p>
-                      <span className="tabular-nums text-foreground">{preview.shared}</span> shared connection(s)
-                      collapse into one.
+                      <Trans i18nKey="chat:graph.merge.previewSharedConnections" values={{ count: preview.shared }}>
+                        <span className="tabular-nums text-foreground">{{ count: preview.shared } as unknown as string}</span> shared connection(s)
+                        collapse into one.
+                      </Trans>
                     </p>
                   )}
                   <p>
-                    Result: <span className="tabular-nums text-foreground">{preview.resulting}</span> link(s) on
-                    the kept node.
+                    <Trans i18nKey="chat:graph.merge.previewResult" values={{ count: preview.resulting }}>
+                      Result: <span className="tabular-nums text-foreground">{{ count: preview.resulting } as unknown as string}</span> link(s) on
+                      the kept node.
+                    </Trans>
                   </p>
                   {preview.contactMerge && (
                     <p className="flex items-start gap-1.5 rounded bg-amber-500/10 px-2 py-1 text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                      Both are saved contacts — this merges the contacts too (undoable from the person page).
+                      {t('graph.merge.contactMergeWarning')}
                     </p>
                   )}
                 </div>
               ) : (
                 <p className="mt-2 text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Computing impact…
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('graph.merge.computingImpact')}
                 </p>
               )}
             </div>
@@ -833,12 +856,12 @@ function MergeNodeDialog({ open, onOpenChange, keeper, isDark, onMerged }: Merge
         <DialogFooter>
           {picked && (
             <Button variant="ghost" size="sm" onClick={() => { setPicked(null); setPreview(null) }} disabled={busy}>
-              Back
+              {t('graph.merge.backButton')}
             </Button>
           )}
           <Button size="sm" onClick={commit} disabled={!picked || busy} className="gap-1.5">
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitMerge className="h-3.5 w-3.5" />}
-            Merge
+            {t('graph.mergeButton')}
           </Button>
         </DialogFooter>
       </DialogContent>

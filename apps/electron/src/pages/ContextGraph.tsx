@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense, lazy } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
 import {
   Network,
   RefreshCw,
@@ -21,7 +22,7 @@ import { toast } from '@/components/ui/toaster'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/ui/useUIStore'
 import { useTheme } from '@/hooks/useTheme'
-import { ENTITY_COLORS, entityColor, STRATUM_STYLES, STRATA_ORDER } from '@/components/context-graph/graph-theme'
+import { ENTITY_COLORS, entityColor, nodeTypeLabel, STRATUM_STYLES, STRATA_ORDER } from '@/components/context-graph/graph-theme'
 import type {
   ContextGraphData,
   ContextGraphNode,
@@ -87,6 +88,7 @@ function ProviderAwareError({ message }: { message: string }) {
 }
 
 export function ContextGraph() {
+  const { t } = useTranslation('chat')
   const qaEnabled = useUIStore((s) => s.qaLogsEnabled)
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
@@ -104,7 +106,7 @@ export function ContextGraph() {
 
   // ---- Lens state ----------------------------------------------------------
   const [ownerLabel, setOwnerLabel] = useState<string | null>(null)
-  const [selection, setSelection] = useState<LensSelection>({ kind: 'you', centerId: null, label: 'Your context' })
+  const [selection, setSelection] = useState<LensSelection>({ kind: 'you', centerId: null, label: t('graph.lens.kindYou') })
   const [windowDays, setWindowDays] = useState<number | null>(30)
   const [lens, setLens] = useState<ContextLensData>(EMPTY_LENS)
   const [lensLoading, setLensLoading] = useState(false)
@@ -153,17 +155,17 @@ export function ContextGraph() {
       if (centerRes.success && centerRes.data) {
         const c = centerRes.data
         setOwnerLabel(c.label)
-        setSelection({ kind: 'you', centerId: c.id, label: `You · ${c.label}` })
+        setSelection({ kind: 'you', centerId: c.id, label: t('graph.lens.labelYouWithOwner', { owner: c.label }) })
       } else {
         // No people yet → fall back to a whole-graph recent lens.
-        setSelection({ kind: 'week', centerId: null, label: 'Recent activity' })
+        setSelection({ kind: 'week', centerId: null, label: t('graph.lens.labelRecentActivity') })
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unexpected error loading the graph')
+      setError(err instanceof Error ? err.message : t('graph.errors.loadGraphFallback'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadStatsAndCenter()
@@ -188,11 +190,11 @@ export function ContextGraph() {
         setError(res.error)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unexpected error loading the lens')
+      setError(err instanceof Error ? err.message : t('graph.errors.loadLensFallback'))
     } finally {
       setLensLoading(false)
     }
-  }, [selection, windowDays, log])
+  }, [selection, windowDays, log, t])
 
   useEffect(() => {
     if (tab === 'lens' && !loading) loadLens()
@@ -327,13 +329,13 @@ export function ContextGraph() {
     try {
       const res = await window.electronAPI.graph.ingestAll()
       if (res.success && res.data) {
-        toast.success('Ingestion complete', `${res.data.ingested} added, ${res.data.skipped} skipped`)
+        toast.success(t('graph.toast.ingestCompleteTitle'), t('graph.toast.ingestCompleteDescription', { ingested: res.data.ingested, skipped: res.data.skipped }))
         await refreshAll()
       } else {
-        setError(res.error ?? 'Ingestion failed')
+        setError(res.error ?? t('graph.errors.ingestionFailedFallback'))
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unexpected error during ingestion')
+      setError(err instanceof Error ? err.message : t('graph.errors.ingestionErrorFallback'))
     } finally {
       setIngestLoading(false)
     }
@@ -344,13 +346,13 @@ export function ContextGraph() {
     try {
       const res = await window.electronAPI.contextGraph.rekey()
       if (res.success && res.data) {
-        toast.success('People re-keyed by identity', `${res.data.rekeyed} re-keyed, ${res.data.merged} merged`)
+        toast.success(t('graph.toast.rekeySuccessTitle'), t('graph.toast.rekeySuccessDescription', { rekeyed: res.data.rekeyed, merged: res.data.merged }))
         await refreshAll()
       } else {
-        toast.error('Re-key failed', res.error ?? 'Unexpected error')
+        toast.error(t('graph.toast.rekeyFailedTitle'), res.error ?? t('graph.unexpectedErrorFallback'))
       }
     } catch (err) {
-      toast.error('Re-key failed', err instanceof Error ? err.message : 'Unexpected error')
+      toast.error(t('graph.toast.rekeyFailedTitle'), err instanceof Error ? err.message : t('graph.unexpectedErrorFallback'))
     } finally {
       setRekeyLoading(false)
     }
@@ -363,19 +365,25 @@ export function ContextGraph() {
       if (res.success && res.data) {
         const { removedNodes, removedEdges } = res.data
         if (removedNodes > 0) {
+          // Two independently-pluralized counts in one sentence: i18next's
+          // count-driven _one/_other suffix drives the "node(s)" word (the
+          // primary `count`), while the "edge(s)" word is picked manually via
+          // the key name itself (mirrors Library.tsx's composite-key pattern
+          // in catalogue-integrity.test.ts, for the same two-count reason).
+          const edgeVariant = removedEdges === 1 ? 'EdgeSingular' : 'EdgePlural'
           toast.success(
-            'Graph cleaned',
-            `Removed ${removedNodes} generic node${removedNodes === 1 ? '' : 's'} and ${removedEdges} edge${removedEdges === 1 ? '' : 's'}`
+            t('graph.toast.cleanedTitle'),
+            t(`graph.toast.cleanedDescription${edgeVariant}`, { count: removedNodes, edgeCount: removedEdges })
           )
           await refreshAll()
         } else {
-          toast.info('Nothing to clean', 'No generic collective/role nodes were found.')
+          toast.info(t('graph.toast.nothingToCleanTitle'), t('graph.toast.nothingToCleanDescription'))
         }
       } else {
-        toast.error('Clean-up failed', res.error ?? 'Unexpected error')
+        toast.error(t('graph.toast.cleanupFailedTitle'), res.error ?? t('graph.unexpectedErrorFallback'))
       }
     } catch (err) {
-      toast.error('Clean-up failed', err instanceof Error ? err.message : 'Unexpected error')
+      toast.error(t('graph.toast.cleanupFailedTitle'), err instanceof Error ? err.message : t('graph.unexpectedErrorFallback'))
     } finally {
       setPruneLoading(false)
     }
@@ -404,12 +412,12 @@ export function ContextGraph() {
         setAtlasFocus(res.data)
         setAtlasHighlight(new Set(res.data.nodes.map((n) => n.id)))
       } else {
-        toast.info('No connections', 'This entity has no neighbors in the graph yet.')
+        toast.info(t('graph.toast.noConnectionsTitle'), t('graph.toast.noConnectionsDescription'))
       }
     } catch (err) {
-      toast.error('Focus failed', err instanceof Error ? err.message : 'Unexpected error')
+      toast.error(t('graph.toast.focusFailedTitle'), err instanceof Error ? err.message : t('graph.unexpectedErrorFallback'))
     }
-  }, [])
+  }, [t])
 
   // Locate/focus a node in the active view: recenter the lens on it, or focus its
   // neighborhood in the atlas — so a selected node is always findable on the canvas.
@@ -462,32 +470,32 @@ export function ContextGraph() {
             <Network className="h-5 w-5 text-violet-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight">Context Graph</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t('graph.header.title')}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {tab === 'lens'
                 ? // Lens: the x axis is ORDINAL (sequence, not duration) — the copy says
                   // "ordered by time", never "laid out by time"; the canvas date ticks
                   // carry the real dates.
-                  'A reasoning-level view of your work — decisions, people, and the meetings they came from, layered by abstraction and ordered by time.'
-                : 'A reasoning-level view of your work — decisions, people, and the meetings they came from.'}
+                  t('graph.header.lensDescription')
+                : t('graph.header.atlasDescription')}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={refreshAll} disabled={loading} className="gap-2">
               <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
-              Refresh
+              {t('graph.header.refreshButton')}
             </Button>
-            <Button variant="outline" size="sm" onClick={handleRekey} disabled={rekeyLoading} className="gap-2" title="Re-key people by contact identity">
+            <Button variant="outline" size="sm" onClick={handleRekey} disabled={rekeyLoading} className="gap-2" title={t('graph.header.rekeyTooltip')}>
               {rekeyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitMerge className="h-4 w-4" />}
-              Re-key
+              {t('graph.header.rekeyButton')}
             </Button>
-            <Button variant="outline" size="sm" onClick={handlePrune} disabled={pruneLoading} className="gap-2" title="Remove generic collective/role nodes">
+            <Button variant="outline" size="sm" onClick={handlePrune} disabled={pruneLoading} className="gap-2" title={t('graph.header.cleanupTooltip')}>
               {pruneLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Clean up
+              {t('graph.header.cleanupButton')}
             </Button>
             <Button size="sm" onClick={handleIngest} disabled={ingestLoading} className="gap-2">
               {ingestLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              Ingest
+              {t('graph.header.ingestButton')}
             </Button>
           </div>
         </div>
@@ -503,7 +511,7 @@ export function ContextGraph() {
               )}
             >
               <Layers className="h-4 w-4" />
-              Lens
+              {t('graph.tabs.lens')}
             </button>
             <button
               onClick={() => setTab('atlas')}
@@ -513,17 +521,17 @@ export function ContextGraph() {
               )}
             >
               <Globe2 className="h-4 w-4" />
-              Atlas
+              {t('graph.tabs.atlas')}
             </button>
           </div>
 
           {stats && (
             <div className="flex items-center gap-4 text-sm">
               <span className="text-muted-foreground">
-                <strong className="text-foreground tabular-nums">{stats.nodes}</strong> nodes
+                <strong className="text-foreground tabular-nums">{stats.nodes}</strong> {t('graph.stats.nodes')}
               </span>
               <span className="text-muted-foreground">
-                <strong className="text-foreground tabular-nums">{stats.edges}</strong> edges
+                <strong className="text-foreground tabular-nums">{stats.edges}</strong> {t('graph.stats.edges')}
               </span>
             </div>
           )}
@@ -531,7 +539,7 @@ export function ContextGraph() {
           {tab === 'atlas' && atlasFocus && (
             <Button variant="ghost" size="sm" onClick={clearAtlasFocus} className="gap-1.5 text-muted-foreground">
               <Maximize2 className="h-3.5 w-3.5" />
-              Show all
+              {t('graph.showAllButton')}
             </Button>
           )}
         </div>
@@ -555,13 +563,13 @@ export function ContextGraph() {
           <div className="mt-3 relative flex-1 min-w-[240px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search a person, project, topic…"
+              placeholder={t('graph.atlas.searchPlaceholder')}
               value={query}
               onChange={(e) => onAtlasQueryChange(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && suggestions.length > 0 && pickAtlasSuggestion(suggestions[0])}
               onFocus={() => query && setShowSuggestions(true)}
               className="pl-9"
-              aria-label="Search the context graph"
+              aria-label={t('graph.atlas.searchAriaLabel')}
             />
             {showSuggestions && suggestions.length > 0 && (
               <div className="absolute z-20 mt-1 w-full rounded-lg border bg-popover shadow-lg overflow-hidden max-h-64 overflow-y-auto">
@@ -573,7 +581,7 @@ export function ContextGraph() {
                   >
                     <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: entityColor(s.type).light }} />
                     <span className="truncate flex-1">{s.label}</span>
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{s.type}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{nodeTypeLabel(s.type)}</span>
                   </button>
                 ))}
               </div>
@@ -601,15 +609,14 @@ export function ContextGraph() {
                 <Network className="h-7 w-7 text-violet-500" />
               </div>
               <div className="max-w-sm">
-                <h2 className="text-lg font-semibold">No context yet</h2>
+                <h2 className="text-lg font-semibold">{t('graph.emptyState.heading')}</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Ingest your transcripts to build the graph of decisions, people, projects, and the
-                  meetings they came from.
+                  {t('graph.emptyState.description')}
                 </p>
               </div>
               <Button onClick={handleIngest} disabled={ingestLoading} className="gap-2">
                 {ingestLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                Ingest transcripts
+                {t('graph.emptyState.ingestButton')}
               </Button>
             </div>
           ) : tab === 'lens' ? (
@@ -635,13 +642,13 @@ export function ContextGraph() {
               {lensLoading && (
                 <div className="absolute top-3 right-3 rounded-full border bg-background/85 backdrop-blur px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm flex items-center gap-1.5">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Loading lens…
+                  {t('graph.lens.loading')}
                 </div>
               )}
 
               {lens.nodes.length === 0 && !lensLoading && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full border bg-background/85 backdrop-blur px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-                  Nothing in this window — widen the time range or pick another lens.
+                  {t('graph.lens.emptyWindow')}
                 </div>
               )}
 
@@ -650,7 +657,7 @@ export function ContextGraph() {
                   "Decisions · 20 of 214" rather than silently truncating. */}
               <div className="absolute top-3 left-3 hidden sm:flex flex-col gap-1 rounded-lg border bg-background/85 backdrop-blur px-3 py-2 text-[11px] max-w-[46%]">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
-                  Reasoning strata
+                  {t('graph.lens.strataHeading')}
                 </span>
                 {STRATA_ORDER.map((s) => {
                   const count = lensStrataByBand.get(s)
@@ -665,9 +672,9 @@ export function ContextGraph() {
                       {count ? (
                         <span
                           className={cn('tabular-nums shrink-0', truncated ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-muted-foreground')}
-                          title={truncated ? `Showing the ${count.shown} most recent of ${count.total} ${STRATUM_STYLES[s].label.toLowerCase()}` : undefined}
+                          title={truncated ? t('graph.lens.truncatedTooltip', { shown: count.shown, total: count.total, label: STRATUM_STYLES[s].label.toLowerCase() }) : undefined}
                         >
-                          · {truncated ? `${count.shown} of ${count.total}` : count.shown}
+                          · {truncated ? t('graph.lens.shownOfTotal', { shown: count.shown, total: count.total }) : count.shown}
                         </span>
                       ) : (
                         <span className="text-muted-foreground truncate">— {STRATUM_STYLES[s].hint}</span>
@@ -677,7 +684,7 @@ export function ContextGraph() {
                 })}
                 {lensTruncated && (
                   <span className="mt-1 pt-1 border-t border-border/60 text-[10px] leading-snug text-muted-foreground">
-                    Showing the most recent slice — narrow the time range or open Atlas for everything.
+                    {t('graph.lens.truncatedNotice')}
                   </span>
                 )}
               </div>
@@ -705,18 +712,18 @@ export function ContextGraph() {
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full border bg-background/85 backdrop-blur px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm max-w-[90%]">
                   <Info className="h-3.5 w-3.5 shrink-0 text-violet-500" />
                   <span className="truncate">
-                    Atlas — the{' '}
-                    <strong className="text-foreground tabular-nums">{overview.nodes.length}</strong> most
-                    connected entities. Click any node to focus.
+                    <Trans i18nKey="chat:graph.atlas.infoBar" values={{ count: overview.nodes.length }}>
+                      Atlas — the <strong className="text-foreground tabular-nums">{{ count: overview.nodes.length } as unknown as string}</strong> most connected entities. Click any node to focus.
+                    </Trans>
                   </span>
                   {stats && stats.nodes > overview.nodes.length && overviewLimit < OVERVIEW_MAX_LIMIT && (
                     <button
                       onClick={handleExpand}
                       className="flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 font-medium text-violet-600 hover:bg-violet-500/20 dark:text-violet-300 shrink-0"
-                      title="Load more of the graph"
+                      title={t('graph.atlas.loadMoreTooltip')}
                     >
                       <Plus className="h-3 w-3" />
-                      Show more
+                      {t('graph.atlas.showMoreButton')}
                     </button>
                   )}
                 </div>
