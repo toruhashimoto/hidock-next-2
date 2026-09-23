@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { personTypeBadgeLabel } from '@/lib/person-type'
 import {
   Search,
   RefreshCw,
@@ -436,7 +437,7 @@ export function Explore() {
                                     className="font-semibold text-sm group-hover:text-blue-600 transition-colors truncate [&_mark]:bg-yellow-200 dark:[&_mark]:bg-yellow-800 [&_mark]:rounded-sm [&_mark]:px-0.5"
                                     dangerouslySetInnerHTML={{ __html: highlightMatch(p.name || '', query) }}
                                   />
-                                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{p.type}</p>
+                                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{personTypeBadgeLabel(t, p.type)}</p>
                                 </div>
                               </CardContent>
                             </Card>

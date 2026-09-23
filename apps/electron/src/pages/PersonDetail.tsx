@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation, Trans } from 'react-i18next'
+import { personTypeBadgeLabel } from '@/lib/person-type'
 import type { TFunction } from 'i18next'
 import {
   ArrowLeft,
@@ -590,7 +591,7 @@ export function PersonDetail() {
                       )}
                       title={getTypeLabel(person.type)}
                     >
-                      {person.type}
+                      {personTypeBadgeLabel(t, person.type)}
                     </span>
                   )}
                   {person.company && (

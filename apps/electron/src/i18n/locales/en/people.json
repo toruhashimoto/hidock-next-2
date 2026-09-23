@@ -32,6 +32,12 @@
   "personTypeOption.external": "External",
   "personTypeOption.unknown": "Unknown",
 
+  "personTypeBadge.team": "team",
+  "personTypeBadge.candidate": "candidate",
+  "personTypeBadge.customer": "customer",
+  "personTypeBadge.external": "external",
+  "personTypeBadge.unknown": "unknown",
+
   "peopleList.header.title": "People",
   "peopleList.header.subtitle": "Everyone mentioned in your knowledge base",
   "peopleList.header.discoverTitle": "Analyze contacts for possible duplicates",

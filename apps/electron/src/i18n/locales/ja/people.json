@@ -32,6 +32,12 @@
   "personTypeOption.external": "社外",
   "personTypeOption.unknown": "不明",
 
+  "personTypeBadge.team": "チーム",
+  "personTypeBadge.candidate": "候補者",
+  "personTypeBadge.customer": "顧客",
+  "personTypeBadge.external": "社外",
+  "personTypeBadge.unknown": "不明",
+
   "peopleList.header.title": "人物",
   "peopleList.header.subtitle": "ナレッジベースに登場するすべての人物",
   "peopleList.header.discoverTitle": "重複の可能性がある連絡先を分析",

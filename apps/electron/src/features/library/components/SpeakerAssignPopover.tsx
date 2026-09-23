@@ -29,6 +29,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { personTypeBadgeLabel } from '@/lib/person-type'
 import type { TFunction } from 'i18next'
 import { Check, ExternalLink, Scissors, Undo2, UserCog, UserPlus, UserX, Users } from 'lucide-react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -151,7 +152,7 @@ function AssignedSummary({ person, fallbackName }: { person?: Person; fallbackNa
       </div>
       {person?.type && (
         <Badge variant="person" className="shrink-0 capitalize">
-          {person.type}
+          {personTypeBadgeLabel(t, person.type)}
         </Badge>
       )}
     </div>

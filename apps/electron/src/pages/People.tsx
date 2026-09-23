@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation, Trans } from 'react-i18next'
+import { personTypeBadgeLabel } from '@/lib/person-type'
 import {
   Users,
   Search,
@@ -499,7 +500,7 @@ export function People() {
                             )}
                             title={typeLabel}
                           >
-                            {person.type}
+                            {personTypeBadgeLabel(t, person.type)}
                           </span>
                         </div>
                       </div>
