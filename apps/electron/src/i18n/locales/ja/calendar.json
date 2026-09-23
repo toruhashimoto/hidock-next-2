@@ -174,7 +174,7 @@
   "meetingDetail.goToCalendarButton": "カレンダーを開く",
   "meetingDetail.recordingsCardTitle": "録音（{{count}}件）",
   "meetingDetail.statusNotTranscribed": "未文字起こし",
-  "meetingDetail.statusQueued": "待機中",
+  "meetingDetail.statusQueued": "キュー待ち",
   "meetingDetail.statusTranscribing": "文字起こし中",
   "meetingDetail.statusTranscribed": "文字起こし済み",
   "meetingDetail.statusFailed": "失敗",

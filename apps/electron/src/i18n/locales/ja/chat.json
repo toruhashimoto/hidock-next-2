@@ -250,9 +250,9 @@
   "graph.inspector.badge.linkedContact": "連絡先と連携済み",
   "graph.inspector.badge.extractedName": "抽出された名前",
 
-  "graph.inspector.fact.role": "役割",
+  "graph.inspector.fact.role": "役職",
   "graph.inspector.fact.org": "組織",
-  "graph.inspector.fact.email": "メール",
+  "graph.inspector.fact.email": "メールアドレス",
   "graph.inspector.fact.meetings": "会議",
   "graph.inspector.fact.seen": "活動期間",
   "graph.inspector.fact.seenRange": "{{first}} → {{last}}",
