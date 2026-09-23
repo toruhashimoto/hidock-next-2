@@ -101,6 +101,16 @@ let recordingPollIntervalMs = RECORDING_POLL_INTERVAL_MS
 // undefined = unknown (never read yet); string = actively recording; null = idle.
 let lastRecordingFilename: string | null | undefined = undefined
 
+/**
+ * The device's in-progress recording as the CMD-18 poll last saw it: a
+ * filename while recording, null when confirmed idle, undefined when unknown.
+ * Main-process readers (truncated-download recovery) use it to keep their
+ * hands off the file the device is still writing.
+ */
+export function getActiveDeviceRecording(): string | null | undefined {
+  return lastRecordingFilename
+}
+
 function scheduleRecordingPoll(intervalMs: number): void {
   if (recordingPollTimer) clearInterval(recordingPollTimer)
   recordingPollIntervalMs = intervalMs
@@ -145,6 +155,16 @@ async function pollRecordingOnce(): Promise<void> {
     console.log(`[Jensen] recording state: ${filename ?? 'idle'}`)
     broadcast('jensen:recording-changed', { recording: filename })
   }
+}
+
+/**
+ * What the recording poll last saw, for readers that must not touch the USB bus
+ * themselves. `known` is false until the first successful poll after a connect;
+ * `recording` is the filename being written, or null when the device is idle.
+ */
+export function getLiveRecordingState(): { known: boolean; recording: string | null } {
+  if (lastRecordingFilename === undefined) return { known: false, recording: null }
+  return { known: true, recording: lastRecordingFilename }
 }
 
 // Idempotent — safe to call after every scan. Starts the poll the first time the
@@ -576,7 +596,11 @@ export function registerJensenHandlers(): void {
       const { offset } = JensenRealtimeDataSchema.parse(args)
       const result = await getJensenDevice().getRealtimeData(offset)
       if (result && !event.sender.isDestroyed()) {
-        await geminiLiveTranscription.acceptDevicePacket(result)
+        // Not awaited, and `acceptDevicePacket` does not await the provider
+        // either: this handler is the renderer's realtime poll, and the device
+        // buffer it drains is finite. Waiting on a WebSocket here is what made
+        // `rest` grow and packets disappear on the device.
+        geminiLiveTranscription.acceptDevicePacket(result)
         event.sender.send('jensen:realtime-data', {
           rest: result.rest,
           muted: result.muted,

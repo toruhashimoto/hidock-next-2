@@ -3,6 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { Library } from '../Library'
 
+/**
+ * Rows are located by the text the row shows. Since 2026-09-22 an unassigned
+ * source shows its title when it has one; the filename moved to the second
+ * line's tooltip. Fixtures unchanged, locators follow the row.
+ */
+
 // Shared harness for the "reveal opened source" behavior: a STABLE scrollToIndex
 // spy (so we can assert across renders) and a mutable selectedSourceId the store
 // mock reads at call time. Defaults keep existing tests unaffected.
@@ -26,6 +32,9 @@ const deviceSyncHarness = vi.hoisted(() => ({
 vi.mock('@/services/device-sync-actions', () => ({
   scanAndReconcile: deviceSyncHarness.scanAndReconcile
 }))
+
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }))
+vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }))
 
 // Mock hooks
 vi.mock('@/hooks/useUnifiedRecordings', () => ({
@@ -123,6 +132,7 @@ vi.mock('@/store/useLibraryStore', () => ({
       readerSectionModes: {
         player: 'expanded',
         metadata: 'expanded',
+        moments: 'expanded',
         summary: 'expanded',
         transcript: 'expanded'
       },
@@ -256,10 +266,13 @@ global.window.electronAPI = {
     restore: vi.fn().mockResolvedValue({ success: true }),
     // spec-005/F17 T5 — loaded eagerly on mount (for the Trash toggle's count).
     getTrash: vi.fn().mockResolvedValue([]),
-    getById: vi.fn().mockResolvedValue(null)
+    getById: vi.fn().mockResolvedValue(null),
+    backfillDurations: vi.fn().mockResolvedValue({ success: true })
   },
   downloadService: {
-    queueDownloads: vi.fn()
+    queueDownloads: vi.fn(),
+    truncatedRecoveryPlan: vi.fn().mockResolvedValue(null),
+    recoverTruncated: vi.fn().mockResolvedValue({ queued: [], skipped: [] })
   },
   onTranscriptionCompleted: vi.fn((callback) => {
     transcriptionCompletedListeners.push(callback)
@@ -391,7 +404,7 @@ describe('Library', () => {
 
       renderLibrary()
 
-      await waitFor(() => expect(screen.getByText('rec-0.wav')).toBeInTheDocument())
+      await waitFor(() => expect(screen.getByText('Recording 0')).toBeInTheDocument())
       expect(scrollHarness.scrollToIndex).not.toHaveBeenCalled()
     })
   })
@@ -707,5 +720,104 @@ describe('Library', () => {
       })
       expect(mockRefresh).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('Library — recordings whose file is shorter than their transcript', () => {
+  // This file does not clear mocks between tests, and the toast spy is shared.
+  beforeEach(() => {
+    toastMock.warning.mockClear()
+  })
+
+  it('says so once when the backfill finds them', async () => {
+    vi.mocked(window.electronAPI.recordings.backfillDurations).mockResolvedValueOnce({
+      success: true,
+      scanned: 40,
+      truncated: 37,
+    })
+
+    render(<MemoryRouter><Library /></MemoryRouter>)
+
+    await waitFor(() => expect(toastMock.warning).toHaveBeenCalledTimes(1))
+    const [title, body] = toastMock.warning.mock.calls[0]
+    expect(title).toMatch(/shorter than their transcripts/i)
+    expect(body).toContain('37 files')
+  })
+
+  it('offers to recover the ones the device still holds larger, and only on request', async () => {
+    vi.mocked(window.electronAPI.recordings.backfillDurations).mockResolvedValueOnce({
+      success: true,
+      truncated: 47,
+    })
+    vi.mocked(window.electronAPI.downloadService.truncatedRecoveryPlan).mockResolvedValueOnce({
+      truncated: 47,
+      recoverable: 3,
+      deviceNotLarger: 8,
+      notOnDevice: 36,
+      heldBack: 0,
+      deviceListKnown: true,
+    })
+    vi.mocked(window.electronAPI.downloadService.recoverTruncated).mockResolvedValueOnce({
+      queued: ['a.hda', 'b.hda', 'c.hda'],
+      skipped: [],
+      truncated: 47,
+      recoverable: 3,
+      deviceNotLarger: 8,
+      notOnDevice: 36,
+      heldBack: 0,
+    })
+
+    render(<MemoryRouter><Library /></MemoryRouter>)
+
+    await waitFor(() => expect(toastMock.warning).toHaveBeenCalledTimes(1))
+    const [, body, opts] = toastMock.warning.mock.calls[0]
+    expect(body).toContain('complete copy of 3')
+    expect(body).toContain('36 are no longer on the HiDock')
+    expect(body).toContain('8 match')
+    expect(opts?.action?.label).toBe('Recover 3 from the device')
+    // Nothing is queued until the owner clicks.
+    expect(window.electronAPI.downloadService.recoverTruncated).not.toHaveBeenCalled()
+
+    opts.action.onClick()
+
+    await waitFor(() => expect(window.electronAPI.downloadService.recoverTruncated).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('3 recoveries queued', expect.any(String)))
+  })
+
+  it('says the audio is gone, with no action, when the device has none of them', async () => {
+    vi.mocked(window.electronAPI.recordings.backfillDurations).mockResolvedValueOnce({
+      success: true,
+      truncated: 2,
+    })
+    vi.mocked(window.electronAPI.downloadService.truncatedRecoveryPlan).mockResolvedValueOnce({
+      truncated: 2,
+      recoverable: 0,
+      deviceNotLarger: 0,
+      notOnDevice: 2,
+      heldBack: 0,
+      deviceListKnown: true,
+    })
+
+    render(<MemoryRouter><Library /></MemoryRouter>)
+
+    await waitFor(() => expect(toastMock.warning).toHaveBeenCalledTimes(1))
+    const [, body, opts] = toastMock.warning.mock.calls[0]
+    expect(body).toContain('2 are no longer on the HiDock, so the missing audio cannot be recovered')
+    expect(body).toContain('Nothing was deleted')
+    expect(opts).toBeUndefined()
+  })
+
+  it('says nothing when every file holds the audio it should', async () => {
+    vi.mocked(window.electronAPI.recordings.backfillDurations).mockResolvedValueOnce({
+      success: true,
+      scanned: 40,
+      measured: 40,
+      truncated: 0,
+    })
+
+    render(<MemoryRouter><Library /></MemoryRouter>)
+
+    await waitFor(() => expect(window.electronAPI.recordings.backfillDurations).toHaveBeenCalled())
+    expect(toastMock.warning).not.toHaveBeenCalled()
   })
 })

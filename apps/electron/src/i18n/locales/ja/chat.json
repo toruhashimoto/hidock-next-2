@@ -77,8 +77,12 @@
   "chat.chunksButton.label": "チャンク",
 
   "chat.chunksPanel.heading": "インデックス済みチャンク（{{count}}）",
+  "chat.chunksPanel.headingRange": "インデックス済みチャンク（{{total}}件中 {{from}}–{{to}}）",
+  "chat.chunksPanel.prevPageAriaLabel": "チャンクの前のページ",
+  "chat.chunksPanel.nextPageAriaLabel": "チャンクの次のページ",
   "chat.chunksPanel.refreshButton": "更新",
   "chat.chunksPanel.empty": "まだチャンクがインデックスされていません。録音を文字起こしすると、ナレッジベースに追加されます。",
+  "chat.chunksPanel.emptyPage": "このページは空です。ページ送りの途中でインデックスが変化しました。更新すると読み込み直せます。",
   "chat.chunksPanel.dimensions": "{{count}}d",
   "chat.chunksPanel.contentQuoted": "「{{content}}」",
 

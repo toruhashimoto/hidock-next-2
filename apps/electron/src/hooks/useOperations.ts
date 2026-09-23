@@ -104,7 +104,11 @@ export function useOperations() {
       // distinguish corrective user work from an automatic/background retry.
       // Previously this branch returned false above, making the primary
       // Re-transcribe button a no-op while the dropdown happened to work.
-      if (recording.transcriptionStatus === 'complete') {
+      // A no_speech recording (silent, or skipped as shorter than the value
+      // gate's minimum) takes the same route: clicking Transcribe on it is the
+      // user overriding that verdict, and only an explicit reprocess bypasses
+      // the main process's too-short gate.
+      if (recording.transcriptionStatus === 'complete' || recording.transcriptionStatus === 'no_speech') {
         const configResult = await window.electronAPI.config.get()
         const configuredProvider = configResult?.success
           ? (configResult.data as AppConfig)?.transcription?.provider
@@ -250,11 +254,34 @@ export function useOperations() {
       requestScopedDownloads([recording.deviceFilename])
       // Defect C: a single explicit download jumps ahead of the recency-ordered backlog.
       markDownloadPriority([recording.deviceFilename])
-      await window.electronAPI.downloadService.queueDownloads([{
+      const { queued, skipped } = await window.electronAPI.downloadService.queueDownloads([{
         filename: recording.deviceFilename,
         size: recording.size,
         dateCreated: recording.dateRecorded.toISOString()
       }])
+      // D-022: an empty queued list is not success. The service refused this
+      // file for a reason it can now state, so state it rather than claiming
+      // a download that will never happen.
+      if (queued.length === 0) {
+        const refusal = skipped[0]
+        // 'already-queued' means the work EXISTS and still has to run — keep the
+        // scope/priority claim and drain, or with auto-download off that pending
+        // item would sit there forever. Every other refusal means there is no
+        // work, so release the claim instead of holding a slot for a file that
+        // is never coming.
+        if (refusal?.skip === 'already-queued') {
+          drainDownloadQueue()
+          toast({ title: 'Already in the download queue', description: recording.filename })
+          return true
+        }
+        releaseDownloadBookkeeping(recording.deviceFilename)
+        toast({
+          title: refusal?.skip === 'already-synced' ? 'Already downloaded' : 'Not queued',
+          description: refusal?.reason ?? 'The download service did not queue this file',
+          variant: refusal?.skip === 'already-synced' ? 'default' : 'error'
+        })
+        return false
+      }
       // A restored pending row may already exist in the main-process queue while
       // the renderer's explicit-request scope was lost during restart. Re-registering
       // above plus an explicit drain makes the visible Download/Start action actually
@@ -276,7 +303,7 @@ export function useOperations() {
     try {
       // Slice 1: explicit scope = exactly the requested recordings.
       requestScopedDownloads(eligible.map((r) => r.deviceFilename))
-      await window.electronAPI.downloadService.queueDownloads(
+      const { queued, skipped } = await window.electronAPI.downloadService.queueDownloads(
         eligible.map((r) => ({
           filename: r.deviceFilename,
           size: r.size,
@@ -284,11 +311,43 @@ export function useOperations() {
         }))
       )
       drainDownloadQueue()
-      // Original ternary was `eligible.length > 1` — singular at BOTH 0 and 1. Fake the
-      // plural-category count (1 vs 2) so `_one`/`_other` resolve the same way, while
-      // `{{n}}` interpolates the real number.
-      toast({ title: t('layout:operationsToasts.bulkDownloadsQueuedTitle', { count: eligible.length > 1 ? 2 : 1, n: eligible.length }) })
-      return eligible.length
+      // D-022: report the real count, and account for the rest.
+      if (queued.length === 0) {
+        // Release only the files with no work left to run: an 'already-queued'
+        // file still has a pending download that needs this scope to be picked
+        // up when auto-download is off.
+        const stillPending = new Set(
+          skipped.filter((s) => s.skip === 'already-queued').map((s) => s.filename)
+        )
+        for (const r of eligible) {
+          if (!stillPending.has(r.deviceFilename)) releaseDownloadBookkeeping(r.deviceFilename)
+        }
+        toast({
+          title: stillPending.size > 0
+            ? t('layout:operationsToasts.alreadyInDownloadQueueTitle')
+            : t('layout:operationsToasts.nothingQueuedTitle'),
+          description:
+            skipped[0]?.reason ?? t('layout:operationsToasts.allSelectedFilesSkippedDescription'),
+          variant: 'default'
+        })
+        return stillPending.size > 0 ? stillPending.size : 0
+      }
+      toast({
+        // Upstream's ternary is `queued.length > 1` — singular at BOTH 0 and 1. Fake the
+        // plural-category count (1 vs 2) so `_one`/`_other` resolve the same way, while
+        // `{{n}}` interpolates the real number.
+        title: t('layout:operationsToasts.bulkDownloadsQueuedTitle', {
+          count: queued.length > 1 ? 2 : 1,
+          n: queued.length
+        }),
+        description: skipped.length > 0
+          ? t('layout:operationsToasts.filesSkippedDescription', {
+              count: skipped.length,
+              reason: skipped[0].reason
+            })
+          : undefined
+      })
+      return queued.length
     } catch (e) {
       const msg = e instanceof Error ? e.message : t('common:errors.unknown')
       toast({ title: t('layout:operationsToasts.downloadsFailedTitle'), description: msg, variant: 'error' })

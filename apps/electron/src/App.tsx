@@ -3,7 +3,6 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Layout } from '@/components/layout/Layout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { SecurityWarningBanner } from '@/components/SecurityWarningBanner'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { ToastProvider } from '@/components/ui/toaster'
 import { FloatingAssistant } from '@/components/assistant/FloatingAssistant'
@@ -24,6 +23,7 @@ const Calendar = lazyWithRetry(() => import('@/pages/Calendar'))
 const MeetingDetail = lazyWithRetry(() => import('@/pages/MeetingDetail'))
 const Chat = lazyWithRetry(() => import('@/pages/Chat'))
 const Explore = lazyWithRetry(() => import('@/pages/Explore'))
+const Notes = lazyWithRetry(() => import('@/pages/Notes'))
 const Device = lazyWithRetry(() => import('@/pages/Device'))
 const Library = lazyWithRetry(() => import('@/pages/Library'))
 const People = lazyWithRetry(() => import('@/pages/People'))
@@ -158,7 +158,6 @@ function App(): React.ReactElement {
   return (
     <ToastProvider>
       <ClipboardCapture />
-      <SecurityWarningBanner />
       <Layout>
         <NavigationLogger />
         <RoutePersistence />
@@ -209,6 +208,21 @@ function App(): React.ReactElement {
                     <Chat />
                   </Suspense>
                 </FeatureRoute>
+              </ErrorBoundary>
+            }
+          />
+          {/*
+            Notes are not behind a FeatureRoute. Writing one needs no
+            transcription, no assistant and no network, so it stays reachable
+            under every preset — the same reason its IPC namespace is core.
+          */}
+          <Route
+            path="/notes"
+            element={
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingSpinner message="Loading notes..." />}>
+                  <Notes />
+                </Suspense>
               </ErrorBoundary>
             }
           />

@@ -24,6 +24,8 @@ import {
   Search,
   Download,
   GripVertical,
+  ChevronLeft,
+  ChevronRight,
   Image as ImageIcon
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -64,6 +66,12 @@ const CHAT_SIDEBAR = {
   MIN_WIDTH: 200,      // 12.5rem
   MAX_WIDTH: 500       // 31.25rem
 } as const
+
+/**
+ * Chunk-viewer page size. The index holds 237k+ chunks; the viewer asks for a
+ * screenful at a time rather than the whole thing (main caps this at 500).
+ */
+const CHUNK_PAGE_SIZE = 100
 
 interface VectorChunk {
   id: string
@@ -243,6 +251,13 @@ export function Chat() {
   const rafRef = useRef<number>()
   const [sources, setSources] = useState<Map<string, Source[]>>(new Map())
   const [chunks, setChunks] = useState<VectorChunk[]>([])
+  const [chunkOffset, setChunkOffset] = useState(0)
+  const [chunkTotal, setChunkTotal] = useState(0)
+  /** Corpus revision of the page currently shown, and of the page the current
+   *  traversal started from. They diverge when indexing or a deletion lands
+   *  mid-paging, which is when offsets stop lining up between pages. */
+  const [chunkRevision, setChunkRevision] = useState<number | null>(null)
+  const [chunkBaseRevision, setChunkBaseRevision] = useState<number | null>(null)
   const [showChunks, setShowChunks] = useState(false)
   const [loadingChunks, setLoadingChunks] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -586,11 +601,20 @@ export function Chat() {
     }
   }
 
-  const loadChunks = async () => {
+  const loadChunks = async (offset = 0, restartTraversal = false) => {
     setLoadingChunks(true)
     try {
-      const data = await window.electronAPI.rag.getChunks()
-      setChunks(data)
+      const page = await window.electronAPI.rag.getChunks(offset, CHUNK_PAGE_SIZE)
+      setChunks(page.chunks)
+      // Trust the offset MAIN served, not the one asked for: it clamps into
+      // [0, total], so a Next past the end lands on the last page instead of
+      // leaving the controls pointing at an empty one.
+      setChunkOffset(page.offset)
+      setChunkTotal(page.total)
+      setChunkRevision(page.revision)
+      // Starting fresh (opening the panel, or Refresh) rebases the traversal;
+      // stepping Prev/Next keeps the base so a mid-paging change stays visible.
+      if (restartTraversal) setChunkBaseRevision(page.revision)
     } catch (error) {
       console.error('Failed to load chunks:', error)
     } finally {
@@ -602,7 +626,7 @@ export function Chat() {
     const newShowChunks = !showChunks
     setShowChunks(newShowChunks)
     if (newShowChunks && chunks.length === 0) {
-      loadChunks()
+      loadChunks(0, true)
     }
   }
 
@@ -1355,19 +1379,55 @@ export function Chat() {
           <div className="border-b bg-muted/30 max-h-80 overflow-auto">
             <div className="px-6 py-3">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium text-sm">{t('chat.chunksPanel.heading', { count: chunks.length })}</h3>
-                <Button variant="ghost" size="sm" onClick={loadChunks} disabled={loadingChunks}>
-                  <RefreshCw className={cn('h-3 w-3 mr-1', loadingChunks && 'animate-spin')} />
-                  {t('chat.chunksPanel.refreshButton')}
-                </Button>
+                <h3 className="font-medium text-sm">
+                  {chunkTotal > 0
+                    ? t('chat.chunksPanel.headingRange', {
+                        from: chunkOffset + 1,
+                        to: chunkOffset + chunks.length,
+                        total: chunkTotal
+                      })
+                    : t('chat.chunksPanel.heading', { count: chunkTotal })}
+                </h3>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => loadChunks(Math.max(chunkOffset - CHUNK_PAGE_SIZE, 0))}
+                    disabled={loadingChunks || chunkOffset === 0}
+                    aria-label={t('chat.chunksPanel.prevPageAriaLabel')}
+                  >
+                    <ChevronLeft className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => loadChunks(chunkOffset + CHUNK_PAGE_SIZE)}
+                    disabled={loadingChunks || chunkOffset + chunks.length >= chunkTotal}
+                    aria-label={t('chat.chunksPanel.nextPageAriaLabel')}
+                  >
+                    <ChevronRight className="h-3 w-3" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => loadChunks(chunkOffset, true)} disabled={loadingChunks}>
+                    <RefreshCw className={cn('h-3 w-3 mr-1', loadingChunks && 'animate-spin')} />
+                    {t('chat.chunksPanel.refreshButton')}
+                  </Button>
+                </div>
               </div>
+              {chunkRevision !== null && chunkBaseRevision !== null && chunkRevision !== chunkBaseRevision && (
+                <div className="mb-3 text-xs text-muted-foreground">
+                  The index changed while you were paging, so page boundaries have shifted. Refresh to
+                  start over.
+                </div>
+              )}
               {loadingChunks ? (
                 <div className="flex items-center justify-center py-8">
                   <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               ) : chunks.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground text-sm">
-                  {t('chat.chunksPanel.empty')}
+                  {chunkTotal === 0
+                    ? t('chat.chunksPanel.empty')
+                    : t('chat.chunksPanel.emptyPage')}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 @md:grid-cols-2 gap-2 pb-4">

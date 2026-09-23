@@ -6,6 +6,12 @@ import { RefreshCw, AlertCircle, EyeOff, Trash2 } from 'lucide-react'
 import { toast } from '@/components/ui/toaster'
 import { getHiDockDeviceService } from '@/services/hidock-device'
 import { scanAndReconcile } from '@/services/device-sync-actions'
+import { recoverTruncated } from '@/services/truncated-recovery-actions'
+import {
+  describeTruncatedRecovery,
+  recoverActionLabel,
+  type TruncatedRecoveryCounts
+} from '@/features/library/utils/truncatedRecoveryCopy'
 import { overlayActiveTranscriptionStatuses, useUnifiedRecordings } from '@/hooks/useUnifiedRecordings'
 import {
   UnifiedRecording,
@@ -428,11 +434,11 @@ export function Library() {
     }
   }, [refresh])
 
-  // One-shot backfill: populate recordings.duration_seconds (NULL on the
-  // download/import paths) from device-cache + transcript timing already in the
-  // DB, and mark clearly-junk captures low-value. Idempotent server-side. Runs
-  // once per mount, after the first data load, then refreshes so the newly
-  // persisted durations/ratings drive sort/filter even when offline.
+  // One-shot backfill: bring recordings.duration_seconds in line with the audio
+  // on disk, then rate what the corrected lengths allow. Idempotent server-side
+  // and each file is measured once, so this stays cheap on later mounts. Runs
+  // once per mount, after the first data load, then refreshes so the persisted
+  // durations and ratings drive sort/filter even when offline.
   const backfillRanRef = useRef(false)
   useEffect(() => {
     if (backfillRanRef.current) return
@@ -442,8 +448,39 @@ export function Library() {
     void (async () => {
       try {
         const result = await window.electronAPI.recordings.backfillDurations()
-        if (result?.success && ((result.updated ?? 0) > 0 || (result.markedLowValue ?? 0) > 0)) {
+        if (
+          result?.success &&
+          ((result.updated ?? 0) > 0 ||
+            (result.markedLowValue ?? 0) > 0 ||
+            (result.markedByDuration ?? 0) > 0)
+        ) {
           await refresh(false)
+        }
+        // A file that holds less audio than its own transcript lost bytes
+        // somewhere, and the only place that showed was a line in the main
+        // process log. Say it once, on the mount that found them, with what
+        // the device can still give back. Recovery only starts from the
+        // toast's action: nothing downloads without the owner asking.
+        const shortened = result?.truncated ?? 0
+        if (result?.success && shortened > 0) {
+          let counts: TruncatedRecoveryCounts | null = null
+          try {
+            counts = (await window.electronAPI.downloadService?.truncatedRecoveryPlan?.()) ?? null
+          } catch (e) {
+            // Device Sync off rejects the channel; the warning still stands.
+            console.warn('[Library] Truncated-recovery plan unavailable:', e)
+          }
+          const recoverable = counts?.recoverable ?? 0
+          toast.warning(
+            'Some recordings are shorter than their transcripts',
+            describeTruncatedRecovery(counts, shortened),
+            recoverable > 0
+              ? {
+                  duration: 30_000,
+                  action: { label: recoverActionLabel(recoverable), onClick: () => { void recoverTruncated() } },
+                }
+              : undefined
+          )
         }
       } catch (e) {
         console.error('[Library] Duration backfill failed:', e)
@@ -2036,6 +2073,15 @@ export function Library() {
 
   // Opening and bulk selection are separate modes. A plain click opens the
   // reader and clears bulk selection; modifiers deliberately build selection.
+
+  // An in-place rename writes through SourceRow; the list only has to reflect
+  // it. Patching the row beats refetching the library for one string.
+  const handleRenamed = useCallback((id: string, userTitle: string | undefined) => {
+    const appState = useAppStore.getState()
+    appState.setUnifiedRecordings(
+      appState.unifiedRecordings.map((r) => (r.id === id ? { ...r, userTitle } : r))
+    )
+  }, [])
   const handleRowClick = useCallback((recording: UnifiedRecording) => {
     clearSelection()
     setSelectedSourceId(recording.id)
@@ -2631,6 +2677,7 @@ export function Library() {
                           // ranges) plus the Trash-only menu actions (§D1):
                           // Restore + Delete permanently.
                           <SourceRow
+                            onRenamed={handleRenamed}
                             recording={recording}
                             meeting={meeting}
                             transcript={transcripts.get(recording.id)}
@@ -2654,6 +2701,7 @@ export function Library() {
                           />
                         ) : (
                           <SourceRow
+                            onRenamed={handleRenamed}
                             recording={recording}
                             meeting={meeting}
                             transcript={transcripts.get(recording.id)}

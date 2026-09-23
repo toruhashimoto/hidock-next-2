@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/toaster'
+import { useConfigStore } from '@/store/domain/useConfigStore'
 import type {
   BrainListItem,
   BrainId,
@@ -114,6 +115,9 @@ function BrainRow({
  */
 export function AIBrainsSettings() {
   const { t } = useTranslation()
+  const cpuPercent = useConfigStore(s => s.config?.embeddings.localCpuPercent ?? 50)
+  const updateConfig = useConfigStore(s => s.updateConfig)
+  const [savingBudget, setSavingBudget] = useState(false)
   const [brains, setBrains] = useState<BrainListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [embedRoute, setEmbedRoute] = useState<string>('auto')
@@ -244,6 +248,31 @@ export function AIBrainsSettings() {
             </Select>
           </div>
         )}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Local embedding CPU budget</p>
+            <p className="text-xs text-muted-foreground">
+              Share of available logical CPUs. Applies to local semantic search and indexing after restart.
+              Transcription has separate resource limits.
+            </p>
+          </div>
+          <Select value={String(cpuPercent)} disabled={savingBudget} onValueChange={async value => {
+            setSavingBudget(true)
+            try {
+              await updateConfig('embeddings', { localCpuPercent: Number(value) })
+              toast.success('CPU budget saved. Restart HiDock to apply it.')
+            } catch (error) {
+              toast.error(`Could not save CPU budget: ${String(error)}`)
+            } finally { setSavingBudget(false) }
+          }}>
+            <SelectTrigger className="w-64" aria-label="Local embedding CPU budget"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="25">25% — more room for other apps</SelectItem>
+              <SelectItem value="50">50% — balanced</SelectItem>
+              <SelectItem value="75">75% — faster processing</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </CardContent>
     </Card>
   )

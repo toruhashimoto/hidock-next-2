@@ -223,6 +223,16 @@ export interface AppConfig {
     speakerLinkingMatchMargin: number
     speakerLinkingMinSpeechSeconds: number
     speakerLinkingTimeoutSeconds: number
+    /** Share of logical CPUs the diarization worker may use, 1-100. */
+    speakerLinkingCpuPercent?: number
+    /** Address of the machine that runs the speaker models. Empty = this one. */
+    modelHostUrl?: string
+    /** Token this computer got when it paired with that host. */
+    modelHostToken?: string
+    /** Realtime channel the user pinned; absent or null = measure it. */
+    liveMicChannel?: 0 | 1 | null
+    /** Realtime channel measured in an earlier session; a warm start only. */
+    liveMicChannelMeasured?: 0 | 1 | null
     autoTranscribe: boolean
     language: string
     /** F16/spec-001 kill-switch (main-process config.ts) — mirrored here only
@@ -234,6 +244,7 @@ export interface AppConfig {
   }
   embeddings: {
     provider: 'ollama'
+    localCpuPercent?: number
     ollamaBaseUrl: string
     ollamaModel: string
     chunkSize: number
@@ -253,6 +264,8 @@ export interface AppConfig {
   // selects a named feature-set; `flags` are sparse per-feature overrides.
   features?: FeaturesConfig
   ui: {
+    /** Library title for sources with no calendar event. */
+    unassignedTitleSource?: 'suggested' | 'filename'
     theme: 'light' | 'dark' | 'system'
     // UI display language. 'system' follows the OS locale. Absent in configs
     // written before i18n existed, which resolve to 'system' via DEFAULT_CONFIG.

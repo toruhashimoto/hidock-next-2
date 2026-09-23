@@ -112,12 +112,14 @@ export const USB_PRODUCT_IDS = {
   P1_OLD: 0xaf0e,
   P1: 0xb00e,
   P1_MINI: 0xaf0f,
+  P1_MINI_NEW: 0xb00f,
   H1_ALT1: 0x0100,
   H1E_ALT1: 0x0101,
   H1_ALT2: 0x0102,
   H1E_ALT2: 0x0103,
   P1_ALT: 0x2040,
-  P1_MINI_ALT: 0x2041
+  P1_MINI_ALT: 0x2041,
+  H1_LITE: 0x0104
 }
 
 export const EP_OUT = 0x01
@@ -127,7 +129,7 @@ export const EP_IN = 0x82
 // Types
 // ============================================================
 
-export type DeviceModel = 'hidock-h1' | 'hidock-h1e' | 'hidock-p1' | 'hidock-p1-mini' | 'unknown'
+export type DeviceModel = 'hidock-h1' | 'hidock-h1e' | 'hidock-p1' | 'hidock-p1-mini' | 'hidock-h1-lite' | 'unknown'
 
 /** Firmware gates recovered from the current HiNotes web application. */
 export function supportsRealtimeFirmware(model: DeviceModel, versionNumber: number | null): boolean {
@@ -139,6 +141,7 @@ export function supportsRealtimeFirmware(model: DeviceModel, versionNumber: numb
   }
   if (model === 'hidock-p1') return versionNumber >= 66312
   if (model === 'hidock-p1-mini') return versionNumber >= 131840
+  if (model === 'hidock-h1-lite') return versionNumber >= 196864
   return false
 }
 
@@ -1121,8 +1124,11 @@ export class JensenDevice {
       case USB_PRODUCT_IDS.P1_ALT:
         return 'hidock-p1'
       case USB_PRODUCT_IDS.P1_MINI:
+      case USB_PRODUCT_IDS.P1_MINI_NEW:
       case USB_PRODUCT_IDS.P1_MINI_ALT:
         return 'hidock-p1-mini'
+      case USB_PRODUCT_IDS.H1_LITE:
+        return 'hidock-h1-lite'
       default:
         return 'unknown'
     }
@@ -2654,11 +2660,14 @@ export class JensenDevice {
       const result = await this.sendCommand<ResponseMessage | null>(
         new JensenMessage(CMD.REALTIME_READ_SETTING), timeout, 'getRealtimeSettings')
       if (!result) return null
+      // Only `enabled` comes from the device. The format fields used to be
+      // filled in with 16000/1/16, which was invented: the reply's layout past
+      // byte 0 is undocumented, HiNotes never calls this command at all, and
+      // `channels: 1` contradicted the realtime stream, which is stereo (see
+      // RealtimeData). Reporting them as absent is the honest answer, and it
+      // stops a caller from sizing buffers off a number nobody measured.
       return {
         enabled: result.body && result.body.length > 0 ? result.body[0] === 1 : false,
-        sampleRate: 16000,
-        channels: 1,
-        bitDepth: 16
       }
     } catch {
       return null

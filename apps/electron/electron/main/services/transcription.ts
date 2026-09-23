@@ -91,7 +91,7 @@ function spawnStreaming(
     })
   })
 }
-import { getConfig } from './config'
+import { getConfig, CURRENT_GEMINI_CHAT_MODEL } from './config'
 import { isFeatureEnabled } from './feature-gate'
 import {
   addToQueue,
@@ -139,9 +139,16 @@ import {
   ensureKnowledgeCaptureForRecording,
   ensureNoSpeechKnowledgeCapture
 } from './knowledge-capture-backfill'
-import { applyCaptureValueClassification, parseValueClassification, neutralizeDelimiters } from './value-classification'
+import {
+  applyCaptureValueClassification,
+  parseValueClassification,
+  classifyByDuration,
+  neutralizeDelimiters
+} from './value-classification'
 import { parseAndAssessDiarization } from './diarization-quality'
 import { analyzeAudioPreflight, type AudioPreflightReport } from './audio-preflight'
+import { readAudioDuration } from './audio-duration'
+import { DURATION_GARBAGE_MAX_SECONDS } from './value-thresholds'
 import { isAutomaticMeetingLinkTemporallyEligible } from './recording-match-scoring'
 import {
   applyKnownVoiceBindings,
@@ -594,7 +601,9 @@ async function processQueue(): Promise<void> {
           const recDone = getRecordingById(item.recording_id)
           emitActivityLog(
             'info',
-            'No intelligible speech detected',
+            outcome.reason === TOO_SHORT_REASON_CODE
+              ? `Too short to transcribe (under ${DURATION_GARBAGE_MAX_SECONDS} seconds)`
+              : 'No intelligible speech detected',
             `${recDone?.filename ?? item.recording_id}: transcription and AI analysis skipped`
           )
         } else {
@@ -905,6 +914,11 @@ async function transcribeWithGemini(
     // richer than the string-returning AIBrain.analyzeAudio contract.
     apiKey: resolveGeminiApiKey(),
     model: modelName,
+    // Only reached when the Transcribe model gets a container the splitters
+    // cannot cut (an imported .m4a/.ogg/.flac). The user's chat model decides,
+    // so the default is whatever CURRENT_GEMINI_CHAT_MODEL is today rather than
+    // a version frozen inside the transcription package.
+    fallbackModel: config.chat?.geminiModel || CURRENT_GEMINI_CHAT_MODEL,
     language: config.transcription.language || 'unknown'
   })
 
@@ -1224,7 +1238,7 @@ async function analyzeTranscriptWithGemini(
   // don't fit the string-returning AIBrain.generate contract, so this analysis
   // path keeps its direct SDK usage — full delegation is deferred to a later phase.
   const genAI = new GoogleGenerativeAI(resolveGeminiApiKey())
-  const model = genAI.getGenerativeModel({ model: config.chat?.geminiModel || 'gemini-3.5-flash' })
+  const model = genAI.getGenerativeModel({ model: config.chat?.geminiModel || 'gemini-3.8-flash' })
 
   let meetingSelectionSection = ''
   if (candidateMeetings.length > 1) {
@@ -1675,7 +1689,7 @@ export async function reanalyzeFailedTranscripts(limit = 3): Promise<number> {
         stage: 'summary',
         provider: reanalysisHasGemini ? 'gemini' : 'hidock-next',
         tool: reanalysisHasGemini ? 'gemini-analysis' : 'local-fallback',
-        model: reanalysisHasGemini ? (reanalysisConfig.chat?.geminiModel || 'gemini-3.5-flash') : null,
+        model: reanalysisHasGemini ? (reanalysisConfig.chat?.geminiModel || 'gemini-3.8-flash') : null,
         execution: reanalysisHasGemini ? 'cloud' : 'local'
       })
       let analysis: TranscriptAnalysis
@@ -1717,7 +1731,7 @@ export async function reanalyzeFailedTranscripts(limit = 3): Promise<number> {
         stage: 'title',
         provider: reanalysisHasGemini ? 'gemini' : 'hidock-next',
         tool: reanalysisHasGemini ? 'gemini-analysis' : 'local-fallback',
-        model: reanalysisHasGemini ? (reanalysisConfig.chat?.geminiModel || 'gemini-3.5-flash') : null,
+        model: reanalysisHasGemini ? (reanalysisConfig.chat?.geminiModel || 'gemini-3.8-flash') : null,
         execution: reanalysisHasGemini ? 'cloud' : 'local',
         parentRunIds: [summaryRun.id]
       })
@@ -1761,7 +1775,18 @@ export async function reanalyzeFailedTranscripts(limit = 3): Promise<number> {
         try {
           const captureId = ensureKnowledgeCaptureForRecording(row.recording_id)
           if (captureId) {
-            applyCaptureValueClassification(captureId, parseValueClassification(analysis))
+            // Same precedence as the live path: duration first. Without it a
+            // re-analysis that comes back 'normal' maps to 'unrated' and
+            // would RESET a short clip the duration gate had already called
+            // garbage, since the guard lets an AI-set rating be refreshed.
+            const durationRow = queryOne<{ duration_seconds: number | null; file_size: number | null }>(
+              'SELECT duration_seconds, file_size FROM recordings WHERE id = ?',
+              [row.recording_id]
+            )
+            const cls =
+              classifyByDuration(durationRow?.duration_seconds, durationRow?.file_size) ??
+              parseValueClassification(analysis)
+            applyCaptureValueClassification(captureId, cls)
           }
         } catch (e) {
           console.warn('[ValueClassification] reanalysis apply failed (non-fatal):', e)
@@ -1795,7 +1820,47 @@ export async function reanalyzeFailedTranscripts(limit = 3): Promise<number> {
  * the soft-delete's 'cancelled' tombstone with 'completed' and emit
  * transcription:completed for content that does not exist).
  */
-type TranscribeOutcome = { status: 'completed' | 'cancelled' | 'no_speech' }
+type TranscribeOutcome =
+  | { status: 'completed' | 'cancelled' }
+  // `reason` separates "the audio is silent" from "the audio is too short to
+  // be worth a transcriber call"; the queue's activity log words them apart.
+  | { status: 'no_speech'; reason: 'no_speech' | typeof TOO_SHORT_REASON_CODE }
+
+/**
+ * Reason code on the `vad` processing run when a recording ends `no_speech`
+ * because it is shorter than DURATION_GARBAGE_MAX_SECONDS, not because it is
+ * silent. The value gate rates such a clip `garbage` on length alone, so
+ * transcribing it first is a paid provider call for audio that is then thrown
+ * away (measured 2026-09-22: 6 of the 7 live recordings under 10 s carried a
+ * full transcription). The reader reads this code to say "too short" instead
+ * of "no speech". Mirrored as a literal in SourceReader.tsx.
+ */
+export const TOO_SHORT_REASON_CODE = 'recording_too_short'
+
+/**
+ * Measure the file and, when it is under the garbage threshold, return the
+ * quality report the `vad` run records. Null means "transcribe normally": the
+ * clip is long enough, or the file could not be measured. The length comes
+ * from the audio's own bytes; `recordings.duration_seconds` was a
+ * transcript-derived estimate for half the library and must not decide this.
+ */
+function measureTooShortClip(filePath: string): Record<string, unknown> | null {
+  const measured = readAudioDuration(filePath)
+  if (!measured || measured.seconds >= DURATION_GARBAGE_MAX_SECONDS) return null
+  // Skipping drops a recording from transcription for good, so only a real MPEG
+  // measurement may decide it. The PCM fallback reads a lying RIFF container at
+  // a quarter of its length: a 30-second device file whose first frame sat past
+  // the sync search window read as 7.6 seconds in review. Anything that did not
+  // come from MPEG frames goes through the normal path instead.
+  if (!measured.how.startsWith('mpeg')) return null
+  return {
+    status: 'no_speech',
+    reasonCodes: [TOO_SHORT_REASON_CODE],
+    durationSeconds: Math.round(measured.seconds * 1000) / 1000,
+    minimumDurationSeconds: DURATION_GARBAGE_MAX_SECONDS,
+    measuredBy: measured.how
+  }
+}
 
 function isCancelledMeetingSubject(subject: string | null | undefined): boolean {
   return /^\s*(cancelled|canceled|cancelado|cancelada)\s*[:\-–—]/i.test(subject ?? '')
@@ -1889,7 +1954,35 @@ async function transcribeRecording(
     throw new Error('Recording metadata or schedule matching is not ready')
   }
 
+  // Too short to hold one exchange: end in the same terminal state as silent
+  // audio before ffmpeg or any provider runs. An explicit user re-run (a
+  // provider override from recordings:reprocessWith) is the escape hatch and
+  // skips this check. An unmeasurable file falls through to the normal path.
+  if (!isExplicitReprocess) {
+    const tooShort = measureTooShortClip(recording.file_path)
+    if (tooShort) {
+      const durationRun = createProcessingRun({
+        recordingId,
+        stage: 'vad',
+        provider: 'hidock-next',
+        tool: 'audio-duration',
+        model: 'duration-gate-v1',
+        execution: 'local'
+      })
+      completeProcessingRun(durationRun.id, { qualityStatus: 'no_speech', quality: tooShort })
+      await retireNoSpeechGeneratedContent(recordingId)
+      updateRecordingTranscriptionStatus(recordingId, 'no_speech')
+      updateRecordingStatus(recordingId, 'no_speech')
+      console.log(
+        `[Transcription] ${recordingId} is ${tooShort.durationSeconds}s long, under the ` +
+          `${DURATION_GARBAGE_MAX_SECONDS}s minimum; provider transcription and all downstream AI skipped`
+      )
+      return { status: 'no_speech', reason: TOO_SHORT_REASON_CODE }
+    }
+  }
+
   console.log(`Transcribing: ${recording.filename}`)
+  const statusBeforeRun = recording.transcription_status ?? 'none'
   // AI-13: Use standard enum values matching Recording.transcription_status
   updateRecordingTranscriptionStatus(recordingId, 'processing')
 
@@ -1989,7 +2082,24 @@ Meeting ${i + 1}: "${m.subject}"
       `[Transcription] ${recordingId} has ${audioPreflight.nonSilentSeconds}s of local audio activity ` +
         `(${(audioPreflight.nonSilentRatio * 100).toFixed(2)}%); provider transcription and all downstream AI skipped`
     )
-    return { status: 'no_speech' }
+    return { status: 'no_speech', reason: 'no_speech' }
+  }
+
+  // An explicit re-run of a value-excluded recording gets past the gate above
+  // for one reason: so this local preflight can prove silence and retire a false
+  // transcript. It found speech, so the rating still stands and no provider may
+  // see this audio. Stop here, before pyannote. Leaving it to the downstream
+  // checks ended the run badly: speaker linking was killed mid-run and the row
+  // retried three times into an error, or, with speaker linking off, the status
+  // stayed 'processing' forever with a dead Transcribe button. The owner lifts
+  // the rating with "Clear rating", and the next re-run then goes through.
+  if (isExplicitReprocess && !isRecordingEligible(recordingId)) {
+    updateRecordingTranscriptionStatus(recordingId, statusBeforeRun)
+    console.log(
+      `[Transcription] ${recordingId} has speech but its rating keeps it from any provider; ` +
+        'explicit re-run stopped after the local check. Clear the rating to transcribe it.'
+    )
+    return { status: 'cancelled' }
   }
 
   meetingContext += `\n\nLOCAL AUDIO ACTIVITY EVIDENCE (authoritative safety constraint):
@@ -2139,6 +2249,9 @@ Do not create speaker turns outside these intervals except for up to 1.5 seconds
         `[Transcription] Recording ${recordingId} became ineligible during the transcription ` +
           'provider pipeline (chunk/upload/retry) — aborted before further audio was sent; nothing persisted'
       )
+      // Hand the status back: 'processing' with nothing running is a dead
+      // Transcribe button, because the UI ignores clicks on a run in progress.
+      updateRecordingTranscriptionStatus(recordingId, statusBeforeRun)
       return { status: 'cancelled' }
     }
     if (e instanceof NoSpeechDetectedError) {
@@ -2148,7 +2261,7 @@ Do not create speaker turns outside these intervals except for up to 1.5 seconds
       updateRecordingTranscriptionStatus(recordingId, 'no_speech')
       updateRecordingStatus(recordingId, 'no_speech')
       console.log(`[Transcription] Provider confirmed no intelligible speech for ${recordingId}; downstream AI skipped`)
-      return { status: 'no_speech' }
+      return { status: 'no_speech', reason: 'no_speech' }
     }
     const message = e instanceof Error ? e.message : String(e)
     failProcessingRun(transcriptionRun.id, message)
@@ -2203,13 +2316,14 @@ Do not create speaker turns outside these intervals except for up to 1.5 seconds
       `[Transcription] Recording ${recordingId} became ineligible during audio transcription ` +
         '— skipping Gemini analysis; no transcript sent to any external LLM for analysis'
     )
+    updateRecordingTranscriptionStatus(recordingId, statusBeforeRun)
     return { status: 'cancelled' }
   }
 
   progressCallback?.('analyzing', 50) // spec-014: progress reporting
   const hasGeminiAnalysis = !!resolveGeminiApiKey()
   const analysisProvider = hasGeminiAnalysis ? 'gemini' : 'hidock-next'
-  const analysisModel = hasGeminiAnalysis ? (config.chat?.geminiModel || 'gemini-3.5-flash') : null
+  const analysisModel = hasGeminiAnalysis ? (config.chat?.geminiModel || 'gemini-3.8-flash') : null
   const summaryRun = createProcessingRun({
     recordingId,
     stage: 'summary',
@@ -2427,7 +2541,15 @@ Do not create speaker turns outside these intervals except for up to 1.5 seconds
   // results (which leave the capture unrated) emit nothing.
   if (captureId && config.transcription.valueClassificationEnabled !== false) {
     try {
-      const cls = parseValueClassification(analysis)
+      // The stopwatch outranks the rubric at the bottom end (2026-09-22): a
+      // recording too short to hold knowledge is worthless however confident
+      // the model sounds about its transcript, and short clips are exactly
+      // where transcribers hallucinate (one 13-second clip produced 508
+      // words). classifyByDuration returns null above its band, leaving the
+      // model's judgement in charge of everything long enough to judge.
+      const cls =
+        classifyByDuration(recording.duration_seconds, recording.file_size) ??
+        parseValueClassification(analysis)
       const applied = applyCaptureValueClassification(captureId, cls)
       if (applied.applied && (applied.rating === 'low-value' || applied.rating === 'garbage')) {
         const { getEventBus } = await import('./event-bus')
@@ -2473,7 +2595,7 @@ Do not create speaker turns outside these intervals except for up to 1.5 seconds
     stage: 'actionable-detection',
     provider: resolveGeminiApiKey() ? 'gemini' : 'hidock-next',
     tool: resolveGeminiApiKey() ? 'gemini-analysis' : 'eligibility-gate',
-    model: resolveGeminiApiKey() ? (config.chat?.geminiModel || 'gemini-3.5-flash') : null,
+    model: resolveGeminiApiKey() ? (config.chat?.geminiModel || 'gemini-3.8-flash') : null,
     execution: resolveGeminiApiKey() ? 'cloud' : 'local',
     parentRunIds: [summaryRun.id]
   })
@@ -2585,7 +2707,7 @@ Do not create speaker turns outside these intervals except for up to 1.5 seconds
     stage: 'timeline-analysis',
     provider: resolveGeminiApiKey() ? 'gemini' : 'hidock-next',
     tool: resolveGeminiApiKey() ? 'sentiment+local-markers' : 'local-markers',
-    model: resolveGeminiApiKey() ? (config.chat?.geminiModel || 'gemini-3.5-flash') : null,
+    model: resolveGeminiApiKey() ? (config.chat?.geminiModel || 'gemini-3.8-flash') : null,
     execution: resolveGeminiApiKey() ? 'provider-managed' : 'local',
     parentRunIds: [summaryRun.id, actionableRun.id]
   })
@@ -2904,6 +3026,20 @@ export async function transcribeManually(recordingId: string): Promise<void> {
     notifyRenderer('transcription:completed', { recordingId })
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    // D-022 — a renderer event is not a record. If nothing is listening (the
+    // window is closed, the user navigated away, the call came over IPC from a
+    // script), the failure used to vanish and the recording kept the same
+    // 'none' status as one nobody had ever attempted — which is how two
+    // interviews went 12 days without anyone noticing they had never run.
+    // Persist the outcome the way the queue processor already does.
+    const failedId = getRecordingById(recordingId)?.id ?? resolveRecordingId(recordingId)?.id ?? recordingId
+    try {
+      updateRecordingTranscriptionStatus(failedId, 'error')
+    } catch (statusError) {
+      console.error('[Transcription] Could not mark the recording as errored:', statusError)
+    }
+    const failed = getRecordingById(failedId)
+    emitActivityLog('error', 'Transcription failed', `${failed?.filename ?? recordingId}: ${errorMessage}`)
     notifyRenderer('transcription:failed', { recordingId, error: errorMessage })
     throw error
   }

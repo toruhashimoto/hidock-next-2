@@ -2,9 +2,47 @@ import { spawn } from 'child_process'
 import { existsSync } from 'fs'
 import { join, isAbsolute } from 'path'
 import { randomUUID } from 'crypto'
+import { availableParallelism } from 'os'
 import ffmpegPath from 'ffmpeg-static'
 import { getConfig } from './config'
 import { queryAll, queryOne, runInTransaction, runNoSave } from './database'
+import { diarizeOnModelHost, ModelHostUnavailableError } from './model-host-client'
+
+/** Default share of logical CPUs when the config does not say. */
+const DEFAULT_DIARIZATION_CPU_PERCENT = 40
+
+/**
+ * Thread-count environment for the diarization worker.
+ *
+ * pyannote/torch size their thread pools from the machine's CPU count, so one
+ * recording on a 24-thread box takes ~12 threads and the desktop stutters for
+ * the whole run — with a backlog, for hours. Every one of these variables is
+ * read by a different layer of the stack (OpenMP, Intel MKL, OpenBLAS, NumExpr,
+ * and the worker's own torch.set_num_threads), and missing one is enough for
+ * that layer to go back to using every core.
+ *
+ * Exported for tests: the arithmetic matters (a 0 or negative thread count
+ * makes OpenMP fall back to "all cores", the exact thing this prevents).
+ */
+export function diarizationThreadEnv(cpuPercent?: number): Record<string, string> {
+  // availableParallelism, not cpus().length: it honours the process's CPU
+  // affinity, so a host pinned to a subset of cores (the perf harness does
+  // exactly that) budgets against what it can actually run on. Same call the
+  // embedder worker uses.
+  const total = Math.max(1, availableParallelism())
+  const pct = Number.isFinite(cpuPercent) && (cpuPercent as number) > 0
+    ? Math.min(100, cpuPercent as number)
+    : DEFAULT_DIARIZATION_CPU_PERCENT
+  const threads = String(Math.max(1, Math.min(total, Math.round((total * pct) / 100))))
+  return {
+    OMP_NUM_THREADS: threads,
+    MKL_NUM_THREADS: threads,
+    OPENBLAS_NUM_THREADS: threads,
+    NUMEXPR_NUM_THREADS: threads,
+    TORCH_NUM_THREADS: threads,
+    HIDOCK_DIARIZATION_THREADS: threads
+  }
+}
 
 export interface AcousticSegment {
   start: number
@@ -230,6 +268,80 @@ function resolveWorkerPath(configured: string): string {
   return join(process.cwd(), 'resources', 'speaker-linking', 'worker.py')
 }
 
+/**
+ * Say the host is unavailable once, not once per recording.
+ *
+ * A backlog of two hundred recordings draining against a host that is switched
+ * off would otherwise print two hundred identical lines and bury everything
+ * else in the log.
+ */
+let lastModelHostComplaint = ''
+/**
+ * How many recordings are trying the host right now.
+ *
+ * Without this, one recording succeeding clears the complaint while another is
+ * still failing, and the next failure prints the same line again. Two
+ * recordings draining a backlog in parallel is the normal case, so the counter
+ * is what makes "say it once" true rather than true-when-sequential.
+ */
+let remoteAttemptsInFlight = 0
+
+/** Exported so a test can watch the same recording twice in one run. */
+export function resetModelHostComplaint(): void {
+  lastModelHostComplaint = ''
+  remoteAttemptsInFlight = 0
+}
+
+/**
+ * Diarize on the model host when there is one, and here when there is not.
+ *
+ * Every reason the host does not produce a result — no host, not paired, off,
+ * paused, busy, unreachable, the worker failed there — comes back as
+ * ModelHostUnavailableError and ends in the local worker. The recording is
+ * never failed because of the host.
+ */
+export async function diarize(
+  audioPath: string,
+  shouldContinue: () => boolean,
+  audioDurationSeconds?: number | null,
+  deps: {
+    local?: typeof runWorker
+    remote?: typeof diarizeOnModelHost
+  } = {}
+): Promise<AcousticWorkerResult> {
+  const local = deps.local || runWorker
+  const remote = deps.remote || diarizeOnModelHost
+  const config = getConfig().transcription
+  const url = config.modelHostUrl?.trim()
+  if (!url) return local(audioPath, shouldContinue, audioDurationSeconds)
+
+  remoteAttemptsInFlight += 1
+  try {
+    const result = await remote(
+      audioPath,
+      { url, token: config.modelHostToken || '' },
+      {
+        timeoutMs: speakerLinkingTimeoutMs(config.speakerLinkingTimeoutSeconds, audioDurationSeconds),
+        shouldContinue
+      }
+    )
+    // Only the last one out clears it. Clearing while another recording is
+    // still failing would make the next failure repeat a line already said.
+    if (remoteAttemptsInFlight === 1) lastModelHostComplaint = ''
+    console.log(`[SpeakerLinking] diarized on the model host (${result.device})`)
+    return result
+  } catch (error) {
+    if (!(error instanceof ModelHostUnavailableError)) throw error
+    if (lastModelHostComplaint !== error.message) {
+      lastModelHostComplaint = error.message
+      console.warn(`[SpeakerLinking] ${error.message} Diarizing here instead.`)
+    }
+    return local(audioPath, shouldContinue, audioDurationSeconds)
+  } finally {
+    remoteAttemptsInFlight -= 1
+  }
+}
+
 function runWorker(
   audioPath: string,
   shouldContinue: () => boolean,
@@ -263,7 +375,8 @@ function runWorker(
         ...process.env,
         FFMPEG_PATH: resolveSpeakerLinkingFfmpegPath(ffmpegPath) || process.env.FFMPEG_PATH,
         HF_TOKEN: config.localAsrHfToken || process.env.HF_TOKEN,
-        HUGGINGFACE_HUB_TOKEN: config.localAsrHfToken || process.env.HUGGINGFACE_HUB_TOKEN
+        HUGGINGFACE_HUB_TOKEN: config.localAsrHfToken || process.env.HUGGINGFACE_HUB_TOKEN,
+        ...diarizationThreadEnv(config.speakerLinkingCpuPercent)
       }
     })
     let stdout = ''
@@ -496,7 +609,7 @@ export async function runSpeakerLinkingPreflight(
       reason: 'disabled in transcription settings'
     }
   }
-  const result = await runWorker(audioPath, shouldContinue, audioDurationSeconds)
+  const result = await diarize(audioPath, shouldContinue, audioDurationSeconds)
   if (!shouldContinue()) throw new Error('speaker-linking cancelled because recording became ineligible')
   const matches = persistMatches(recordingId, result)
   return {

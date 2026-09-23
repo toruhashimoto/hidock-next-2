@@ -12,6 +12,7 @@ import { registerQualityHandlers } from './quality-handlers'
 import { registerMigrationHandlers } from './migration-handlers'
 import { registerDeviceCacheHandlers } from './device-cache-handlers'
 import { registerDownloadServiceHandlers } from '../services/download-service'
+import { registerTruncatedRecoveryHandlers } from './truncated-recovery-handlers'
 import { registerIntegrityHandlers } from './integrity-handlers'
 import { registerKnowledgeHandlers } from './knowledge-handlers'
 import { registerAssistantHandlers } from './assistant-handlers'
@@ -31,9 +32,11 @@ import { registerSelfIdentificationHandlers } from './self-identification-handle
 import { registerTurnSpeakersHandlers } from './turn-speakers-handlers'
 import { registerRecordingDeletionHandlers } from './recording-deletion-handlers'
 import { registerTranscriptionHandlers } from './transcription-handlers'
+import { registerModelHostHandlers } from './model-host-handlers'
 import { registerReDiarizeHandlers } from './re-diarize-handlers'
 import { registerTimelineHandlers } from './timeline-handlers'
 import { registerClipboardCaptureHandlers } from './clipboard-capture-handlers'
+import { registerNotesHandlers } from './notes-handlers'
 import { registerGitCommitsHandlers } from './git-commits-handlers'
 import { registerWaveformCacheHandlers } from './waveform-cache-handlers'
 import { registerBrainsHandlers } from './brains-handlers'
@@ -69,6 +72,7 @@ export function registerIpcHandlers(): void {
   registerMigrationHandlers()
   registerDeviceCacheHandlers()
   registerDownloadServiceHandlers()
+  registerTruncatedRecoveryHandlers()
   registerIntegrityHandlers()
   registerKnowledgeHandlers()
   registerAssistantHandlers()
@@ -91,9 +95,11 @@ export function registerIpcHandlers(): void {
   registerTurnSpeakersHandlers()
   registerRecordingDeletionHandlers()
   registerTranscriptionHandlers()
+  registerModelHostHandlers()
   registerReDiarizeHandlers()
   registerTimelineHandlers()
   registerClipboardCaptureHandlers()
+  registerNotesHandlers()
   registerGitCommitsHandlers()
   registerWaveformCacheHandlers()
   registerBrainsHandlers()

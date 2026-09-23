@@ -160,6 +160,69 @@ export function stripLeadingSqlComments(sql: string): string {
     .trim()
 }
 
+/**
+ * Split a schema script into statements, ignoring semicolons that are not
+ * statement terminators.
+ *
+ * A plain `.split(';')` was what this did, and on 2026-09-22 a semicolon
+ * written inside a `--` comment in a CREATE TABLE cut that statement in two.
+ * SQLite then reported a syntax error on the second half, the table was never
+ * created, and the only trace was one warning line in a boot log full of them
+ * — every later migration failed with "no such table". The cost is not the bug,
+ * it is that the failure points nowhere near the cause.
+ *
+ * Semicolons inside line comments, block comments and quoted identifiers or
+ * strings are therefore text, not terminators. Doubled quotes (SQLite's escape,
+ * `'it''s'`) close and immediately reopen the literal, which lands on the same
+ * answer without a special case.
+ */
+export function splitSqlStatements(schema: string): string[] {
+  const statements: string[] = []
+  let start = 0
+  let quote: string | null = null
+  let lineComment = false
+  let blockComment = false
+
+  for (let i = 0; i < schema.length; i++) {
+    const ch = schema[i]
+    const next = schema[i + 1]
+
+    if (lineComment) {
+      if (ch === '\n') lineComment = false
+      continue
+    }
+    if (blockComment) {
+      if (ch === '*' && next === '/') {
+        blockComment = false
+        i++
+      }
+      continue
+    }
+    if (quote) {
+      if (ch === quote) quote = null
+      continue
+    }
+
+    if (ch === '-' && next === '-') {
+      lineComment = true
+      i++
+    } else if (ch === '/' && next === '*') {
+      blockComment = true
+      i++
+    } else if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch
+    } else if (ch === ';') {
+      const statement = schema.slice(start, i).trim()
+      if (statement.length > 0) statements.push(statement)
+      start = i + 1
+    }
+  }
+
+  const tail = schema.slice(start).trim()
+  if (tail.length > 0) statements.push(tail)
+  return statements
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Parameter normalization (sql.js accepted looser inputs than               */
 /*  better-sqlite3; normalize so consumer call sites are unchanged).          */
@@ -599,6 +662,60 @@ export class DatabaseEngine {
 
   /* --- Initialization / 4-phase boot -------------------------------------- */
 
+  /**
+   * Open an existing database for reading only, without touching it.
+   *
+   * For a second process that answers questions about the data while the app
+   * that owns it may be running too — the headless brain service. SQLite in WAL
+   * mode lets any number of readers work alongside one writer, but only if the
+   * reader never tries to write, and the ordinary {@link initialize} writes a
+   * great deal: it switches the journal mode, takes a backup, creates tables,
+   * repairs columns and runs migrations. None of that is the reader's business.
+   *
+   * So this opens with `readonly` and `fileMustExist`, sets only per-connection
+   * settings, and refuses outright when the file is on an older schema than
+   * this code expects: the queries name columns a migration adds, and a reader
+   * cannot run the migration. Open the app once to upgrade the file.
+   */
+  initializeReadOnly(): void {
+    if (this.bdb) this.closeDatabase()
+    this.appliedMigration = false
+    this.deferredBackupPending = false
+    this.dbPath = this.config.dbPathProvider()
+
+    const Ctor = this.config.betterSqlite3
+    if (typeof Ctor !== 'function') {
+      throw new Error(
+        'DatabaseEngineConfig.betterSqlite3 is required (pass the default export of better-sqlite3).'
+      )
+    }
+    if (!existsSync(this.dbPath)) {
+      throw new Error(`No database at ${this.dbPath}. Open the app once to create it.`)
+    }
+
+    const bdb = new Ctor(this.dbPath, { readonly: true, fileMustExist: true })
+    try {
+      // Connection settings only. journal_mode is a property of the file and a
+      // read-only connection must not try to change it.
+      bdb.pragma('busy_timeout = 5000')
+      bdb.pragma('foreign_keys = ON')
+      this.bdb = bdb
+      const onDisk = this.readSchemaVersion()
+      if (onDisk < this.config.schemaVersion) {
+        throw new Error(
+          `The database is on schema v${onDisk} and this code needs v${this.config.schemaVersion}. ` +
+            'Open the app once so it can upgrade the file; a read-only reader cannot.'
+        )
+      }
+      this.shim = new SqlJsCompatDatabase(this.bdb, this.recordChanges, () => this.lastChanges)
+    } catch (error) {
+      this.bdb = null
+      this.shim = null
+      bdb.close()
+      throw error
+    }
+  }
+
   async initialize(): Promise<void> {
     // Re-initialization: release any previous connection before opening a new
     // one — better-sqlite3 handles are never GC-closed, so overwriting this.bdb
@@ -628,10 +745,21 @@ export class DatabaseEngine {
       this.bdb.pragma('journal_mode = WAL')
       this.bdb.pragma('synchronous = NORMAL')
       this.bdb.pragma('busy_timeout = 5000')
-      // Deliberately leave foreign_keys at SQLite's default (OFF) to match the
-      // previous sql.js engine. Enabling enforcement would activate dormant
-      // ON DELETE CASCADE clauses and reject writes the app historically allowed
-      // — a behavior change out of scope for this stability fix.
+      // Foreign keys, stated rather than inherited.
+      //
+      // This comment used to say enforcement was deliberately left OFF to match
+      // the previous sql.js engine. That stopped being true without anyone
+      // changing a line: the better-sqlite3 this app installs is built with
+      // SQLITE_DEFAULT_FOREIGN_KEYS, so the default here is already ON and the
+      // cascades have been live all along. Measured, not assumed:
+      // `pragma('foreign_keys')` reads 1 on a fresh connection and
+      // `compile_options` lists DEFAULT_FOREIGN_KEYS.
+      //
+      // Setting it explicitly changes nothing today and stops the app's
+      // behaviour from depending on how a native module happened to be
+      // compiled. A rebuild without that flag would otherwise have silently
+      // turned every ON DELETE CASCADE in this schema into a no-op.
+      this.bdb.pragma('foreign_keys = ON')
 
       this.shim = new SqlJsCompatDatabase(this.bdb, this.recordChanges, () => this.lastChanges)
 
@@ -644,10 +772,7 @@ export class DatabaseEngine {
       const deferRoutineBackup = this.config.deferBackupOnBoot === true && !migrationPending
       if (hadExistingFile && !deferRoutineBackup) await this.backupOnBoot(migrationPending)
 
-      const statements = this.config.schema
-        .split(';')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0)
+      const statements = splitSqlStatements(this.config.schema)
 
       // --- PHASE 1: CORE TABLES ---
       console.log('[Database] Phase 1: Ensuring core tables exist...')

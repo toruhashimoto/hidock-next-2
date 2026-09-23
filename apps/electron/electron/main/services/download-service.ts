@@ -17,7 +17,8 @@ import { BrowserWindow, ipcMain, Notification } from 'electron'
 import {
   markRecordingDownloaded,
   addSyncedFile,
-  isFileSynced,
+  getSyncedFile,
+  removeSyncedFile,
   isFilePurged,
   getPurgedFilenames,
   getRecordingByFilename,
@@ -30,13 +31,40 @@ import {
   enrichRecordingScheduleMetadata,
   createProcessingRun,
   completeProcessingRun,
+  remeasureRecordingDuration,
   type Recording
 } from './database'
-import { saveRecording, getRecordingsPath } from './file-storage'
+import { saveRecording, getRecordingsPath, replaceRecordingFile } from './file-storage'
 import { emitActivityLog } from './activity-log'
 import { cancelActiveTransfer, cancelActiveTransferByName, getActiveTransferFilename } from './download-transfer-controller'
 import { existsSync } from 'fs'
-import { join, basename } from 'path'
+import { join, basename, dirname } from 'path'
+
+/**
+ * D-022 — why a requested file did not enter the queue.
+ *
+ * 'already-synced'  the audio is verified present on disk (not merely claimed)
+ * 'already-queued'  a pending/downloading entry for it already exists
+ * 'user-cancelled'  you cancelled it before; an explicit request re-queues it
+ */
+export type DownloadSkipKind = 'already-synced' | 'already-queued' | 'user-cancelled'
+
+export interface DownloadSkip {
+  filename: string
+  skip: DownloadSkipKind
+  /** Human-readable detail, safe to show in a toast. */
+  reason: string
+}
+
+/**
+ * D-022 — queueDownloads reports both halves of what it did. Callers that only
+ * look at `queued` still behave correctly; callers that care about a file they
+ * asked for can now see that it was refused, and why.
+ */
+export interface QueueDownloadsResult {
+  queued: string[]
+  skipped: DownloadSkip[]
+}
 
 // Download queue item
 // C-004: Added 'cancelled' status to distinguish user cancellations from actual failures
@@ -70,6 +98,22 @@ export interface DownloadQueueItem {
   // user-cancelled rows are reloaded on startup, so a deliberate cancel survives an
   // app restart instead of resurrecting via post-restart reconciliation.
   cancelReason?: 'user' | 'interrupted'
+  // Truncated-download recovery: this download brings back the complete copy of
+  // a recording whose local file is shorter than its transcript. The new bytes
+  // replace the file at `path` in place, and only after they prove longer (see
+  // replaceRecordingFile). Memory-only on purpose: after a restart the row
+  // reloads as an ordinary download, the file is on disk, so the reload drops
+  // it as already synced. Losing a recovery to a restart is recoverable (ask
+  // again); a stale recovery turning into a suffixed duplicate would not be.
+  replaces?: { path: string; recordingId: string }
+}
+
+/** One device file to fetch again to replace a truncated local copy. */
+export interface ReplacementDownload {
+  filename: string
+  size: number
+  dateCreated?: Date
+  replaces: { path: string; recordingId: string }
 }
 
 // Sync session state
@@ -345,6 +389,49 @@ export class DownloadService {
   }
 
   /**
+   * D-022 — a synced_files row is a CLAIM about the disk, never proof.
+   *
+   * The row used to be trusted on its existence alone, so a row left pointing at
+   * a file that had moved or been deleted answered "already synced" forever. That
+   * answer is load-bearing in two places at once: queueDownloads skips the file,
+   * and nothing else ever re-fetches it, so the recording keeps an empty
+   * file_path and transcription dies with "no local file". The recording cannot
+   * escape through EITHER exit, and nothing reports it.
+   *
+   * So the row only counts while the disk agrees. When it does not, the row is
+   * retired here, which lets the caller fall through to the disk/recordings
+   * reconciliation below — that re-points the row when the audio turns up under
+   * another name, and lets the file be queued again when it is genuinely gone.
+   */
+  private syncedRowIsBackedByDisk(filename: string): boolean {
+    const row = getSyncedFile(filename)
+    if (!row) return false
+    if (row.file_path && existsSync(row.file_path)) return true
+
+    // A missing file and an unmounted volume look identical from here, and the
+    // recordings live on an external drive. If the directory that should hold
+    // the file is itself unreachable, keep trusting the row: blocking downloads
+    // until the drive is back is recoverable, dropping 2000+ rows and re-pulling
+    // the entire device over USB is not.
+    if (row.file_path && !existsSync(dirname(row.file_path))) {
+      console.warn(
+        `[DownloadService] "${row.file_path}" is unreachable and so is its folder — ` +
+        'treating the synced_files row as still valid until the volume comes back'
+      )
+      return true
+    }
+
+    // The folder is there and the file is not. The claim is stale: retire it
+    // rather than letting it shadow the disk.
+    console.warn(
+      `[DownloadService] synced_files claimed "${filename}" was at "${row.file_path}" but nothing is there — ` +
+      'retiring the row so the file can be reconciled or re-downloaded'
+    )
+    removeSyncedFile(filename)
+    return false
+  }
+
+  /**
    * Check if a file needs to be downloaded
    * Reconciles database, synced_files table, and actual files on disk
    * C-004: Also checks .mp3 normalized name (B-DWN-003 normalizes .hda->.mp3)
@@ -354,20 +441,20 @@ export class DownloadService {
     // Purge tombstones are consulted by the AUTOMATIC paths (getFilesToSync
     // reconciliation, auto-retry) — NEVER here: an EXPLICIT user download of a
     // purged file is a deliberate re-download and must not be blocked.
-    // Check 1: Is it in synced_files table?
-    if (isFileSynced(filename)) {
+    // Check 1: Is it in synced_files table, and is that claim still true?
+    if (this.syncedRowIsBackedByDisk(filename)) {
       return { synced: true, reason: 'In synced_files table' }
     }
 
     // Check 2: Convert .hda to .wav and check both (legacy format)
     const wavFilename = filename.replace(/\.hda$/i, '.wav')
-    if (wavFilename !== filename && isFileSynced(wavFilename)) {
+    if (wavFilename !== filename && this.syncedRowIsBackedByDisk(wavFilename)) {
       return { synced: true, reason: 'WAV version in synced_files' }
     }
 
     // C-004: Check 2b: Also check .mp3 normalized name (B-DWN-003 normalizes .hda->.mp3)
     const mp3Filename = DownloadService.normalizeFilename(filename)
-    if (mp3Filename !== filename && mp3Filename !== wavFilename && isFileSynced(mp3Filename)) {
+    if (mp3Filename !== filename && mp3Filename !== wavFilename && this.syncedRowIsBackedByDisk(mp3Filename)) {
       return { synced: true, reason: 'MP3 version in synced_files' }
     }
 
@@ -533,8 +620,15 @@ export class DownloadService {
    * user action ("Download this file" from the Library) passes true, which CLEARS
    * the suppression and re-queues — equivalent to a manual Retry for that file.
    */
-  queueDownloads(files: Array<{ filename: string; size: number; dateCreated?: Date }>, explicit: boolean = false): string[] {
+  queueDownloads(
+    files: Array<{ filename: string; size: number; dateCreated?: Date; replaces?: ReplacementDownload['replaces'] }>,
+    explicit: boolean = false
+  ): QueueDownloadsResult {
     const queuedIds: string[] = []
+    // D-022: every refusal is returned, not just counted into a log line. An
+    // empty queued list used to be indistinguishable from "queued everything",
+    // which is how a file the service silently refused looked like a success.
+    const skipped: DownloadSkip[] = []
     // BUG-R4: aggregate per-file skip reasons into one summary line instead of
     // logging every already-queued/already-synced file (was 1300+ lines per sync).
     let skippedInQueue = 0
@@ -554,6 +648,11 @@ export class DownloadService {
       if (suppressed && suppressed.status === 'cancelled' && suppressed.cancelReason === 'user') {
         if (!explicit) {
           skippedUserCancelled++
+          skipped.push({
+            filename: file.filename,
+            skip: 'user-cancelled',
+            reason: 'Cancelled by you earlier — download it explicitly to retry'
+          })
           continue
         }
         suppressed.status = 'pending'
@@ -565,6 +664,7 @@ export class DownloadService {
         suppressed.lastProgressAt = undefined
         suppressed.fileSize = file.size || suppressed.fileSize
         suppressed.recordingDate = file.dateCreated ?? suppressed.recordingDate
+        suppressed.replaces = file.replaces
         this.persistQueueItem(suppressed)
         queuedIds.push(suppressed.filename)
         console.log(`[DownloadService] Re-queued after explicit user request: ${suppressed.filename}`)
@@ -579,25 +679,44 @@ export class DownloadService {
 
       if (existingInDb) {
         skippedInQueue++
+        skipped.push({
+          filename: file.filename,
+          skip: 'already-queued',
+          reason: `Already in the download queue (${existingInDb.status})`
+        })
         continue
       }
 
       // Skip if already in memory queue (check both original and normalized)
       if (this.state.queue.has(file.filename) || this.state.queue.has(normalizedFilename)) {
         skippedInQueue++
+        skipped.push({
+          filename: file.filename,
+          skip: 'already-queued',
+          reason: 'Already in the download queue'
+        })
         continue
       }
 
-      // Skip if already synced (check both original and normalized)
-      const { synced } = this.isFileAlreadySynced(file.filename)
+      // Skip if already synced (check both original and normalized).
+      // D-022: isFileAlreadySynced now verifies the audio is really there, so a
+      // skip here means the file IS on disk — not merely that a row said so.
+      // A replacement download is the one exception: its file is on disk by
+      // definition, and being there short is the reason it was asked for.
+      const { synced, reason } = file.replaces
+        ? { synced: false, reason: '' }
+        : this.isFileAlreadySynced(file.filename)
       if (synced) {
         skippedAlreadySynced++
+        skipped.push({ filename: file.filename, skip: 'already-synced', reason })
         continue
       }
-      if (normalizedFilename !== file.filename) {
-        const { synced: normalizedSynced } = this.isFileAlreadySynced(normalizedFilename)
+      if (!file.replaces && normalizedFilename !== file.filename) {
+        const { synced: normalizedSynced, reason: normalizedReason } =
+          this.isFileAlreadySynced(normalizedFilename)
         if (normalizedSynced) {
           skippedAlreadySynced++
+          skipped.push({ filename: file.filename, skip: 'already-synced', reason: normalizedReason })
           continue
         }
       }
@@ -609,7 +728,8 @@ export class DownloadService {
         progress: 0,
         status: 'pending',
         recordingDate: file.dateCreated, // Store the original recording date
-        createdAt: new Date() // prune age fallback (DB created_at is set on persist)
+        createdAt: new Date(), // prune age fallback (DB created_at is set on persist)
+        replaces: file.replaces
       }
 
       this.state.queue.set(file.filename, item)
@@ -630,7 +750,17 @@ export class DownloadService {
     this.markDirty()
     // C-004: Emit immediately so renderer sees new queue items without throttle delay
     this.emitStateUpdate(true)
-    return queuedIds
+    return { queued: queuedIds, skipped }
+  }
+
+  /**
+   * Queue complete copies of truncated recordings. Goes through queueDownloads,
+   * so the rows land in the same queue, the same progress UI and the same USB
+   * path as any other download; only the final write differs (see
+   * processDownload). An explicit request by definition: the owner asked.
+   */
+  queueReplacementDownloads(files: ReplacementDownload[]): QueueDownloadsResult {
+    return this.queueDownloads(files, true)
   }
 
   /**
@@ -639,7 +769,7 @@ export class DownloadService {
    */
   startSyncSession(files: Array<{ filename: string; size: number; dateCreated?: Date }>): SyncSession {
     // Queue the files (including recording dates for proper date preservation)
-    const queuedIds = this.queueDownloads(files)
+    const { queued: queuedIds } = this.queueDownloads(files)
 
     // C-004: Count only the pending/downloading items for this session, not completed/failed leftovers
     let pendingCount = 0
@@ -733,6 +863,10 @@ export class DownloadService {
         return { success: false, error: 'Download cancelled' }
       }
 
+      if (item.replaces) {
+        return await this.completeReplacement(item, data)
+      }
+
       // Save the file with the original recording date if available. saveRecording
       // writes to a temp `.partial` and atomically renames only after a final
       // cancellation check, so a cancel that lands mid-write never yields a visible
@@ -817,6 +951,63 @@ export class DownloadService {
       this.emitStateUpdate(true) // C-004: immediate emit for failure
       return { success: false, error: errorMsg }
     }
+  }
+
+  /**
+   * Finish a truncated-recording recovery: swap the complete copy in over the
+   * short file, then let the duration backfill's rule settle the row.
+   *
+   * replaceRecordingFile refuses anything that is not strictly larger and
+   * longer, and leaves the original untouched when it refuses, fails or is
+   * cancelled. A refusal lands in the catch in processDownload and marks the
+   * item failed, with the reason, like any other failed download.
+   *
+   * No transcription is queued: the existing transcript is the evidence that
+   * this audio once existed in full, and it already covers it.
+   */
+  private async completeReplacement(
+    item: DownloadQueueItem,
+    data: Buffer
+  ): Promise<{ success: boolean; filePath?: string; error?: string }> {
+    const replaces = item.replaces as NonNullable<DownloadQueueItem['replaces']>
+    const replaced = await replaceRecordingFile(replaces.path, data, {
+      isCancelled: () => this.isCancelledStatus(item),
+      originalDate: item.recordingDate,
+    })
+    if (replaced === null) {
+      console.log(`[DownloadService] Recovery of ${item.filename} cancelled (file on disk unchanged)`)
+      return { success: false, error: 'Download cancelled' }
+    }
+
+    addSyncedFile(item.filename, basename(replaced.filePath), replaced.filePath, replaced.bytes)
+    run('UPDATE recordings SET file_size = ? WHERE id = ?', [replaced.bytes, replaces.recordingId])
+    const settled = remeasureRecordingDuration(replaces.recordingId)
+
+    item.status = 'completed'
+    item.progress = 100
+    item.completedAt = new Date()
+    this.persistQueueItem(item)
+    if (this.state.currentSession) {
+      this.state.currentSession.completedFiles++
+    }
+    this.markDirty()
+    this.emitStateUpdate(true)
+
+    const filename = item.filename
+    setTimeout(() => {
+      this.state.queue.delete(filename)
+      this.removeFromDatabase(filename)
+      this.pruneCompletedItems(10)
+      this.markDirty()
+      this.emitStateUpdate()
+    }, 2000)
+
+    const outcome = settled?.truncated
+      ? 'still shorter than its transcript'
+      : `now ${Math.round(replaced.seconds)} s, measured from the file`
+    emitActivityLog('info', `Recovered ${filename}: ${replaced.previousBytes} -> ${replaced.bytes} bytes, ${outcome}`)
+    console.log(`[DownloadService] Recovered truncated ${filename} (${replaced.previousBytes} -> ${replaced.bytes} bytes, ${outcome})`)
+    return { success: true, filePath: replaced.filePath }
   }
 
   /**
@@ -1065,8 +1256,12 @@ export class DownloadService {
           continue
         }
 
-        // B-DWN-007: Check if file was synced in the meantime
-        const { synced, reason } = this.isFileAlreadySynced(item.filename)
+        // B-DWN-007: Check if file was synced in the meantime. A recovery's
+        // file is on disk by definition (short), so the check would always
+        // drop it; replaceRecordingFile re-verifies size and length instead.
+        const { synced, reason } = item.replaces
+          ? { synced: false, reason: '' }
+          : this.isFileAlreadySynced(item.filename)
         if (synced) {
           console.log(`[DownloadService] Skipping retry for ${item.filename}: ${reason}`)
           alreadySynced.push(key)

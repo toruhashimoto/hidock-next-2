@@ -20,7 +20,7 @@ const USB_PRODUCT_IDS = [
 ]
 import { initializeDatabase, closeDatabase, isGraphProvenanceCleanupRegistered } from './services/database'
 import { initializeConfig, getConfig } from './services/config'
-import { setAutoConnectChecker } from './services/jensen'
+import { getJensenDevice, setAutoConnectChecker } from './services/jensen'
 import { initializeStartupStorage } from './storage-startup'
 import { registerIpcHandlers } from './ipc/handlers'
 import { stopAutoSync, initializeCalendarAutoSync } from './ipc/calendar-handlers'
@@ -45,6 +45,8 @@ import { createSplashWindow } from './splash-screen'
 import { configureEarlyStartup } from './startup-configuration'
 import { getStartupState } from './startup-state'
 import { revealMainWindow, type WindowRevealReason } from './window-reveal'
+import { startAppBrain, stopAppBrain } from './services/brain-app'
+import { getLiveRecordingState } from './ipc/jensen-handlers'
 
 const startup = getStartupState()
 configureEarlyStartup() // idempotent fallback when this module is launched directly in tests/tools
@@ -168,6 +170,13 @@ async function initializeServices(): Promise<boolean> {
 
   registerIpcHandlers()
   console.log('IPC handlers registered')
+
+  // The second brain's API for agents, served from this process while the app
+  // is open. Starting it also asks a headless --brain-only process, if an agent
+  // launched one earlier, to step down: while the app runs it is the one door.
+  startAppBrain({ getLiveRecording: getLiveRecordingState }).catch((e) =>
+    console.error('[Brain] could not start the agent API:', e)
+  )
 
   // spec-006/F17 T6 AR3-1 — loud startup tripwire. registerRecordingDeletionHandlers()
   // (called from registerIpcHandlers() above) wires the graph-provenance
@@ -404,17 +413,6 @@ app.whenReady().then(async () => {
 
   console.log('Background services scheduled')
 
-  // Show security warning in production when remote debugging is explicitly enabled
-  if (!is.dev && process.env.ENABLE_REMOTE_DEBUGGING === 'true' && mainWindow) {
-    // Wait for window to be ready before sending the warning
-    mainWindow.webContents.on('did-finish-load', () => {
-      mainWindow?.webContents.send('security-warning', {
-        type: 'remote-debugging-enabled',
-        message: 'Remote debugging is enabled. This should only be used for troubleshooting.'
-      })
-    })
-  }
-
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -433,10 +431,39 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('before-quit', () => {
+/** How long quitting waits for the USB device to let go before leaving anyway. */
+const USB_RELEASE_TIMEOUT_MS = 2000
+let quitCleanupDone = false
+
+app.on('before-quit', (event) => {
+  if (quitCleanupDone) return
+  // The first quit is held back once so the USB device can be released. The
+  // app used to exit with the device still open, and the process then crashed
+  // inside libusb's teardown (exit code 139) after this cleanup had run.
+  event.preventDefault()
+  quitCleanupDone = true
+  // Release the brain lock first, so an agent asking a moment later starts a
+  // headless brain instead of knocking on a door that is closing.
+  void stopAppBrain().catch(() => {})
   stopAutoSync() // B-CAL-002: Clean up calendar auto-sync interval
   stopRecordingWatcher()
   stopTranscriptionProcessor()
-  closeDatabase()
-  console.log('Cleanup complete')
+  void (async () => {
+    let releaseTimer: NodeJS.Timeout | undefined
+    try {
+      await Promise.race([
+        getJensenDevice().disconnect(),
+        new Promise((resolve) => {
+          releaseTimer = setTimeout(resolve, USB_RELEASE_TIMEOUT_MS)
+        }),
+      ])
+    } catch (error) {
+      console.warn('[Quit] releasing the USB device failed:', error)
+    } finally {
+      clearTimeout(releaseTimer)
+    }
+    closeDatabase()
+    console.log('Cleanup complete')
+    app.quit()
+  })()
 })

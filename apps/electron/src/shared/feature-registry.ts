@@ -87,6 +87,10 @@ export const FEATURES: Record<FeatureId, FeatureDefinition> = {
     ipcNamespaces: [
       'transcription:',
       'transcripts:',
+      // Pairing with the machine that runs the speaker models. It belongs to
+      // transcription and fails closed with it: with transcription off there is
+      // nothing to send anywhere, so pairing would be a control with no effect.
+      'model-host:',
       'turn-speakers:',
       'self-id:',
       'transcript-upgrade:',
@@ -518,6 +522,11 @@ export const CORE_CHANNEL_PREFIXES: string[] = [
   'repair:',
   'brains:',
   'knowledge:',
+  // Hand-written notes. Writing one needs no transcription, no assistant and no
+  // network, so it stays available under every preset — the same reason config
+  // and db are here. The three AI channels on this namespace degrade to an
+  // error result when no provider is configured; they never gate the editor.
+  'notes:',
   'artifacts:',
   'waveform:',
   'handover:',

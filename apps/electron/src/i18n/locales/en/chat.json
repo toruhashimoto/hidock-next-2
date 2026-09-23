@@ -77,8 +77,12 @@
   "chat.chunksButton.label": "Chunks",
 
   "chat.chunksPanel.heading": "Indexed Chunks ({{count}})",
+  "chat.chunksPanel.headingRange": "Indexed Chunks ({{from}}–{{to}} of {{total}})",
+  "chat.chunksPanel.prevPageAriaLabel": "Previous page of chunks",
+  "chat.chunksPanel.nextPageAriaLabel": "Next page of chunks",
   "chat.chunksPanel.refreshButton": "Refresh",
   "chat.chunksPanel.empty": "No chunks indexed yet. Transcribe recordings to populate the knowledge base.",
+  "chat.chunksPanel.emptyPage": "This page is empty — the index changed while you were paging. Refresh to reload it.",
   "chat.chunksPanel.dimensions": "{{count}}d",
   "chat.chunksPanel.contentQuoted": "\"{{content}}\"",
 

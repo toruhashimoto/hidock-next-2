@@ -61,7 +61,11 @@ function writeConfigAtomically(path: string, contents: string): void {
   }
 }
 
-// CS-007: Encrypt sensitive config values (ICS URL) at rest using Electron safeStorage
+// CS-007: Encrypt sensitive config values at rest using Electron safeStorage.
+// Two of them now: the calendar's ICS URL and the model host's pairing token.
+// The token lets whoever holds it send audio to that host and read the result
+// back, so it is a credential and it does not sit in a plaintext file next to
+// the settings.
 function encryptSensitive(value: string): string {
   try {
     if (safeStorage.isEncryptionAvailable() && value) {
@@ -115,6 +119,40 @@ export interface AppConfig {
     speakerLinkingMatchMargin: number
     speakerLinkingMinSpeechSeconds: number
     speakerLinkingTimeoutSeconds: number
+    /**
+     * Share of the machine's logical CPUs the diarization worker may use, 1-100.
+     *
+     * pyannote picks its thread count from the CPU count, so on a 24-thread box
+     * one recording saturates half the machine and the desktop crawls. This is
+     * the knob that keeps the machine usable while a backlog drains. It only
+     * matters on CPU: with a working CUDA GPU the worker barely uses the CPU at
+     * all, and this cap costs nothing.
+     */
+    speakerLinkingCpuPercent?: number
+    /**
+     * Address of the HiDock Model Host, the machine that has the GPU.
+     *
+     * Empty means there is none and nothing changes: diarization runs here, on
+     * the CPU, exactly as it does today. A host that is off, paused or busy
+     * also changes nothing, because every one of those sends the recording back
+     * to the local worker.
+     */
+    modelHostUrl?: string
+    /** Token this machine got when it paired with that host. */
+    modelHostToken?: string
+    /**
+     * Which realtime channel carries the microphone, for live speaker labels.
+     * This one is the user's pin from Settings and it always wins. Absent or
+     * null = measure it (see MicChannelIdentifier); 0 or 1 pins it.
+     */
+    liveMicChannel?: 0 | 1 | null
+    /**
+     * The channel the app measured in an earlier session, used as a warm start
+     * so a new session does not spend its first ten seconds unattributed. Kept
+     * apart from `liveMicChannel` so that writing it cannot silently turn the
+     * user's "Measure automatically" into a pin they can no longer undo.
+     */
+    liveMicChannelMeasured?: 0 | 1 | null
     // VibeVoice backend (microsoft/VibeVoice-ASR) — reuses localAsrPath/mcp_runner.py.
     vibevoiceModelId: string
     vibevoiceDevice: string
@@ -138,6 +176,7 @@ export interface AppConfig {
   }
   embeddings: {
     provider: 'ollama'
+    localCpuPercent?: number
     ollamaBaseUrl: string
     ollamaModel: string
     chunkSize: number
@@ -173,6 +212,12 @@ export interface AppConfig {
   // resolveFeatureState() in src/shared/feature-registry.ts.
   features: FeaturesConfig
   ui: {
+    /**
+     * Title the library shows for a source with no calendar event.
+     * `suggested` (default) prefers the AI title; `filename` restores the old
+     * behaviour. A title the user typed wins under either one.
+     */
+    unassignedTitleSource?: 'suggested' | 'filename'
     theme: 'light' | 'dark' | 'system'
     // UI display language. 'system' follows the OS locale. Absent in configs
     // written before i18n existed, which resolve to 'system' via DEFAULT_CONFIG.
@@ -217,6 +262,11 @@ const DEFAULT_CONFIG: AppConfig = {
     speakerLinkingMatchMargin: 0.08,
     speakerLinkingMinSpeechSeconds: 4,
     speakerLinkingTimeoutSeconds: 600,
+    // 40% leaves the machine responsive while a backlog drains. Raise it when
+    // nobody is using the machine; lower it if the desktop still stutters.
+    speakerLinkingCpuPercent: 40,
+    modelHostUrl: '',
+    modelHostToken: '',
     vibevoiceModelId: process.env.VIBEVOICE_MODEL_ID || 'microsoft/VibeVoice-ASR',
     vibevoiceDevice: process.env.ASR_DEVICE || 'cuda:0',
     vibevoiceAttn: process.env.VIBEVOICE_ATTN || 'sdpa', // VibeVoice-ASR supports neither flash_attention_2 (not built on Windows) nor flex_attention (unsupported arch); both silently fall back to sdpa, so use it directly
@@ -227,6 +277,7 @@ const DEFAULT_CONFIG: AppConfig = {
   },
   embeddings: {
     provider: 'ollama',
+    localCpuPercent: 50,
     ollamaBaseUrl: 'http://localhost:11434',
     ollamaModel: 'nomic-embed-text',
     chunkSize: 500,
@@ -234,7 +285,7 @@ const DEFAULT_CONFIG: AppConfig = {
   },
   chat: {
     provider: 'gemini',
-    geminiModel: 'gemini-3.5-flash',
+    geminiModel: 'gemini-3.8-flash',
     ollamaModel: 'llama3.2',
     maxContextChunks: 10
   },
@@ -265,6 +316,7 @@ const DEFAULT_CONFIG: AppConfig = {
   // modular features existed. New installs may later be asked during onboarding.
   features: { ...DEFAULT_FEATURES_CONFIG },
   ui: {
+    unassignedTitleSource: 'suggested',
     theme: 'system',
     language: 'system',
     defaultView: 'week',
@@ -294,15 +346,25 @@ export const RETIRED_GEMINI_MODELS = new Set([
   'gemini-2.0-flash',
   'gemini-2.5-flash',
   'gemini-3-pro-preview',
+  // Superseded by 3.8 Flash (2026-09-22, Sebastián: "ya se puede usar 3.8 en
+  // lugar de 3.5 para flash, mejores resultados"). Same price class, better
+  // results on the analysis prompts this app sends. A saved config still naming
+  // one of these migrates on load rather than sitting on an older model.
+  'gemini-3-flash-preview',
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.6-flash',
+  'gemini-3.7-flash',
 ])
 export const CURRENT_GEMINI_TRANSCRIPTION_MODEL = 'gemini-3.5-transcribe'
-export const CURRENT_GEMINI_CHAT_MODEL = 'gemini-3.5-flash'
+export const CURRENT_GEMINI_CHAT_MODEL = 'gemini-3.8-flash'
 /** Backward-compatible alias used by general Gemini analysis code. */
 export const CURRENT_GEMINI_MODEL = CURRENT_GEMINI_CHAT_MODEL
 
 const LEGACY_GEMINI_TRANSCRIPTION_MODELS = new Set([
   ...RETIRED_GEMINI_MODELS,
-  'gemini-3.5-flash',
+  'gemini-3.8-flash',
   'gemini-flash-latest',
   'gemini-flash-lite-latest',
   'gemini-3.1-flash-lite',
@@ -418,7 +480,17 @@ export function migrateGeminiKeyToCredentialStore(cfg: AppConfig): boolean {
   }
 }
 
-export async function initializeConfig(): Promise<void> {
+/**
+ * Load config.json into memory.
+ *
+ * `persist: false` is for a second process reading the same profile while the
+ * app may be running — the headless brain. It loads and merges, and never
+ * writes: the migrations below rewrite config.json and move the Gemini key into
+ * the credential store, and two processes doing that at once would clobber each
+ * other. The brain needs the storage paths, not the model settings.
+ */
+export async function initializeConfig(options: { persist?: boolean } = {}): Promise<void> {
+  const persist = options.persist !== false
   const configPath = getConfigPath()
 
   try {
@@ -429,8 +501,14 @@ export async function initializeConfig(): Promise<void> {
       if (savedConfig.calendar?.icsUrl) {
         savedConfig.calendar.icsUrl = decryptSensitive(savedConfig.calendar.icsUrl)
       }
+      if (savedConfig.transcription?.modelHostToken) {
+        savedConfig.transcription.modelHostToken = decryptSensitive(
+          savedConfig.transcription.modelHostToken
+        )
+      }
       // Merge with defaults to handle new fields
       config = deepMerge(DEFAULT_CONFIG, savedConfig)
+      if (!persist) return
       // Auto-upgrade retired Gemini model names in persisted configs so old
       // saved values (e.g. gemini-2.0-flash, now 404) don't break transcription
       // and GraphRAG extraction. Persist if anything changed.
@@ -441,6 +519,10 @@ export async function initializeConfig(): Promise<void> {
         await saveConfig(config)
       }
     } else {
+      if (!persist) {
+        config = { ...DEFAULT_CONFIG }
+        return
+      }
       // Create config file with defaults
       await saveConfig(DEFAULT_CONFIG)
     }
@@ -514,6 +596,12 @@ export async function saveConfig(newConfig: Partial<AppConfig>): Promise<void> {
     calendar: {
       ...config.calendar,
       icsUrl: encryptSensitive(config.calendar.icsUrl)
+    },
+    transcription: {
+      ...config.transcription,
+      modelHostToken: config.transcription.modelHostToken
+        ? encryptSensitive(config.transcription.modelHostToken)
+        : config.transcription.modelHostToken
     }
   }
 

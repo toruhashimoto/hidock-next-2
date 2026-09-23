@@ -156,6 +156,7 @@ import type {
   Person
 } from '../../src/types/knowledge'
 import type { PipelineState } from '../main/types/device-pipeline'
+import type { Note, NoteRelatedItem, NoteMeetingSuggestion } from '../../src/types/notes'
 
 /** A Context Graph node with its degree + click-through ids (mirrors the service DTO). */
 interface ContextGraphNode {
@@ -332,6 +333,22 @@ export interface ClipboardCaptureResult {
   error?: string
 }
 
+/** Truncated-download recovery counts (see electron/main/services/truncated-recovery.ts). */
+export interface TruncatedRecoveryCounts {
+  /** Recordings whose transcript runs past the end of their local file. */
+  truncated: number
+  /** The device holds a strictly larger copy. */
+  recoverable: number
+  /** The device holds a copy of the same size or smaller. */
+  deviceNotLarger: number
+  /** Not in the device's last file listing: the audio is gone. */
+  notOnDevice: number
+  /** Held back because the device is, or may be, still writing it. */
+  heldBack: number
+  /** False when no device listing has ever been stored. */
+  deviceListKnown?: boolean
+}
+
 export interface ElectronAPI {
   // App
   app: {
@@ -425,7 +442,20 @@ export interface ElectronAPI {
     updateRecordingStatus: (id: string, status: string) => Promise<{ success: boolean; data?: any; error?: string }>
     updateTranscriptionStatus: (id: string, status: string) => Promise<{ success: boolean; data?: any; error?: string }>
     updateDuration: (id: string, durationSeconds: number) => Promise<{ success: boolean; error?: string }>
-    backfillDurations: () => Promise<{ success: boolean; scanned?: number; updated?: number; markedLowValue?: number; error?: string }>
+    backfillDurations: () => Promise<{
+      success: boolean
+      scanned?: number
+      updated?: number
+      /** Rows whose length was read from the audio file itself. */
+      measured?: number
+      /** Rows whose transcript runs past the end of the file on disk. */
+      truncated?: number
+      /** Automatic ratings reopened because the corrected length invalidated them. */
+      rerateable?: number
+      markedLowValue?: number
+      markedByDuration?: number
+      error?: string
+    }>
     linkToMeeting: (recordingId: string, meetingId: string, confidence: number, method: string) => Promise<any>
     // Privacy source-deletion (v38)
     markPersonal: (id: string, personal: boolean) => Promise<{ success: boolean; personal?: boolean; error?: string }>
@@ -706,6 +736,54 @@ export interface ElectronAPI {
     getItems: (status?: string) => Promise<any[]>
   }
 
+  /**
+   * Hand-written notes. Create, edit and search need nothing but this machine;
+   * analyze/related/meetingSuggestions return an error result when there is no
+   * AI provider, and the editor carries on without them.
+   */
+  notes: {
+    create: (request?: { content?: string; live?: boolean }) => Promise<{ success: boolean; note?: Note; error?: string }>
+    list: (request?: { limit?: number; offset?: number; search?: string }) => Promise<{ success: boolean; notes?: Note[]; error?: string }>
+    get: (request: { id: string }) => Promise<{ success: boolean; note?: Note; error?: string }>
+    update: (request: {
+      id: string
+      content?: string
+      title?: string | null
+      category?: string | null
+      tags?: string[]
+      meetingId?: string | null
+      recordingId?: string | null
+      linkSource?: 'live' | 'user' | 'suggested' | null
+    }) => Promise<{ success: boolean; note?: Note; error?: string }>
+    delete: (request: { id: string }) => Promise<{ success: boolean }>
+    analyze: (request: { id: string; force?: boolean }) => Promise<{ success: boolean; note?: Note; error?: string }>
+    related: (request: { id: string }) => Promise<{ success: boolean; items?: NoteRelatedItem[]; error?: string }>
+    meetingSuggestions: (request: { id: string }) => Promise<{ success: boolean; suggestions?: NoteMeetingSuggestion[]; error?: string }>
+  }
+
+  /**
+   * The HiDock Model Host: the machine with the GPU, lending its diarization
+   * worker over the LAN. Only Settings talks to it; the decision to use it or
+   * to diarize here is made in the main process.
+   */
+  modelHost: {
+    check: (request: { url: string }) => Promise<{
+      success: boolean
+      error?: string
+      health?: {
+        version: string
+        state: 'stopped' | 'ready' | 'paused' | 'busy'
+        capabilities: string[]
+        /** Absent until this machine is paired: a stranger is not told. */
+        acceleration?: 'cuda' | 'cpu'
+        gpu?: { name: string; vramMiB: number | null; driver: string } | null
+        reason?: string
+      }
+    }>
+    pair: (request: { url: string; code: string }) => Promise<{ success: boolean; error?: string }>
+    forget: () => Promise<{ success: boolean }>
+  }
+
   // Knowledge Captures
   knowledge: {
     getAll: (options?: { limit?: number; offset?: number; status?: string }) => Promise<KnowledgeCapture[]>
@@ -889,16 +967,29 @@ export interface ElectronAPI {
       subject?: string
       score: number
     }>>
-    getChunks: () => Promise<Array<{
-      id: string
-      content: string
-      meetingId?: string
-      recordingId?: string
-      chunkIndex: number
-      subject?: string
-      timestamp?: string
-      embeddingDimensions: number
-    }>>
+    /**
+     * One page of indexed chunks. Paged on purpose: the whole index is 237k+
+     * chunks with their text, which is neither renderable nor cheap to
+     * serialize. `total` is the eligible chunk count; `offset`/`limit` are the
+     * ones actually served after main clamps them (limit caps at 500).
+     */
+    getChunks: (offset?: number, limit?: number) => Promise<{
+      total: number
+      offset: number
+      limit: number
+      /** Corpus revision; a change between pages means the index moved. */
+      revision: number
+      chunks: Array<{
+        id: string
+        content: string
+        meetingId?: string
+        recordingId?: string
+        chunkIndex: number
+        subject?: string
+        timestamp?: string
+        embeddingDimensions: number
+      }>
+    }>
     globalSearch: (query: string, limit?: number) => Promise<Result<{
       knowledge: any[]
       people: any[]
@@ -933,7 +1024,21 @@ export interface ElectronAPI {
     isFileSynced: (filename: string) => Promise<{ synced: boolean; reason: string }>
     getFilesToSync: (files: Array<{ filename: string; size: number; duration: number; dateCreated: Date }>) => Promise<Array<{ filename: string; size: number; duration: number; dateCreated: Date; skipReason?: string }>>
     getPurgedFilenames: () => Promise<string[]>
-    queueDownloads: (files: Array<{ filename: string; size: number; dateCreated?: string }>) => Promise<string[]>
+    /** Counts for recordings whose local file is shorter than their transcript. */
+    truncatedRecoveryPlan: () => Promise<TruncatedRecoveryCounts>
+    /** Queue a complete copy of every truncated recording the device still holds larger. */
+    recoverTruncated: () => Promise<TruncatedRecoveryCounts & {
+      queued: string[]
+      skipped: Array<{ filename: string; skip: 'already-synced' | 'already-queued' | 'user-cancelled'; reason: string }>
+    }>
+    queueDownloads: (files: Array<{ filename: string; size: number; dateCreated?: string }>) => Promise<{
+      queued: string[]
+      skipped: Array<{
+        filename: string
+        skip: 'already-synced' | 'already-queued' | 'user-cancelled'
+        reason: string
+      }>
+    }>
     startSession: (files: Array<{ filename: string; size: number; dateCreated?: string }>) => Promise<{
       id: string
       totalFiles: number
@@ -1146,10 +1251,21 @@ export interface ElectronAPI {
     pauseRealtime: () => Promise<any>
     stopRealtime: () => Promise<any>
     getRealtimeData: (offset: number) => Promise<any>
-    onLiveTranscriptionStatus: (callback: (data: { status: string }) => void) => () => void
-    onLiveTranscriptionInterim: (callback: (data: { text: string }) => void) => () => void
-    onLiveTranscriptionFinal: (callback: (data: { text: string }) => void) => () => void
-    onLiveTranscriptionError: (callback: (data: { error: string }) => void) => () => void
+    onLiveTranscriptionStatus: (callback: (data: { status: string; channel?: 0 | 1 }) => void) => () => void
+    onLiveTranscriptionInterim: (
+      callback: (data: { text: string; speaker: 'you' | 'them' | 'speaker-1' | 'speaker-2' | 'speaker'; channel?: 0 | 1 | null }) => void
+    ) => () => void
+    onLiveTranscriptionFinal: (
+      callback: (data: { text: string; speaker: 'you' | 'them' | 'speaker-1' | 'speaker-2' | 'speaker'; channel?: 0 | 1 | null }) => void
+    ) => () => void
+    onLiveTranscriptionError: (callback: (data: { error: string; channel?: 0 | 1 }) => void) => () => void
+    /**
+     * Fires once per session when the microphone channel is measured.
+     * `micChannel` is null when the two channels were too close to separate.
+     */
+    onLiveTranscriptionChannels: (
+      callback: (data: { micChannel: 0 | 1 | null; left: number; right: number }) => void
+    ) => () => void
     // Battery & Bluetooth
     getBatteryStatus: () => Promise<any>
     startBluetoothScan: (duration?: number) => Promise<any>
@@ -1405,9 +1521,6 @@ export interface ElectronAPI {
   onTranscriptionAllCancelled: (callback: (data: { count: number }) => void) => () => void
   onTranscriptionQueueState: (callback: (state: TranscriptionQueueState) => void) => () => void
 
-  // Security Warning Events
-  onSecurityWarning: (callback: (data: { type: string; message: string }) => void) => () => void
-
   // Activity Log bridge — main process services (transcription, calendar, download) emit entries here
   onActivityLogEntry: (callback: (entry: { type: string; message: string; details?: string; timestamp: string }) => void) => () => void
 }
@@ -1580,6 +1693,23 @@ const electronAPI: ElectronAPI = {
 
   queue: {
     getItems: (status) => callIPC('db:get-queue', status)
+  },
+
+  notes: {
+    create: (request) => callIPC('notes:create', request ?? {}),
+    list: (request) => callIPC('notes:list', request ?? {}),
+    get: (request) => callIPC('notes:get', request),
+    update: (request) => callIPC('notes:update', request),
+    delete: (request) => callIPC('notes:delete', request),
+    analyze: (request) => callIPC('notes:analyze', request),
+    related: (request) => callIPC('notes:related', request),
+    meetingSuggestions: (request) => callIPC('notes:meetingSuggestions', request)
+  },
+
+  modelHost: {
+    check: (request) => callIPC('model-host:check', request),
+    pair: (request) => callIPC('model-host:pair', request),
+    forget: () => callIPC('model-host:forget')
   },
 
   knowledge: {
@@ -1787,7 +1917,7 @@ const electronAPI: ElectronAPI = {
     clearSession: (sessionId) => callIPC('rag:clear-session', sessionId),
     stats: () => callIPC('rag:stats'),
     search: (query, limit) => callIPC('rag:search', { query, limit }),
-    getChunks: () => callIPC('rag:get-chunks'),
+    getChunks: (offset, limit) => callIPC('rag:get-chunks', { offset, limit }),
     globalSearch: (query, limit) => callIPC('rag:globalSearch', { query, limit })
   },
 
@@ -1796,6 +1926,8 @@ const electronAPI: ElectronAPI = {
     isFileSynced: (filename) => callIPC('download-service:is-file-synced', filename),
     getFilesToSync: (files) => callIPC('download-service:get-files-to-sync', files),
     getPurgedFilenames: () => callIPC('download-service:get-purged-filenames'),
+    truncatedRecoveryPlan: () => callIPC('download-service:truncated-recovery-plan'),
+    recoverTruncated: () => callIPC('download-service:recover-truncated'),
     queueDownloads: (files) => callIPC('download-service:queue-downloads', files),
     startSession: (files) => callIPC('download-service:start-session', files),
     processDownload: (filename, data) => callIPC('download-service:process-download', filename, data),
@@ -1894,25 +2026,39 @@ const electronAPI: ElectronAPI = {
     pauseRealtime: () => callIPC('jensen:pauseRealtime'),
     stopRealtime: () => callIPC('jensen:stopRealtime'),
     getRealtimeData: (offset: number) => callIPC('jensen:getRealtimeData', { offset }),
-    onLiveTranscriptionStatus: (callback: (data: { status: string }) => void) => {
-      const handler = (_event: any, data: { status: string }) => callback(data)
+    onLiveTranscriptionStatus: (callback: (data: { status: string; channel?: 0 | 1 }) => void) => {
+      const handler = (_event: any, data: { status: string; channel?: 0 | 1 }) => callback(data)
       ipcRenderer.on('transcription-live:status', handler)
       return () => ipcRenderer.removeListener('transcription-live:status', handler)
     },
-    onLiveTranscriptionInterim: (callback: (data: { text: string }) => void) => {
-      const handler = (_event: any, data: { text: string }) => callback(data)
+    onLiveTranscriptionInterim: (
+      callback: (data: { text: string; speaker: 'you' | 'them' | 'speaker-1' | 'speaker-2' | 'speaker'; channel?: 0 | 1 | null }) => void
+    ) => {
+      const handler = (_event: any, data: { text: string; speaker: 'you' | 'them' | 'speaker-1' | 'speaker-2' | 'speaker'; channel?: 0 | 1 | null }) =>
+        callback(data)
       ipcRenderer.on('transcription-live:interim', handler)
       return () => ipcRenderer.removeListener('transcription-live:interim', handler)
     },
-    onLiveTranscriptionFinal: (callback: (data: { text: string }) => void) => {
-      const handler = (_event: any, data: { text: string }) => callback(data)
+    onLiveTranscriptionFinal: (
+      callback: (data: { text: string; speaker: 'you' | 'them' | 'speaker-1' | 'speaker-2' | 'speaker'; channel?: 0 | 1 | null }) => void
+    ) => {
+      const handler = (_event: any, data: { text: string; speaker: 'you' | 'them' | 'speaker-1' | 'speaker-2' | 'speaker'; channel?: 0 | 1 | null }) =>
+        callback(data)
       ipcRenderer.on('transcription-live:final', handler)
       return () => ipcRenderer.removeListener('transcription-live:final', handler)
     },
-    onLiveTranscriptionError: (callback: (data: { error: string }) => void) => {
-      const handler = (_event: any, data: { error: string }) => callback(data)
+    onLiveTranscriptionError: (callback: (data: { error: string; channel?: 0 | 1 }) => void) => {
+      const handler = (_event: any, data: { error: string; channel?: 0 | 1 }) => callback(data)
       ipcRenderer.on('transcription-live:error', handler)
       return () => ipcRenderer.removeListener('transcription-live:error', handler)
+    },
+    onLiveTranscriptionChannels: (
+      callback: (data: { micChannel: 0 | 1 | null; left: number; right: number }) => void
+    ) => {
+      const handler = (_event: any, data: { micChannel: 0 | 1 | null; left: number; right: number }) =>
+        callback(data)
+      ipcRenderer.on('transcription-live:channels', handler)
+      return () => ipcRenderer.removeListener('transcription-live:channels', handler)
     },
     // Battery & Bluetooth
     getBatteryStatus: () => callIPC('jensen:getBatteryStatus'),
@@ -2141,15 +2287,6 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on('transcription:queueState', handler)
     return () => {
       ipcRenderer.removeListener('transcription:queueState', handler)
-    }
-  },
-
-  // Security Warning Listener
-  onSecurityWarning: (callback: (data: { type: string; message: string }) => void) => {
-    const handler = (_event: any, data: { type: string; message: string }) => callback(data)
-    ipcRenderer.on('security-warning', handler)
-    return () => {
-      ipcRenderer.removeListener('security-warning', handler)
     }
   },
 

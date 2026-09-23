@@ -1,26 +1,34 @@
 /**
  * SourceReader Component
  *
- * The Library's center detail panel for a selected recording. The reader is a
- * vertically resizable workspace with independently controlled sections:
+ * The Library's center detail panel for a selected recording. ONE scrolling
+ * column, whose sections stick to the top as you scroll past them.
  *
- *  Context area:
+ *  Head (scrolls away):
  *    - Title (inline-editable) + transcription status
  *    - A curated meta strip (date · duration · location)
  *    - Primary CTAs (Play/Download, Transcribe/Re-transcribe ▾, Ask, overflow)
- *    - Player and metadata can be expanded, minimized, docked, hidden, or maximized
+ *
+ *  Sections, in column order — player, metadata, moments, summary, transcript:
+ *    - Each can be expanded, minimized, docked, hidden, or maximized, and that
+ *      choice persists in `readerSectionModes`.
+ *    - Each header strip pins to the top while its section is on screen,
+ *      stacking under the strips above it within a budget.
+ *    - The player has no labeled strip. Its section controls sit next to its
+ *      1x speed selector; minimized or docked, the player itself is a one-line
+ *      bar that pins in the strip's place. Expanded, it does not pin.
  *    - Participants (who actually spoke) chips — derived from the SAME resolved
  *      speaker map the transcript uses, so a renamed speaker updates here too
  *
- *  Reading area:
- *    - Summary and transcript have the same explicit layout states
- *    - A keyboard-accessible handle reallocates height between both areas
+ * Until 2026-09-22 this was two resizable panes ("context area" / "reading
+ * area") with a handle between them, and scrolling was forbidden from touching
+ * the layout. Both are gone. PINNING IS PRESENTATION: scrolling never writes
+ * `readerSectionModes`. See useStickySectionPins and
+ * docs/superpowers/specs/2026-09-22-reader-sticky-sections-design.md.
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { TFunction } from 'i18next'
-import { useTranslation } from 'react-i18next'
 import { TranscriptViewer, type StoredSegment, type TranscriptContentUpdate } from './TranscriptViewer'
 import { TranscriptionStatusBadge } from './TranscriptionStatusBadge'
 import { StatusIcon } from './StatusIcon'
@@ -32,15 +40,17 @@ import { getDisplayTitle } from '@/features/library/utils/getDisplayTitle'
 import { getSourceType } from '@/features/library/utils/sourceType'
 import { ArtifactReader } from './ArtifactReader'
 import { RecordingSplitEditor } from './RecordingSplitEditor'
-import { HiddenReaderSections, ReaderSectionControls } from './ReaderSectionControls'
+import { HiddenReaderSections, ReaderSectionActions } from './ReaderSectionControls'
+import { ReaderSection } from './ReaderSection'
+import { TimelineEventList } from './TimelineEventList'
+import { useStickySectionPins } from '../hooks/useStickySectionPins'
 import { useUIStore } from '@/store/useUIStore'
-import { useLibraryStore, type ReaderSectionId, type ReaderSectionMode } from '@/store/useLibraryStore'
+import { useLibraryStore, type ReaderSectionId, type ReaderSectionMode, type ReaderSectionModes } from '@/store/useLibraryStore'
 import { UnifiedRecording, hasLocalPath, isDeviceOnly, isRecordingBacked } from '@/types/unified-recording'
 import type { DownloadStatus } from '@/store/useAppStore'
 import { Transcript, Meeting, MeetingAttendee, parseJsonArray } from '@/types'
 import { Calendar, CloudDownload, Download, Trash2, Wand2, RefreshCw, Play, Square, Pencil, Check, Edit2, Link, X, ExternalLink, FolderOpen, MoreHorizontal, Folder, Plus, EyeOff, Eye, Sparkles, ChevronDown, Cloud, Cpu, Users, Mail, UserCog, Scissors } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { PersonHoverCard } from '@/components/entity/EntityHoverCards'
@@ -76,24 +86,30 @@ import { formatDateTime, formatDuration, formatBytes, cn } from '@/lib/utils'
 import { formatSmartDate, formatRelativeDate } from '@/lib/smartDate'
 import { useTranscriptionStore } from '@/store/features/useTranscriptionStore'
 
+/**
+ * The reader's sections, in the order they appear in the single scrolling
+ * column, which is also the order their strips stack in when they pin.
+ */
+const READER_SECTION_ORDER: ReaderSectionId[] = ['player', 'metadata', 'moments', 'summary', 'transcript']
+
+const READER_SECTION_LABELS: Record<ReaderSectionId, string> = {
+  player: 'Player',
+  metadata: 'Metadata',
+  moments: 'Actions & decisions',
+  summary: 'Summary',
+  transcript: 'Full transcript'
+}
+
 /** Reader width (px) below which the docked bar drops to the bare scrubber. */
 const NARROW_WIDTH_BREAKPOINT = 420
 
-/** Translated label for each reader section id — used by the "Hidden" restore chips. */
-const SECTION_LABEL_KEYS: Record<ReaderSectionId, string> = {
-  player: 'library:sourceReader.playerSectionLabel',
-  metadata: 'library:sourceReader.metadataSectionLabel',
-  summary: 'library:sourceReader.summarySectionLabel',
-  transcript: 'library:sourceReader.transcriptSectionLabel'
-}
-
 const CATEGORY_OPTIONS = [
-  { value: 'meeting', labelKey: 'library:sourceReader.categoryMeeting' },
-  { value: 'interview', labelKey: 'library:sourceReader.categoryInterview' },
-  { value: '1:1', labelKey: 'library:sourceReader.categoryOneOnOne' },
-  { value: 'brainstorm', labelKey: 'library:sourceReader.categoryBrainstorm' },
-  { value: 'note', labelKey: 'library:sourceReader.categoryNote' },
-  { value: 'other', labelKey: 'library:sourceReader.categoryOther' },
+  { value: 'meeting', label: 'Meeting' },
+  { value: 'interview', label: 'Interview' },
+  { value: '1:1', label: '1:1' },
+  { value: 'brainstorm', label: 'Brainstorm' },
+  { value: 'note', label: 'Note' },
+  { value: 'other', label: 'Other' },
 ] as const
 
 /**
@@ -323,7 +339,6 @@ export function SourceReader({
   onSplitCompleted,
   onAskAboutSource
 }: SourceReaderProps) {
-  const { t } = useTranslation()
 
   // Title editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -358,11 +373,24 @@ export function SourceReader({
   const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const [showUnlinkConfirmation, setShowUnlinkConfirmation] = useState(false)
 
-  // Explicit, persisted section layout. Scrolling never changes these modes.
-  const readerSectionModes = useLibraryStore((s) => s.readerSectionModes)
+  // LAYER ONE: what the user chose, and the only layer that persists. Scrolling
+  // never writes here. The second layer (which sections are stuck to the top
+  // right now) is derived below and lives only as long as this component does.
+  const persistedSectionModes = useLibraryStore((s) => s.readerSectionModes)
   const setReaderSectionMode = useLibraryStore((s) => s.setReaderSectionMode)
-  const readerVerticalSizes = useLibraryStore((s) => s.readerVerticalSizes)
-  const setReaderVerticalSizes = useLibraryStore((s) => s.setReaderVerticalSizes)
+  // A store rehydrated by an older build, or a test that calls setState with a
+  // partial map, can be missing a section. `migrate` covers the first case; this
+  // covers the second, and costs nothing.
+  const readerSectionModes = useMemo<ReaderSectionModes>(
+    () => ({
+      player: persistedSectionModes?.player ?? 'expanded',
+      metadata: persistedSectionModes?.metadata ?? 'expanded',
+      moments: persistedSectionModes?.moments ?? 'expanded',
+      summary: persistedSectionModes?.summary ?? 'expanded',
+      transcript: persistedSectionModes?.transcript ?? 'expanded'
+    }),
+    [persistedSectionModes]
+  )
   const maximizedSection = useLibraryStore((s) => s.readerMaximizedSection)
   const maximizeReaderSection = useLibraryStore((s) => s.maximizeReaderSection)
   const restoreMaximizedSection = useLibraryStore((s) => s.restoreReaderSection)
@@ -520,7 +548,9 @@ export function SourceReader({
       }
     })()
     return () => { cancelled = true }
-  }, [recordingId, effectiveTranscript?.id])
+    // transcriptionStatus: a run that ends no_speech writes no transcript, so
+    // the status flip is the only signal that a new `vad` run exists to read.
+  }, [recordingId, effectiveTranscript?.id, recording?.transcriptionStatus])
 
   useEffect(() => {
     if (!recordingId) return
@@ -637,6 +667,8 @@ export function SourceReader({
   // (full text + assignee/due/status/priority + editability). Fetched with the
   // timeline; joined by marker refId. Transcript-JSON items (refId `txa_`/`txk_`)
   // get editable details sourced from those transcript arrays.
+  /** Highlighted timeline event, shared by the graph's markers and the list. */
+  const [activeEventId, setActiveEventId] = useState<string | null>(null)
   const [eventRowDetails, setEventRowDetails] = useState<Record<string, TimelineEventDetail>>({})
   useEffect(() => {
     let cancelled = false
@@ -714,11 +746,11 @@ export function SourceReader({
             content: patch.content
           })
           if (!res?.success) {
-            toast.error(t('library:sourceReader.updateFailedTitle'))
+            toast.error('Failed to update')
             return false
           }
           setTxEdits((prev) => ({ ...prev, [refId]: patch.content! }))
-          toast.success(kind === 'action' ? t('library:sourceReader.actionItemUpdatedTitle') : t('library:sourceReader.decisionUpdatedTitle'))
+          toast.success(kind === 'action' ? 'Action item updated' : 'Decision updated')
           return true
         }
 
@@ -729,14 +761,14 @@ export function SourceReader({
             ...(patch.status !== undefined ? { status: patch.status } : {})
           })
           if (!res?.success || !res.data) {
-            toast.error(t('library:sourceReader.updateActionItemFailedTitle'))
+            toast.error('Failed to update action item')
             return false
           }
           const row = res.data as { content: string; status: string }
           setEventRowDetails((prev) =>
             prev[refId] ? { ...prev, [refId]: { ...prev[refId], fullText: row.content, status: row.status } } : prev
           )
-          toast.success(t('library:sourceReader.actionItemUpdatedTitle'))
+          toast.success('Action item updated')
           return true
         }
         const res = await window.electronAPI.decisions.update({
@@ -744,22 +776,22 @@ export function SourceReader({
           ...(patch.content !== undefined ? { content: patch.content } : {})
         })
         if (!res?.success || !res.data) {
-          toast.error(t('library:sourceReader.updateDecisionFailedTitle'))
+          toast.error('Failed to update decision')
           return false
         }
         const row = res.data as { content: string }
         setEventRowDetails((prev) =>
           prev[refId] ? { ...prev, [refId]: { ...prev[refId], fullText: row.content } } : prev
         )
-        toast.success(t('library:sourceReader.decisionUpdatedTitle'))
+        toast.success('Decision updated')
         return true
       } catch (err) {
         console.error('Failed to update event:', err)
-        toast.error(t('library:sourceReader.updateFailedTitle'))
+        toast.error('Failed to update')
         return false
       }
     },
-    [recordingId, t]
+    [recordingId]
   )
 
   // H3: Timeline events for the full-mode event-list. Prefer the sibling agent's
@@ -904,10 +936,15 @@ export function SourceReader({
     return () => { cancelled = true }
   }, [recordingId, transcriptRevisionKey, analysisRetryNonce])
 
-  // B1: a timeline marker (or event-list row) was activated — ask the transcript
-  // to scroll to + pulse the turn at this marker's time. A bumped nonce re-fires
-  // the pulse for a repeat click on the same marker.
+  // B1: a timeline marker (or a row in Actions & decisions) was activated — ask
+  // the transcript to scroll to + pulse the turn at this marker's time. A bumped
+  // nonce re-fires the pulse for a repeat click on the same marker.
+  //
+  // The highlighted id lives HERE now. The event list left the player on
+  // 2026-09-22 to become its own section, so the graph's markers and the list
+  // are siblings; the only place that can keep them agreeing is their parent.
   const handleTimelineEventClick = useCallback((event: TimelineEvent) => {
+    setActiveEventId(event.id)
     highlightNonceRef.current += 1
     setTranscriptHighlight({ atMs: Math.round(event.timeSec * 1000), nonce: highlightNonceRef.current })
   }, [])
@@ -925,7 +962,7 @@ export function SourceReader({
     const trimmed = editedTitle.trim()
     if (!trimmed) {
       setEditedTitle(recording.userTitle || '')
-      toast.error(t('library:sourceReader.titleCannotBeEmptyTitle'))
+      toast.error('Title cannot be empty')
       return
     }
     if (trimmed === (recording.userTitle || '')) {
@@ -941,18 +978,18 @@ export function SourceReader({
       if (result.success) {
         setIsEditingTitle(false)
         setMetadataEdited(true)
-        toast.success(trimmed ? t('library:sourceReader.contentTitleUpdatedTitle') : t('library:sourceReader.contentTitleClearedTitle'))
+        toast.success(trimmed ? 'Content title updated' : 'Content title cleared')
         onMetadataEdited?.()
       } else {
-        toast.error(t('library:sourceReader.saveTitleFailedTitle'))
+        toast.error('Failed to save title')
       }
     } catch (err) {
       console.error('Failed to save title:', err)
-      toast.error(t('library:sourceReader.saveTitleFailedTitle'))
+      toast.error('Failed to save title')
     } finally {
       setIsSavingTitle(false)
     }
-  }, [editedTitle, recording, onMetadataEdited, t])
+  }, [editedTitle, recording, onMetadataEdited])
 
   const handleCancelTitle = useCallback(() => {
     setIsEditingTitle(false)
@@ -970,18 +1007,18 @@ export function SourceReader({
       )
       if (result.success) {
         setMetadataEdited(true)
-        toast.success(t('library:sourceReader.categoryUpdatedTitle'))
+        toast.success('Category updated')
         onMetadataEdited?.()
       } else {
-        toast.error(t('library:sourceReader.saveCategoryFailedTitle'))
+        toast.error('Failed to save category')
       }
     } catch (err) {
       console.error('Failed to save category:', err)
-      toast.error(t('library:sourceReader.saveCategoryFailedTitle'))
+      toast.error('Failed to save category')
     } finally {
       setIsSavingCategory(false)
     }
-  }, [recording, onMetadataEdited, t])
+  }, [recording, onMetadataEdited])
 
   const handleRemoveMeetingLink = useCallback(async () => {
     if (!recording) return
@@ -991,16 +1028,16 @@ export function SourceReader({
       // checking it the refresh ran anyway and the unlink looked like a no-op
       // (2026-07-24: "clicking the little x does nothing").
       if (result && result.success === false) {
-        toast.error(t('library:sourceReader.removeMeetingLinkFailedTitle'), result.error ?? undefined)
+        toast.error('Failed to remove meeting link', result.error ?? undefined)
         return
       }
       setMetadataEdited(true)
       onMetadataEdited?.()
     } catch (err) {
       console.error('Failed to remove meeting link:', err)
-      toast.error(t('library:sourceReader.removeMeetingLinkFailedTitle'))
+      toast.error('Failed to remove meeting link')
     }
-  }, [recording, onMetadataEdited, t])
+  }, [recording, onMetadataEdited])
 
   // Run a transcription action, but first warn if the user edited metadata the
   // AI pass could overwrite. The chosen action is stashed and executed on
@@ -1024,18 +1061,15 @@ export function SourceReader({
     try {
       const res = await window.electronAPI.recordings.reprocessWith(recording.id, provider)
       if (!res?.success) {
-        toast.error(
-          t('library:sourceReader.transcribeFailedTitle'),
-          res?.error || t('library:sourceReader.couldNotStartTranscriptionFallback', { label })
-        )
+        toast.error('Failed to transcribe', res?.error || `Could not start ${label} transcription`)
         return
       }
       if (res.queueItemId) addToQueue(res.queueItemId, recording.id, recording.filename)
-      toast.success(t('library:sourceReader.transcribingWithTitle', { label }), recording.filename)
+      toast.success(`Transcribing with ${label}`, recording.filename)
     } catch (err) {
-      toast.error(t('library:sourceReader.transcribeFailedTitle'), err instanceof Error ? err.message : undefined)
+      toast.error('Failed to transcribe', err instanceof Error ? err.message : undefined)
     }
-  }, [recording, addToQueue, t])
+  }, [recording, addToQueue])
 
   // Re-run speaker diarization for this recording via a dedicated IPC (added by a
   // sibling change). Degrades gracefully when the IPC isn't present at runtime.
@@ -1045,24 +1079,24 @@ export function SourceReader({
       | { reDiarize?: (id: string) => Promise<{ success: boolean; queueItemId?: string; error?: string }> }
       | undefined
     if (typeof api?.reDiarize !== 'function') {
-      toast.error(t('library:sourceReader.reDiarizeUnavailableTitle'), t('library:sourceReader.reDiarizeUnavailableMessage'))
+      toast.error('Re-diarize unavailable', 'This build does not support re-diarizing yet.')
       return
     }
     setReDiarizing(true)
     try {
       const res = await api.reDiarize(recording.id)
       if (!res?.success) {
-        toast.error(t('library:sourceReader.reDiarizeFailedTitle'), res?.error || t('library:sourceReader.reDiarizeFailedFallback'))
+        toast.error('Failed to re-diarize', res?.error || 'Could not start re-diarization')
         setReDiarizing(false)
         return
       }
       if (res.queueItemId) addToQueue(res.queueItemId, recording.id, recording.filename)
-      toast.success(t('library:sourceReader.reDiarizingSpeakersTitle'), recording.filename)
+      toast.success('Re-diarizing speakers', recording.filename)
     } catch (err) {
-      toast.error(t('library:sourceReader.reDiarizeFailedTitle'), err instanceof Error ? err.message : undefined)
+      toast.error('Failed to re-diarize', err instanceof Error ? err.message : undefined)
       setReDiarizing(false)
     }
-  }, [recording, addToQueue, t])
+  }, [recording, addToQueue])
 
   // Memoized dialog prop: a fresh object per render would re-fire the dialog's
   // load effect on every background poll (the ~3s list→Loading→list flicker,
@@ -1076,10 +1110,38 @@ export function SourceReader({
     duration_seconds: recording.duration ?? null
   } : null, [recording])
 
+  // LAYER TWO. Sections in document order with the hidden ones removed, so a
+  // hidden section takes no slot in the pinned stack and the next one inherits
+  // its place. Computed here, with the other hooks, because useStickySectionPins
+  // is one and this component returns early when there is no recording.
+  //
+  // The player takes a slot only while it is a one-line bar (minimized or
+  // docked) and only when there is a player at all. Expanded, it has no strip
+  // and nothing short enough to pin; if it kept slot 0 anyway, every strip
+  // below would pin 32px lower than it should, over an empty band.
+  const hasPlayer = !!localPath
+  const pinOrder = useMemo(
+    () => READER_SECTION_ORDER.filter(
+      (section) =>
+        readerSectionModes[section] !== 'hidden' &&
+        (!maximizedSection || maximizedSection === section) &&
+        (section !== 'player' || (hasPlayer && readerSectionModes.player !== 'expanded'))
+    ),
+    [readerSectionModes, maximizedSection, hasPlayer]
+  )
+  const pins = useStickySectionPins(pinOrder)
+
   const handleReaderSeek = useCallback((startMs: number, endMs?: number) => {
     if (splitMode) setSplitPointSec(startMs / 1000)
     onSeek?.(startMs, endMs)
   }, [onSeek, splitMode])
+
+  // Activating from the LIST also has to seek, which the player used to do for
+  // it from the inside.
+  const handleTimelineEventActivate = useCallback((event: TimelineEvent) => {
+    handleReaderSeek(Math.round(event.timeSec * 1000))
+    handleTimelineEventClick(event)
+  }, [handleReaderSeek, handleTimelineEventClick])
 
   const closeSplitMode = useCallback(() => {
     setSplitMode(false)
@@ -1120,8 +1182,8 @@ export function SourceReader({
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
         <div className="text-center space-y-2">
-          <p className="text-lg font-medium">{t('library:sourceReader.noSourceSelectedTitle')}</p>
-          <p className="text-sm">{t('library:sourceReader.noSourceSelectedHint')}</p>
+          <p className="text-lg font-medium">No source selected</p>
+          <p className="text-sm">Select a source from the list to view its details</p>
         </div>
       </div>
     )
@@ -1134,6 +1196,7 @@ export function SourceReader({
   // Same title resolver the list row uses, so clicking a row and the detail
   // header always agree (no raw filename leaking through here).
   const { primaryText: displayTitle } = getDisplayTitle(recording, meeting, effectiveTranscript)
+  const tooShortSkip = findTooShortSkip(processingRuns)
   const displayedProcessingRuns: ReaderProcessingRun[] = processingRuns.length > 0
     ? processingRuns
     : effectiveTranscript?.transcription_provider
@@ -1154,13 +1217,10 @@ export function SourceReader({
         }]
       : []
   const candidateMeetingLabel = meetingCandidates.length === 1
-    ? t('library:sourceReader.candidateMeetingSingle', { subject: meetingCandidates[0].subject })
+    ? `${meetingCandidates[0].subject} (candidate)`
     : meetingCandidates.length > 1
-      ? t('library:sourceReader.candidateMeetingMultiple', {
-          subject: meetingCandidates[0].subject,
-          count: meetingCandidates.length - 1
-        })
-      : t('library:sourceReader.candidateMeetingNotAssigned')
+      ? `${meetingCandidates[0].subject} + ${meetingCandidates.length - 1} candidate${meetingCandidates.length > 2 ? 's' : ''}`
+      : 'Not assigned'
 
   // Prefer the stored duration; fall back to the live decoded value for the
   // recording whose waveform is currently loaded (computed as a hook above).
@@ -1178,20 +1238,20 @@ export function SourceReader({
   // Re-diarize item only makes sense once a transcript with speakers exists.
   const transcribeMenuItems = (
     <>
-      <DropdownMenuItem onClick={() => requestTranscribe(() => transcribeWith('gemini', t('library:sourceReader.geminiProviderLabel')))}>
+      <DropdownMenuItem onClick={() => requestTranscribe(() => transcribeWith('gemini', 'Gemini'))}>
         <Cloud className="h-4 w-4" aria-hidden="true" />
-        {t('library:sourceReader.geminiCloudMenuItem')}
+        Gemini (cloud)
       </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => requestTranscribe(() => transcribeWith('local-asr', t('library:sourceReader.localProviderLabel')))}>
+      <DropdownMenuItem onClick={() => requestTranscribe(() => transcribeWith('local-asr', 'Local'))}>
         <Cpu className="h-4 w-4" aria-hidden="true" />
-        {t('library:sourceReader.localOnDeviceMenuItem')}
+        Local (on-device)
       </DropdownMenuItem>
       {isTranscribed && (
         <>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={reDiarize} disabled={reDiarizing}>
             <UserCog className="h-4 w-4" aria-hidden="true" />
-            {reDiarizing ? t('library:sourceReader.reDiarizingEllipsis') : t('library:sourceReader.reDiarizeThisRecordingMenuItem')}
+            {reDiarizing ? 'Re-diarizing…' : 'Re-diarize this recording'}
           </DropdownMenuItem>
         </>
       )}
@@ -1200,14 +1260,21 @@ export function SourceReader({
 
   const sectionIsVisible = (section: ReaderSectionId) =>
     readerSectionModes[section] !== 'hidden' && (!maximizedSection || maximizedSection === section)
-  const sectionIsOpen = (section: ReaderSectionId) => readerSectionModes[section] !== 'compact'
-  const showUpperWorkspace = !maximizedSection || maximizedSection === 'player' || maximizedSection === 'metadata'
   const showLowerWorkspace = !maximizedSection || maximizedSection === 'summary' || maximizedSection === 'transcript'
+  // The reading area pads itself only when it is NOT showing sections; a
+  // ReaderSection brings its own horizontal padding. Same conditions, in the
+  // same order, as the ternary that picks what the reading area renders.
+  const readingAreaHasSections =
+    !isDeviceOnly(recording) && isAudioSource &&
+    recording.transcriptionStatus !== 'no_speech' && !!effectiveTranscript
+  const isSectionPinned = (section: ReaderSectionId) =>
+    readerSectionModes[section] === 'docked' || pins.isPinned(section)
+
   const hiddenReaderSections = (Object.entries(readerSectionModes) as Array<[ReaderSectionId, ReaderSectionMode]>)
     .filter(([, mode]) => mode === 'hidden')
     .map(([id]) => ({
       id,
-      label: t(SECTION_LABEL_KEYS[id])
+      label: READER_SECTION_LABELS[id]
     }))
 
   return (
@@ -1216,24 +1283,31 @@ export function SourceReader({
         hidden={hiddenReaderSections}
         onRestore={(section) => changeSectionMode(section, 'expanded')}
       />
-      <ResizablePanelGroup
-        direction="vertical"
-        className="min-h-0 flex-1"
-        onLayout={maximizedSection ? undefined : setReaderVerticalSizes}
-        data-testid="reader-vertical-layout"
-      >
-      {showUpperWorkspace && (
-      <ResizablePanel
-        defaultSize={maximizedSection ? 100 : readerVerticalSizes[0] ?? 64}
-        minSize={maximizedSection ? 100 : 24}
-        order={1}
-      >
       {/* ===================================================================
-          DOCKED HEADER — stays put while the body scrolls.
-          Title + status + curated meta + primary CTAs + compact player +
-          Participants chips.
+          ONE SCROLLING COLUMN.
+
+          This used to be two resizable panes with a handle between them: a
+          "context area" (title, meta, CTAs, player, metadata) and a "reading
+          area" (summary, transcript), each with its own scrollbar and a 64/36
+          default split. Reading a transcript meant dragging the handle or
+          maximizing, and the player kept two thirds of the reader whether or not
+          anyone was looking at it.
+
+          Now every section lives in one column. Each section's header strip
+          sticks to the top while that section is on screen, stacking under the
+          strips above it, so scrolling down leaves a compact strip behind and the
+          body reads uninterrupted.
+
+          Pinning is PRESENTATION. It never writes readerSectionModes — that map
+          is what the user chose. See useStickySectionPins.
           =================================================================== */}
-      <div className="h-full overflow-y-auto bg-background" data-testid="reader-compact-header">
+      <div
+        ref={pins.scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto bg-background pb-6"
+        data-testid="reader-scroll-body"
+      >
+        {!maximizedSection && (
+        <>
         {/* Authoritative source identity: official meeting subject once linked,
             otherwise the immutable filename. Content title is edited below. */}
         <div className="flex items-start gap-2 px-4 pt-4">
@@ -1248,7 +1322,7 @@ export function SourceReader({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-2 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-            {formatSmartDate(recording.dateRecorded, { fallback: t('library:sourceReader.unknownFallback') })}
+            {formatSmartDate(recording.dateRecorded, { fallback: 'Unknown' })}
             {(() => {
               const rel = formatRelativeDate(recording.dateRecorded)
               return rel ? <span className="text-muted-foreground/70">· {rel}</span> : null
@@ -1257,7 +1331,7 @@ export function SourceReader({
           {isAudioSource && (
             <>
               <span aria-hidden="true" className="text-muted-foreground/40">•</span>
-              <span>{durationSeconds > 0 ? formatDuration(durationSeconds) : t('library:sourceReader.unknownDurationFallback')}</span>
+              <span>{durationSeconds > 0 ? formatDuration(durationSeconds) : 'Unknown duration'}</span>
             </>
           )}
           <span aria-hidden="true" className="text-muted-foreground/40">•</span>
@@ -1270,156 +1344,19 @@ export function SourceReader({
             <span className="rounded-full bg-muted px-2 py-0.5 font-medium capitalize text-foreground">{sourceType}</span>
           )}
         </div>
-
-        {sectionIsVisible('metadata') && (
-        <section
-          className={cn(
-            'px-4 pt-2',
-            readerSectionModes.metadata === 'docked' && 'sticky top-0 z-20 border-b bg-background/95 shadow-sm'
-          )}
-          aria-label={t('library:sourceReader.sourceMetadataAriaLabel')}
-        >
-        <ReaderSectionControls
-          section="metadata"
-          label={t('library:sourceReader.metadataSectionLabel')}
-          mode={readerSectionModes.metadata}
-          onModeChange={(mode) => changeSectionMode('metadata', mode)}
-          onMaximize={() => toggleMaximizedSection('metadata')}
-          maximized={maximizedSection === 'metadata'}
-        />
-        {sectionIsOpen('metadata') && (
-        <div id="reader-metadata-content">
-        {/* Independent identity fields: source filename, calendar subject, and
-            AI title suggestion are never aliases for the editable content title. */}
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 pt-2 text-xs @md:grid-cols-2" data-testid="source-identity-fields">
-          {displayTitle !== recording.filename && (
-            <div className="min-w-0">
-              <dt className="font-medium text-muted-foreground">{t('library:sourceReader.filenameLabel')}</dt>
-              <dd className="mt-0.5 truncate text-foreground" title={recording.filename}>{recording.filename}</dd>
-            </div>
-          )}
-          {isAudioSource && !meeting && !recording.meetingSubject && meetingCandidates.length > 0 && (
-            <div className="min-w-0">
-              <dt className="font-medium text-muted-foreground">{t('library:sourceReader.possibleMeetingLabel')}</dt>
-              <dd className="mt-0.5 truncate text-foreground" title={candidateMeetingLabel}>{candidateMeetingLabel}</dd>
-            </div>
-          )}
-          <div className="min-w-0">
-            <dt className="font-medium text-muted-foreground">{t('library:sourceReader.contentTitleLabel')}</dt>
-            {isEditingTitle ? (
-              <dd className="mt-0.5 flex min-w-0 items-center gap-1">
-                <Input
-                  value={editedTitle}
-                  onChange={(e) => setEditedTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveTitle()
-                    if (e.key === 'Escape') handleCancelTitle()
-                  }}
-                  className="h-6 min-w-0 px-1.5 py-0 text-xs"
-                  autoFocus
-                  disabled={isSavingTitle}
-                  aria-label={t('library:sourceReader.recordingTitleAriaLabel')}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={handleSaveTitle}
-                  disabled={isSavingTitle}
-                  aria-label={t('library:sourceReader.saveTitleAriaLabel')}
-                  title={t('library:sourceReader.saveTitleShortcutTitle')}
-                >
-                  <Check className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={handleCancelTitle}
-                  disabled={isSavingTitle}
-                  aria-label={t('library:sourceReader.cancelEditingAriaLabel')}
-                  title={t('library:sourceReader.cancelEditingShortcutTitle')}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </dd>
-            ) : (
-              <dd className="group mt-0.5 flex min-w-0 items-center gap-1 text-foreground">
-                <span className="truncate" title={recording.userTitle || effectiveTranscript?.title_suggestion || undefined}>
-                  {recording.userTitle || effectiveTranscript?.title_suggestion || t('library:sourceReader.notGeneratedFallback')}
-                </span>
-                {recording.knowledgeCaptureId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsEditingTitle(true)
-                      setEditedTitle(recording.userTitle || effectiveTranscript?.title_suggestion || '')
-                    }}
-                    className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 group-hover:opacity-100 group-focus-within:opacity-100"
-                    aria-label={t('library:sourceReader.editTitleAriaLabel')}
-                    title={t('library:sourceReader.editContentTitleTooltip')}
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                )}
-              </dd>
-            )}
-          </div>
-          {isAudioSource && (meeting?.organizer_name || meeting?.organizer_email) && (
-            <div className="min-w-0">
-              <dt className="font-medium text-muted-foreground">{t('library:sourceReader.organizerLabel')}</dt>
-              <dd className="mt-0.5 truncate text-foreground" title={meeting?.organizer_name || meeting?.organizer_email || undefined}>
-                {meeting?.organizer_name || meeting?.organizer_email}
-              </dd>
-            </div>
-          )}
-        </dl>
-
-        {isAudioSource && !meeting && !isDeviceOnly(recording) && (
-          <button
-            type="button"
-            className="mt-2 flex max-w-full flex-wrap items-center gap-1.5 rounded-md border border-dashed px-2.5 py-1.5 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-            onClick={() => setLinkDialogOpen(true)}
-            aria-label={t('library:sourceReader.linkToMeetingAriaLabel')}
-          >
-            <Link className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            <span className="text-[11px] font-semibold text-primary">{t('library:sourceReader.linkMeetingLabel')}</span>
-            {meetingCandidates.length > 0 && (
-              <span className="text-[11px] text-muted-foreground">
-                {t('library:sourceReader.possibleMatches', { count: meetingCandidates.length })}
-              </span>
-            )}
-            {meetingCandidates.slice(0, 4).map((candidate) => (
-              <span
-                key={candidate.meetingId}
-                className="rounded-full border border-dashed px-2 py-0.5 text-[11px] hover:border-primary"
-                title={candidate.matchReason || undefined}
-              >
-                {candidate.subject}{t('library:sourceReader.candidateConfidenceSeparator')}{Math.round(candidate.confidenceScore * 100)}%
-              </span>
-            ))}
-          </button>
-        )}
-
-        {displayedProcessingRuns.length > 0 && <ProcessingRunChips runs={displayedProcessingRuns} />}
-        </div>
-        )}
-        </section>
-        )}
-
         {/* Primary CTAs */}
         <div className="flex flex-wrap items-center gap-2 px-4 pb-3 pt-3">
           {/* Primary action: Play/Stop for local files, Download for device-only */}
           {canPlay && onPlay ? (
             isPlaying ? (
-              <Button size="sm" onClick={onStop} className="gap-2" title={t('library:sourceReader.stopPlaybackTitle')}>
+              <Button size="sm" onClick={onStop} className="gap-2" title="Stop playback">
                 <Square className="h-4 w-4" />
-                {t('library:sourceReader.stopButton')}
+                Stop
               </Button>
             ) : (
-              <Button size="sm" onClick={onPlay} className="gap-2" title={t('library:sourceReader.playRecordingTitle')}>
+              <Button size="sm" onClick={onPlay} className="gap-2" title="Play recording">
                 <Play className="h-4 w-4" />
-                {t('library:sourceReader.playButton')}
+                Play
               </Button>
             )
           ) : isDeviceOnly(recording) && onDownload ? (
@@ -1428,17 +1365,17 @@ export function SourceReader({
               onClick={onDownload}
               disabled={!deviceConnected || isDownloading}
               className="gap-2"
-              title={!deviceConnected ? t('library:sourceReader.deviceNotConnectedTitle') : t('library:sourceReader.downloadFromDeviceTitle')}
+              title={!deviceConnected ? 'Device not connected' : 'Download recording from device'}
             >
               {isDownloading ? (
                 <>
                   <RefreshCw className="h-4 w-4 animate-spin" />
-                  {(downloadProgress ?? 0) > 0 ? `${downloadProgress}%` : t('library:sourceReader.startingEllipsis')}
+                  {(downloadProgress ?? 0) > 0 ? `${downloadProgress}%` : 'Starting…'}
                 </>
               ) : (
                 <>
                   <Download className="h-4 w-4" />
-                  {downloadStatus === 'pending' ? t('library:sourceReader.startDownloadButton') : t('library:sourceReader.downloadButton')}
+                  {downloadStatus === 'pending' ? 'Start download' : 'Download'}
                 </>
               )}
             </Button>
@@ -1454,10 +1391,10 @@ export function SourceReader({
                   onClick={() => requestTranscribe(() => onTranscribe?.())}
                   disabled={isTranscribeBusy}
                   className="gap-2 rounded-r-none border-r-0"
-                  title={t('library:sourceReader.reTranscribeDefaultTitle')}
+                  title="Re-transcribe with the configured default method"
                 >
                   <Wand2 className="h-4 w-4" />
-                  {t('library:sourceReader.reTranscribeButton')}
+                  Re-transcribe
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1466,8 +1403,8 @@ export function SourceReader({
                       size="sm"
                       disabled={isTranscribeBusy}
                       className="rounded-l-none px-2"
-                      aria-label={t('library:sourceReader.chooseReTranscriptionMethodAriaLabel')}
-                      title={t('library:sourceReader.chooseReTranscriptionOrReDiarizationTitle')}
+                      aria-label="Choose re-transcription method"
+                      title="Choose re-transcription or re-diarization method"
                     >
                       <ChevronDown className="h-4 w-4" />
                     </Button>
@@ -1484,25 +1421,25 @@ export function SourceReader({
                   disabled={isTranscribeBusy}
                   className="gap-2 rounded-r-none border-r-0"
                   title={
-                    recording.transcriptionStatus === 'pending' ? t('library:sourceReader.transcriptionQueuedTitle') :
-                    recording.transcriptionStatus === 'processing' ? t('library:sourceReader.transcriptionInProgressTitle') :
-                    t('library:sourceReader.startAiTranscriptionTitle')
+                    recording.transcriptionStatus === 'pending' ? 'Transcription queued' :
+                    recording.transcriptionStatus === 'processing' ? 'Transcription in progress' :
+                    'Start AI transcription (configured default method)'
                   }
                 >
                   {recording.transcriptionStatus === 'processing' ? (
                     <>
                       <RefreshCw className="h-4 w-4 animate-spin" />
-                      {t('library:sourceReader.inProgressLabel')}
+                      In Progress
                     </>
                   ) : recording.transcriptionStatus === 'pending' ? (
                     <>
                       <RefreshCw className="h-4 w-4" />
-                      {t('library:sourceReader.queuedLabel')}
+                      Queued
                     </>
                   ) : (
                     <>
                       <Wand2 className="h-4 w-4" />
-                      {t('library:sourceReader.transcribeButton')}
+                      Transcribe
                     </>
                   )}
                 </Button>
@@ -1513,8 +1450,8 @@ export function SourceReader({
                       size="sm"
                       disabled={isTranscribeBusy}
                       className="rounded-l-none px-2"
-                      aria-label={t('library:sourceReader.chooseTranscriptionMethodAriaLabel')}
-                      title={t('library:sourceReader.chooseTranscriptionMethodAriaLabel')}
+                      aria-label="Choose transcription method"
+                      title="Choose transcription method"
                     >
                       <ChevronDown className="h-4 w-4" />
                     </Button>
@@ -1532,10 +1469,10 @@ export function SourceReader({
               size="sm"
               onClick={onAskAboutSource}
               className="gap-2"
-              title={t('library:sourceReader.askAboutSourceTitle')}
+              title="Ask the AI assistant about this source"
             >
               <Sparkles className="h-4 w-4" />
-              {t('library:sourceReader.askAboutSourceButton')}
+              Ask about this source
             </Button>
           )}
 
@@ -1546,17 +1483,17 @@ export function SourceReader({
               onClick={toggleSplitMode}
               className="gap-2"
               aria-pressed={splitMode}
-              title={splitMode ? t('library:sourceReader.closeSplitEditorTitle') : t('library:sourceReader.splitRecordingTitle')}
+              title={splitMode ? 'Close the split editor' : 'Split this recording into two sessions'}
             >
               <Scissors className="h-4 w-4" />
-              {splitMode ? t('library:sourceReader.splittingLabel') : t('library:sourceReader.splitLabel')}
+              {splitMode ? 'Splitting' : 'Split'}
             </Button>
           )}
 
           {/* Overflow: file operations + destructive delete (behind a separator) */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" aria-label={t('library:sourceReader.moreActionsLabel')} title={t('library:sourceReader.moreActionsLabel')}>
+              <Button variant="outline" size="sm" aria-label="More actions" title="More actions">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -1565,18 +1502,18 @@ export function SourceReader({
                 <>
                   <DropdownMenuItem onClick={() => window.electronAPI?.storage.openFile(recording.localPath)}>
                     <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                    {t('library:sourceReader.openInDefaultAppMenuItem')}
+                    Open in default app
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => window.electronAPI?.storage.revealInFolder(recording.localPath)}>
                     <FolderOpen className="h-4 w-4" aria-hidden="true" />
-                    {t('library:sourceReader.revealInFolderMenuItem')}
+                    Reveal in folder
                   </DropdownMenuItem>
                 </>
               )}
               {!meeting && !isDeviceOnly(recording) && (
                 <DropdownMenuItem onClick={() => setLinkDialogOpen(true)}>
                   <Link className="h-4 w-4" aria-hidden="true" />
-                  {t('library:sourceReader.linkMeetingLabel')}
+                  Link meeting
                 </DropdownMenuItem>
               )}
               {onMarkPersonal && !isDeviceOnly(recording) && (
@@ -1584,8 +1521,8 @@ export function SourceReader({
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={onMarkPersonal}>
                     {recording.personal
-                      ? <><Eye className="h-4 w-4" aria-hidden="true" />{t('library:sourceReader.unmarkPersonalMenuItem')}</>
-                      : <><EyeOff className="h-4 w-4" aria-hidden="true" />{t('library:sourceReader.markPersonalMenuItem')}</>}
+                      ? <><Eye className="h-4 w-4" aria-hidden="true" />Unmark personal</>
+                      : <><EyeOff className="h-4 w-4" aria-hidden="true" />Mark personal (ignore)</>}
                   </DropdownMenuItem>
                 </>
               )}
@@ -1655,34 +1592,42 @@ export function SourceReader({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        </>
+        )}
 
-        {/* One waveform, with an explicit state chosen by the user. Scrolling
-            never changes its presentation. */}
         {canPlay && sectionIsVisible('player') && (
-          <section
-            className={cn(
-              'px-4 pb-3 pt-2',
-              readerSectionModes.player === 'docked' && 'sticky top-0 z-30 border-b bg-background/95 shadow-sm'
-            )}
-            aria-label={t('library:sourceReader.audioPlayerAriaLabel')}
+          <ReaderSection
+            section="player"
+            label="Player"
+            mode={readerSectionModes.player}
+            onModeChange={(mode) => changeSectionMode('player', mode)}
+            onMaximize={() => toggleMaximizedSection('player')}
+            maximized={maximizedSection === 'player'}
+            pinned={isSectionPinned('player')}
+            stickyTop={pins.stickyTop('player')}
+            sentinelRef={pins.sentinelRef('player')}
+            headerless
           >
-            <ReaderSectionControls
-              section="player"
-              label={t('library:sourceReader.playerSectionLabel')}
-              mode={readerSectionModes.player}
-              onModeChange={(mode) => changeSectionMode('player', mode)}
-              onMaximize={() => toggleMaximizedSection('player')}
-              maximized={maximizedSection === 'player'}
-            />
-            <div id="reader-player-content">
             <ReaderPlayer
+              controls={
+                <ReaderSectionActions
+                  section="player"
+                  label="Player"
+                  mode={readerSectionModes.player}
+                  onModeChange={(mode) => changeSectionMode('player', mode)}
+                  onMaximize={() => toggleMaximizedSection('player')}
+                  maximized={maximizedSection === 'player'}
+                  pinned={isSectionPinned('player')}
+                  // Same id the labeled sections use for their strip content,
+                  // so "is the player pinned" reads the same way everywhere.
+                  testId="reader-player-controls"
+                />
+              }
               recordingId={recording.id}
               filePath={localPath}
               durationSec={durationSeconds}
               speakerRanges={speakerTimeline.ranges}
               events={timelineEvents}
-              eventDetails={eventDetails}
-              onEventUpdate={handleEventUpdate}
               sentiment={timeline?.sentiment}
               analyzing={analyzingTimeline}
               analysisFailure={timelineAnalysisFailure}
@@ -1690,6 +1635,7 @@ export function SourceReader({
               presentation={readerSectionModes.player === 'expanded' ? 'expanded' : 'compact'}
               onSeek={(sec) => handleReaderSeek(Math.round(sec * 1000))}
               onEventClick={handleTimelineEventClick}
+              activeEventId={activeEventId}
               splitPointSec={splitMode ? splitPointSec : undefined}
             />
             {splitMode && localPath && (
@@ -1711,188 +1657,307 @@ export function SourceReader({
                 }}
               />
             )}
-            </div>
-          </section>
+          </ReaderSection>
         )}
 
-        {sectionIsVisible('metadata') && sectionIsOpen('metadata') && (
-        <div id="reader-metadata-context">
-        {/* Linked Meeting — meeting context and its change/remove controls. */}
-        {meeting && (
-          <div className="px-4 pb-3" data-testid="linked-meeting-card">
-            <div className="flex items-center gap-2 p-3 bg-muted/30 border rounded-lg">
-              <div
-                className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => onNavigateToMeeting?.(meeting.id)}
+        {sectionIsVisible('metadata') && (
+          <ReaderSection
+            section="metadata"
+            label="Metadata"
+            mode={readerSectionModes.metadata}
+            onModeChange={(mode) => changeSectionMode('metadata', mode)}
+            onMaximize={() => toggleMaximizedSection('metadata')}
+            maximized={maximizedSection === 'metadata'}
+            pinned={isSectionPinned('metadata')}
+            stickyTop={pins.stickyTop('metadata')}
+            sentinelRef={pins.sentinelRef('metadata')}
+          >
+            {/* Independent identity fields: source filename, calendar subject, and
+                AI title suggestion are never aliases for the editable content title. */}
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-2 pt-2 text-xs @md:grid-cols-2" data-testid="source-identity-fields">
+              {displayTitle !== recording.filename && (
+                <div className="min-w-0">
+                  <dt className="font-medium text-muted-foreground">Filename</dt>
+                  <dd className="mt-0.5 truncate text-foreground" title={recording.filename}>{recording.filename}</dd>
+                </div>
+              )}
+              {isAudioSource && !meeting && !recording.meetingSubject && meetingCandidates.length > 0 && (
+                <div className="min-w-0">
+                  <dt className="font-medium text-muted-foreground">Possible meeting</dt>
+                  <dd className="mt-0.5 truncate text-foreground" title={candidateMeetingLabel}>{candidateMeetingLabel}</dd>
+                </div>
+              )}
+              <div className="min-w-0">
+                <dt className="font-medium text-muted-foreground">Content title</dt>
+                {isEditingTitle ? (
+                  <dd className="mt-0.5 flex min-w-0 items-center gap-1">
+                    <Input
+                      value={editedTitle}
+                      onChange={(e) => setEditedTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveTitle()
+                        if (e.key === 'Escape') handleCancelTitle()
+                      }}
+                      className="h-6 min-w-0 px-1.5 py-0 text-xs"
+                      autoFocus
+                      disabled={isSavingTitle}
+                      aria-label="Recording title — content title"
+                    />
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveTitle} disabled={isSavingTitle} aria-label="Save title" title="Save (Enter)">
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelTitle} disabled={isSavingTitle} aria-label="Cancel editing" title="Cancel (Escape)">
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </dd>
+                ) : (
+                  <dd className="group mt-0.5 flex min-w-0 items-center gap-1 text-foreground">
+                    <span className="truncate" title={recording.userTitle || effectiveTranscript?.title_suggestion || undefined}>
+                      {recording.userTitle || effectiveTranscript?.title_suggestion || 'Not generated'}
+                    </span>
+                    {recording.knowledgeCaptureId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingTitle(true)
+                          setEditedTitle(recording.userTitle || effectiveTranscript?.title_suggestion || '')
+                        }}
+                        className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 group-hover:opacity-100 group-focus-within:opacity-100"
+                        aria-label="Edit title"
+                        title="Edit content title"
+                      >
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    )}
+                  </dd>
+                )}
+              </div>
+              {isAudioSource && (meeting?.organizer_name || meeting?.organizer_email) && (
+                <div className="min-w-0">
+                  <dt className="font-medium text-muted-foreground">Organizer</dt>
+                  <dd className="mt-0.5 truncate text-foreground" title={meeting?.organizer_name || meeting?.organizer_email || undefined}>
+                    {meeting?.organizer_name || meeting?.organizer_email}
+                  </dd>
+                </div>
+              )}
+            </dl>
+
+            {isAudioSource && !meeting && !isDeviceOnly(recording) && (
+              <button
+                type="button"
+                className="mt-2 flex max-w-full flex-wrap items-center gap-1.5 rounded-md border border-dashed px-2.5 py-1.5 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                onClick={() => setLinkDialogOpen(true)}
+                aria-label="Link this recording to a meeting"
               >
-                <Calendar className="h-4 w-4 text-primary shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{meeting.subject}</p>
-                  <p className="text-xs text-muted-foreground">{formatDateTime(meeting.start_time)}</p>
+                <Link className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                <span className="text-[11px] font-semibold text-primary">Link meeting</span>
+                {meetingCandidates.length > 0 && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {meetingCandidates.length} possible {meetingCandidates.length === 1 ? 'match' : 'matches'}
+                  </span>
+                )}
+                {meetingCandidates.slice(0, 4).map((candidate) => (
+                  <span
+                    key={candidate.meetingId}
+                    className="rounded-full border border-dashed px-2 py-0.5 text-[11px] hover:border-primary"
+                    title={candidate.matchReason || undefined}
+                  >
+                    {candidate.subject} · {Math.round(candidate.confidenceScore * 100)}%
+                  </span>
+                ))}
+              </button>
+            )}
+
+            {displayedProcessingRuns.length > 0 && <ProcessingRunChips runs={displayedProcessingRuns} />}
+            {/* Linked Meeting — meeting context and its change/remove controls. */}
+            {meeting && (
+              <div className="px-4 pb-3" data-testid="linked-meeting-card">
+                <div className="flex items-center gap-2 p-3 bg-muted/30 border rounded-lg">
+                  <div
+                    className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => onNavigateToMeeting?.(meeting.id)}
+                  >
+                    <Calendar className="h-4 w-4 text-primary shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{meeting.subject}</p>
+                      <p className="text-xs text-muted-foreground">{formatDateTime(meeting.start_time)}</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={(e) => { e.stopPropagation(); setLinkDialogOpen(true) }}
+                    title="Change linked meeting"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={(e) => { e.stopPropagation(); setShowUnlinkConfirmation(true) }}
+                    title="Remove meeting link (meeting is not deleted)"
+                    aria-label="Remove meeting link"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0"
-                onClick={(e) => { e.stopPropagation(); setLinkDialogOpen(true) }}
-                title={t('library:sourceReader.changeLinkedMeetingTitle')}
-              >
-                <Edit2 className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                onClick={(e) => { e.stopPropagation(); setShowUnlinkConfirmation(true) }}
-                title={t('library:sourceReader.removeMeetingLinkTitle')}
-                aria-label={t('library:sourceReader.removeMeetingLinkAriaLabel')}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* Participants (who actually spoke) — docked, actionable chips. */}
-        {people.participants.length > 0 && (
-          <div className="px-4 pb-3" data-testid="participants-section">
-            <ParticipantsChips
-              participants={people.participants}
-              contacts={people.allContacts}
-              colorByKey={speakerTimeline.colorByKey}
-              onOpenPicker={people.ensureAllContacts}
-              onAssign={people.assignSpeaker}
-              onUnassign={people.unassignSpeaker}
-            />
-          </div>
-        )}
-
-        {meeting && (
-          <div className="px-4 pb-3" data-testid="invited-section">
-            <InvitedChips
-              invited={people.invited}
-              resolveAttendee={people.resolveAttendee}
-              spokeKey={people.attendeeSpoke}
-            />
-          </div>
-        )}
-
-        {mentionedPeople.length > 0 && (
-          <div className="px-4 pb-3" data-testid="mentioned-people-section">
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              {t('library:sourceReader.mentionedCount', { count: mentionedPeople.length })}
-              <span className="font-normal">{t('library:sourceReader.notAttendanceNote')}</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {mentionedPeople.map((person, index) => (
-                <span key={`${person.name}-${index}`} className="rounded-full border px-2 py-0.5 text-xs" title={person.role}>
-                  {person.name}{person.role ? `${t('library:sourceReader.personRoleSeparator')}${person.role}` : ''}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Secondary metadata stays available without consuming transcript space. */}
-        <details
-          className="group border-t"
-          data-testid="reader-more-metadata"
-          open={metadataOpen}
-          onToggle={(event) => setMetadataOpen(event.currentTarget.open)}
-        >
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
-            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-            {t('library:sourceReader.moreMetadataSummary')}
-          </summary>
-          <div className="px-4 pb-3 space-y-3">
-          <div className="grid grid-cols-2 @md:grid-cols-3 @xl:grid-cols-4 gap-x-4 gap-y-2 text-sm">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('library:sourceReader.sizeLabel')}</p>
-              <p>{recording.size ? formatBytes(recording.size) : t('library:sourceReader.unknownFallback')}</p>
-            </div>
-            {recording.quality && recording.quality !== 'unrated' && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('library:sourceReader.qualityLabel')}</p>
-                <p className="capitalize">{recording.quality.replace('-', ' ')}</p>
+            {/* Participants (who actually spoke) — docked, actionable chips. */}
+            {people.participants.length > 0 && (
+              <div className="px-4 pb-3" data-testid="participants-section">
+                <ParticipantsChips
+                  participants={people.participants}
+                  contacts={people.allContacts}
+                  colorByKey={speakerTimeline.colorByKey}
+                  onOpenPicker={people.ensureAllContacts}
+                  onAssign={people.assignSpeaker}
+                  onUnassign={people.unassignSpeaker}
+                />
               </div>
             )}
-            {recording.knowledgeCaptureId ? (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('library:sourceReader.categoryLabel')}</p>
-                <Select
-                  value={recording.category || ''}
-                  onValueChange={handleCategoryChange}
-                  disabled={isSavingCategory}
-                >
-                  <SelectTrigger className="h-7 text-sm w-[140px]">
-                    <SelectValue placeholder={t('library:sourceReader.selectCategoryPlaceholder')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORY_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {t(opt.labelKey)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : recording.category ? (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('library:sourceReader.categoryLabel')}</p>
-                <p className="capitalize">{recording.category}</p>
-              </div>
-            ) : null}
-          </div>
 
-          {recording.knowledgeCaptureId && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('library:sourceReader.projectsLabel')}</p>
-              <ProjectAssignmentRow knowledgeCaptureId={recording.knowledgeCaptureId} />
-            </div>
-          )}
-          </div>
-        </details>
-        </div>
+            {meeting && (
+              <div className="px-4 pb-3" data-testid="invited-section">
+                <InvitedChips
+                  invited={people.invited}
+                  resolveAttendee={people.resolveAttendee}
+                  spokeKey={people.attendeeSpoke}
+                />
+              </div>
+            )}
+
+            {mentionedPeople.length > 0 && (
+              <div className="px-4 pb-3" data-testid="mentioned-people-section">
+                <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  Mentioned ({mentionedPeople.length})
+                  <span className="font-normal">· not attendance</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {mentionedPeople.map((person, index) => (
+                    <span key={`${person.name}-${index}`} className="rounded-full border px-2 py-0.5 text-xs" title={person.role}>
+                      {person.name}{person.role ? ` · ${person.role}` : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Secondary metadata stays available without consuming transcript space. */}
+            <details
+              className="group border-t"
+              data-testid="reader-more-metadata"
+              open={metadataOpen}
+              onToggle={(event) => setMetadataOpen(event.currentTarget.open)}
+            >
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
+                <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+                More metadata
+              </summary>
+              <div className="px-4 pb-3 space-y-3">
+              <div className="grid grid-cols-2 @md:grid-cols-3 @xl:grid-cols-4 gap-x-4 gap-y-2 text-sm">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-0.5">Size</p>
+                  <p>{recording.size ? formatBytes(recording.size) : 'Unknown'}</p>
+                </div>
+                {recording.quality && recording.quality !== 'unrated' && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Quality</p>
+                    <p className="capitalize">{recording.quality.replace('-', ' ')}</p>
+                  </div>
+                )}
+                {recording.knowledgeCaptureId ? (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Category</p>
+                    <Select
+                      value={recording.category || ''}
+                      onValueChange={handleCategoryChange}
+                      disabled={isSavingCategory}
+                    >
+                      <SelectTrigger className="h-7 text-sm w-[140px]">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATEGORY_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : recording.category ? (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Category</p>
+                    <p className="capitalize">{recording.category}</p>
+                  </div>
+                ) : null}
+              </div>
+
+              {recording.knowledgeCaptureId && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">Projects</p>
+                  <ProjectAssignmentRow knowledgeCaptureId={recording.knowledgeCaptureId} />
+                </div>
+              )}
+              </div>
+            </details>
+          </ReaderSection>
         )}
-      </div>
-      </ResizablePanel>
-      )}
 
-      {/* ===================================================================
-          READING AREA — Summary / Transcript, independently scrollable.
-          =================================================================== */}
-      {showUpperWorkspace && showLowerWorkspace && (
-        <ResizableHandle
-          withHandle
-          className="z-30 h-2 bg-border/60 transition-colors hover:bg-primary/30 focus-visible:bg-primary/30"
-          aria-label={t('library:sourceReader.resizeAreasAriaLabel')}
-          data-testid="reader-vertical-resize-handle"
-        />
-      )}
-      {showLowerWorkspace && (
-      <ResizablePanel
-        defaultSize={maximizedSection ? 100 : readerVerticalSizes[1] ?? 36}
-        minSize={maximizedSection ? 100 : 24}
-        order={2}
-      >
-      <div className="h-full min-h-0 overflow-y-auto" data-testid="reader-scroll-body">
-        <div className="p-6 space-y-4">
-          {/* Transcript / Artifact Content */}
-          <div>
+        {/* Actions and decisions, promoted out of the player's graph into a
+            section of their own, so they survive any player mode. */}
+        {isAudioSource && sectionIsVisible('moments') && (
+          <ReaderSection
+            section="moments"
+            label="Actions & decisions"
+            mode={readerSectionModes.moments}
+            onModeChange={(mode) => changeSectionMode('moments', mode)}
+            onMaximize={() => toggleMaximizedSection('moments')}
+            maximized={maximizedSection === 'moments'}
+            pinned={isSectionPinned('moments')}
+            stickyTop={pins.stickyTop('moments')}
+            sentinelRef={pins.sentinelRef('moments')}
+          >
+            <TimelineEventList
+              events={timelineEvents}
+              eventDetails={eventDetails}
+              onEventUpdate={handleEventUpdate}
+              activeEventId={activeEventId}
+              onActivate={handleTimelineEventActivate}
+              recordingId={recording.id}
+            />
+          </ReaderSection>
+        )}
+        {showLowerWorkspace && (
+        // Box-less while the reading area is showing sections: a sticky header
+        // cannot escape an ancestor's box, so everything between a section and
+        // reader-scroll-body has to generate none.
+        //
+        // No pb-6 in either branch any more. It moved to the scroller, where it
+        // applies to both, and leaving a copy here charged the non-section
+        // states 72px of bottom padding where they used to pay 48.
+        <div className={cn(readingAreaHasSections && 'contents')}>
+          {/* Transcript / Artifact Content. The section branch supplies its own
+              horizontal padding (ReaderSection), so the reading area only pads
+              itself when it is showing one of the non-section states. */}
+          <div className={cn(readingAreaHasSections ? 'contents' : 'p-6')}>
             {isDeviceOnly(recording) ? (
               <div className="flex items-start gap-3 rounded-lg bg-muted/35 px-4 py-3">
                 <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-300">
                   <CloudDownload className="h-4 w-4" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-sm font-medium text-foreground">{t('library:sourceReader.storedOnHidockHeading')}</h3>
+                  <h3 className="text-sm font-medium text-foreground">Stored on HiDock</h3>
                   <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-                    {t('library:sourceReader.downloadToPlayMessage')}
+                    Download to play, transcribe, and ask about the audio.
                   </p>
                   {!deviceConnected && (
                     <p className="mt-1 text-xs font-medium text-orange-600 dark:text-orange-300">
-                      {t('library:sourceReader.connectHidockToStartMessage')}
+                      Connect the HiDock to start.
                     </p>
                   )}
                 </div>
@@ -1901,58 +1966,74 @@ export function SourceReader({
               <ArtifactReader recording={recording} onAskAboutSource={onAskAboutSource} />
             ) : recording.transcriptionStatus === 'no_speech' ? (
               <div className="mx-auto max-w-xl rounded-lg border border-border/70 bg-muted/30 px-5 py-6 text-center">
-                <p className="font-medium text-foreground">{t('library:sourceReader.noIntelligibleSpeechTitle')}</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {t('library:sourceReader.noIntelligibleSpeechMessage')}
-                </p>
+                {tooShortSkip ? (
+                  <>
+                    <p className="font-medium text-foreground">Too short to transcribe</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {tooShortSkip.seconds} {tooShortSkip.seconds === 1 ? 'second' : 'seconds'} of audio.
+                      Recordings under {tooShortSkip.minimumSeconds} seconds are skipped.
+                      To transcribe it anyway, choose Clear rating in its row menu, then re-run transcription.
+                      {/* A skipped clip is rated garbage, and the main process keeps
+                          garbage-rated audio away from every provider even on an
+                          explicit re-run. Clearing the rating is a user rating,
+                          which no automatic rater overwrites. */}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium text-foreground">No intelligible speech detected</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Automatic transcription, summary, participant inference, and meeting auto-linking were skipped.
+                      Re-run transcription if you believe this recording contains spoken words.
+                    </p>
+                  </>
+                )}
               </div>
             ) : effectiveTranscript ? (
-              <div className="space-y-3">
+              // Box-less for the same reason. The rhythm space-y-4 and pt-2
+              // used to supply comes back as spacer siblings: a sibling is not
+              // an ancestor, so it cannot trap a sticky header the way a
+              // wrapper would. 8px before Summary, 16px before the transcript,
+              // which is exactly what the two utilities added.
+              <div className="contents">
                 {sectionIsVisible('summary') && (
-                  <section
-                    className={cn(
-                      'border-b pb-3',
-                      readerSectionModes.summary === 'docked' && 'sticky top-0 z-20 rounded-lg border bg-background px-3 pt-1 shadow-sm'
-                    )}
-                    aria-label={t('library:sourceReader.summarySectionLabel')}
+                  <div aria-hidden="true" className="h-2" data-testid="reader-gap-summary" />
+                )}
+                {sectionIsVisible('summary') && (
+                  <ReaderSection
+                    section="summary"
+                    label="Summary"
+                    mode={readerSectionModes.summary}
+                    onModeChange={(mode) => changeSectionMode('summary', mode)}
+                    onMaximize={() => toggleMaximizedSection('summary')}
+                    maximized={maximizedSection === 'summary'}
+                    pinned={isSectionPinned('summary')}
+                    stickyTop={pins.stickyTop('summary')}
+                    sentinelRef={pins.sentinelRef('summary')}
                   >
-                    <ReaderSectionControls
-                      section="summary"
-                      label={t('library:sourceReader.summarySectionLabel')}
-                      mode={readerSectionModes.summary}
-                      onModeChange={(mode) => changeSectionMode('summary', mode)}
-                      onMaximize={() => toggleMaximizedSection('summary')}
-                      maximized={maximizedSection === 'summary'}
-                    />
-                    {sectionIsOpen('summary') && (
-                      <div id="reader-summary-content" className="max-w-[75ch] pt-1 text-sm leading-relaxed text-foreground">
-                        {effectiveTranscript.summary
-                          ? <p className="whitespace-pre-wrap">{effectiveTranscript.summary}</p>
-                          : <p className="text-muted-foreground">{t('library:sourceReader.noSummaryGenerated')}</p>}
-                      </div>
-                    )}
-                  </section>
+                    <div className="max-w-[75ch] text-sm leading-relaxed text-foreground">
+                      {effectiveTranscript.summary
+                        ? <p className="whitespace-pre-wrap">{effectiveTranscript.summary}</p>
+                        : <p className="text-muted-foreground">No summary generated.</p>}
+                    </div>
+                  </ReaderSection>
                 )}
 
                 {sectionIsVisible('transcript') && (
-                  <section
-                    className={cn(
-                      readerSectionModes.transcript === 'docked' && 'relative rounded-lg border bg-background px-3 shadow-sm'
-                    )}
-                    aria-label={t('library:sourceReader.fullTranscriptSectionLabel')}
+                  <div aria-hidden="true" className="h-4" data-testid="reader-gap-transcript" />
+                )}
+                {sectionIsVisible('transcript') && (
+                  <ReaderSection
+                    section="transcript"
+                    label="Full transcript"
+                    mode={readerSectionModes.transcript}
+                    onModeChange={(mode) => changeSectionMode('transcript', mode)}
+                    onMaximize={() => toggleMaximizedSection('transcript')}
+                    maximized={maximizedSection === 'transcript'}
+                    pinned={isSectionPinned('transcript')}
+                    stickyTop={pins.stickyTop('transcript')}
+                    sentinelRef={pins.sentinelRef('transcript')}
                   >
-                    <div className={cn(readerSectionModes.transcript === 'docked' && 'sticky top-0 z-20 bg-background')}>
-                      <ReaderSectionControls
-                        section="transcript"
-                        label={t('library:sourceReader.fullTranscriptSectionLabel')}
-                        mode={readerSectionModes.transcript}
-                        onModeChange={(mode) => changeSectionMode('transcript', mode)}
-                        onMaximize={() => toggleMaximizedSection('transcript')}
-                        maximized={maximizedSection === 'transcript'}
-                      />
-                    </div>
-                    {sectionIsOpen('transcript') && (
-                      <div id="reader-transcript-content">
                         <TranscriptViewer
                           transcript={effectiveTranscript.full_text}
                           segments={transcriptSegments}
@@ -1963,40 +2044,36 @@ export function SourceReader({
                           onSeek={handleReaderSeek}
                           showSummary={false}
                           showTranscriptHeader={false}
-                          /* H3: action items live in ONE home — the timeline event-list above. */
+                          /* H3: action items live in ONE home — the Actions & decisions section. */
                           showActionItems={false}
                           actionItems={actionItems}
                           onTranscriptUpdated={handleTranscriptUpdated}
                         />
-                      </div>
-                    )}
-                  </section>
+                  </ReaderSection>
                 )}
               </div>
             ) : recording.transcriptionStatus === 'complete' ? (
               <div className="text-center text-muted-foreground py-8">
-                <p>{t('library:sourceReader.transcriptNotAvailable')}</p>
+                <p>Transcript not available</p>
               </div>
             ) : recording.transcriptionStatus === 'pending' || recording.transcriptionStatus === 'processing' ? (
               <div className="text-center text-muted-foreground py-8">
-                <p>{t('library:sourceReader.transcriptionInProgressDots')}</p>
+                <p>Transcription in progress...</p>
               </div>
             ) : (
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-3 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">{t('library:sourceReader.noTranscriptTitle')}</p>
+                <p className="font-medium text-foreground">No transcript</p>
                 {canPlay && (
                   <p>
-                    {t('library:sourceReader.useTranscribeAboveMessage')}
+                    Use Transcribe above to generate one.
                   </p>
                 )}
               </div>
             )}
           </div>
         </div>
+        )}
       </div>
-      </ResizablePanel>
-      )}
-      </ResizablePanelGroup>
 
       {/* Meeting link dialog */}
       <RecordingLinkDialog
@@ -2015,12 +2092,10 @@ export function SourceReader({
       <ConfirmDialog
         open={showUnlinkConfirmation}
         onOpenChange={setShowUnlinkConfirmation}
-        title={t('library:sourceReader.removeMeetingLinkDialogTitle')}
-        description={t('library:sourceReader.removeMeetingLinkDialogDescription', {
-          subject: meeting?.subject ?? t('library:sourceReader.thisMeetingFallback')
-        })}
-        actionLabel={t('library:sourceReader.removeLinkActionLabel')}
-        cancelLabel={t('library:sourceReader.keepLinkedActionLabel')}
+        title="Remove this meeting link?"
+        description={`This recording will no longer be attached to “${meeting?.subject ?? 'this meeting'}”. The calendar meeting itself will not be deleted, and you can link the recording again later.`}
+        actionLabel="Remove link"
+        cancelLabel="Keep linked"
         variant="destructive"
         onConfirm={() => {
           setShowUnlinkConfirmation(false)
@@ -2035,10 +2110,10 @@ export function SourceReader({
           setShowTranscribeWarning(open)
           if (!open) setPendingTranscribe(null)
         }}
-        title={t('library:sourceReader.reprocessRecordingDialogTitle')}
-        description={t('library:sourceReader.reprocessRecordingDialogDescription')}
-        actionLabel={t('library:sourceReader.continueActionLabel')}
-        cancelLabel={t('library:sourceReader.cancelActionLabel')}
+        title="Reprocess this recording?"
+        description="Your content title and original filename are preserved. Reprocessing replaces AI-generated fields such as the transcript, summary, AI title, speaker turns, and meeting resolution."
+        actionLabel="Continue"
+        cancelLabel="Cancel"
         variant="default"
         onConfirm={() => {
           pendingTranscribe?.()
@@ -2057,45 +2132,60 @@ const VISIBLE_PROCESSING_STAGES = new Set<ReaderProcessingRun['stage']>([
   'wiki-export', 'rag-indexing'
 ])
 
-function processingStageLabel(t: TFunction, stage: ReaderProcessingRun['stage']): string {
+/** The `vad` run's record of a clip skipped for length rather than silence.
+ *  'recording_too_short' mirrors TOO_SHORT_REASON_CODE in the main process
+ *  (services/transcription.ts). Null for silent audio, or when unrecorded. */
+function findTooShortSkip(runs: ReaderProcessingRun[]): { seconds: number; minimumSeconds: number } | null {
+  const vad = runs.find((processingRun) => processingRun.stage === 'vad')
+  if (!vad?.quality_json) return null
+  try {
+    const quality = JSON.parse(vad.quality_json) as {
+      reasonCodes?: unknown
+      durationSeconds?: unknown
+      minimumDurationSeconds?: unknown
+    }
+    if (!Array.isArray(quality.reasonCodes) || !quality.reasonCodes.includes('recording_too_short')) return null
+    if (typeof quality.durationSeconds !== 'number' || typeof quality.minimumDurationSeconds !== 'number') return null
+    // Whole seconds read naturally; a sub-second clip keeps one decimal so it
+    // does not read as "0 seconds".
+    const seconds = quality.durationSeconds < 1
+      ? Math.round(quality.durationSeconds * 10) / 10
+      : Math.round(quality.durationSeconds)
+    return { seconds, minimumSeconds: quality.minimumDurationSeconds }
+  } catch {
+    return null
+  }
+}
+
+function processingStageLabel(stage: ReaderProcessingRun['stage']): string {
   switch (stage) {
-    case 'meeting-resolution': return t('library:sourceReader.stageMeetingMatch')
-    case 'speaker-identity': return t('library:sourceReader.stageSpeakerIdentity')
-    case 'voice-id': return t('library:sourceReader.stageVoiceId')
-    case 'actionable-detection': return t('library:sourceReader.stageActionables')
-    case 'timeline-analysis': return t('library:sourceReader.stageTimeline')
-    case 'org-reconciliation': return t('library:sourceReader.stageEntityLinking')
-    case 'graph-sync': return t('library:sourceReader.stageKnowledgeGraph')
-    case 'wiki-export': return t('library:sourceReader.stageWikiExport')
-    case 'rag-indexing': return t('library:sourceReader.stageRagIndexing')
-    case 'transcription': return t('library:sourceReader.stageTranscription')
-    case 'diarization': return t('library:sourceReader.stageDiarization')
-    case 'summary': return t('library:sourceReader.stageSummary')
-    case 'title': return t('library:sourceReader.stageTitle')
-    case 'persistence': return t('library:sourceReader.stagePersistence')
-    // 'metadata' | 'schedule-match' | 'vad' are excluded from
-    // VISIBLE_PROCESSING_STAGES and never reach this label — kept as a
-    // defensive, untranslated fallback for any future/unlisted stage.
+    case 'meeting-resolution': return 'Meeting match'
+    case 'speaker-identity': return 'Speaker identity'
+    case 'voice-id': return 'Voice ID'
+    case 'actionable-detection': return 'Actionables'
+    case 'timeline-analysis': return 'Timeline'
+    case 'org-reconciliation': return 'Entity linking'
+    case 'graph-sync': return 'Knowledge graph'
+    case 'wiki-export': return 'Wiki export'
+    case 'rag-indexing': return 'RAG indexing'
     default: return stage.charAt(0).toUpperCase() + stage.slice(1)
   }
 }
 
-function formatProcessingDuration(t: TFunction, durationMs: number | null | undefined): string | null {
+function formatProcessingDuration(durationMs: number | null | undefined): string | null {
   if (durationMs == null || !Number.isFinite(durationMs) || durationMs < 0) return null
-  if (durationMs < 1000) return t('library:sourceReader.durationMs', { value: Math.round(durationMs) })
-  if (durationMs < 60_000) {
-    return t('library:sourceReader.durationSeconds', { value: (durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0) })
-  }
+  if (durationMs < 1000) return `${Math.round(durationMs)} ms`
+  if (durationMs < 60_000) return `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)} s`
   const minutes = Math.floor(durationMs / 60_000)
   const seconds = Math.round((durationMs % 60_000) / 1000)
-  return t('library:sourceReader.durationMinutesSeconds', { minutes, seconds })
+  return `${minutes}m ${seconds}s`
 }
 
-function processingProviderLabel(t: TFunction, run: ReaderProcessingRun): string {
+function processingProviderLabel(run: ReaderProcessingRun): string {
   if (run.stage === 'diarization' && run.tool && run.tool !== run.provider) return run.tool
   if ((run.stage === 'speaker-identity' || run.stage === 'voice-id') && run.tool) return run.tool
-  if (run.provider === 'local-asr') return t('library:sourceReader.providerLocalAsr')
-  if (run.provider === 'hidock-next') return t('library:sourceReader.providerHidockNext')
+  if (run.provider === 'local-asr') return 'Local ASR'
+  if (run.provider === 'hidock-next') return 'HiDock Next'
   return run.provider.charAt(0).toUpperCase() + run.provider.slice(1)
 }
 
@@ -2117,7 +2207,7 @@ function formatAudioOffset(seconds: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
 }
 
-function formatProviderTimeline(t: TFunction, usageJson: string | null | undefined): string[] {
+function formatProviderTimeline(usageJson: string | null | undefined): string[] {
   if (!usageJson) return []
   try {
     const parsed = JSON.parse(usageJson) as { providerTimeline?: ProviderTimelineEvent[] }
@@ -2127,61 +2217,50 @@ function formatProviderTimeline(t: TFunction, usageJson: string | null | undefin
       .filter((event) => event.status !== 'started')
       .map((event) => {
         const chunk = event.chunkIndex && event.chunkCount
-          ? t('library:sourceReader.providerTimelineChunk', { index: event.chunkIndex, count: event.chunkCount })
-          : t('library:sourceReader.providerTimelineProviderFallback')
+          ? `Chunk ${event.chunkIndex}/${event.chunkCount}`
+          : 'Provider'
         const bounds = Number.isFinite(event.audioStartSec) && Number.isFinite(event.audioEndSec)
           ? ` (${formatAudioOffset(event.audioStartSec!)}-${formatAudioOffset(event.audioEndSec!)})`
           : ''
         const phase = (event.phase || 'request').replaceAll('-', ' ')
-        const duration = formatProcessingDuration(t, event.elapsedMs)
-        const status = event.status === 'failed' ? t('library:sourceReader.providerTimelineFailedStatus') : duration
-        return `${chunk}${bounds} ${phase}: ${status || t('library:sourceReader.providerTimelineDurationNotReported')}${event.detail ? ` - ${event.detail}` : ''}`
+        const duration = formatProcessingDuration(event.elapsedMs)
+        const status = event.status === 'failed' ? 'failed' : duration
+        return `${chunk}${bounds} ${phase}: ${status || 'duration not reported'}${event.detail ? ` - ${event.detail}` : ''}`
       })
   } catch {
-    return [t('library:sourceReader.providerTimelineInvalidDiagnostics')]
+    return ['Provider request timeline: invalid persisted diagnostics']
   }
 }
 
 /** Compact, evidence-backed stage attribution. Every chip is backed by an
  * immutable processing_runs row; absent cost/version stays honestly unknown. */
 function ProcessingRunChips({ runs }: { runs: ReaderProcessingRun[] }) {
-  const { t } = useTranslation()
   const visible = runs.filter((run) => VISIBLE_PROCESSING_STAGES.has(run.stage))
   if (visible.length === 0) return null
-  const notReported = t('library:sourceReader.notReported')
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-4 pt-2" data-testid="processing-provenance">
-      <span className="mr-0.5 text-[11px] font-medium text-muted-foreground">{t('library:sourceReader.processingTimelineHeading')}</span>
+      <span className="mr-0.5 text-[11px] font-medium text-muted-foreground">Processing timeline</span>
       {visible.map((run) => {
-        const provider = processingProviderLabel(t, run)
-        const duration = formatProcessingDuration(t, run.duration_ms)
-        const providerTimeline = run.stage === 'transcription' ? formatProviderTimeline(t, run.usage_json) : []
+        const provider = processingProviderLabel(run)
+        const duration = formatProcessingDuration(run.duration_ms)
+        const providerTimeline = run.stage === 'transcription' ? formatProviderTimeline(run.usage_json) : []
         const blocked = run.quality_status === 'blocked'
-        const chipSep = t('library:sourceReader.processingChipSeparator')
-        const blockedLabel = t('library:sourceReader.processingBlockedStatus')
         const statusSuffix = !blocked && (run.status === 'degraded' || run.status === 'failed')
-          ? `${chipSep}${run.status}`
+          ? ` · ${run.status}`
           : ''
         const detail = [
-          t('library:sourceReader.processingStageStatusLine', {
-            stage: processingStageLabel(t, run.stage),
-            status: blocked ? blockedLabel : provider
-          }),
-          blocked ? t('library:sourceReader.processingAttemptedToolLabel', { value: provider }) : null,
-          t('library:sourceReader.processingModelLabel', { value: run.model || notReported }),
-          t('library:sourceReader.processingVersionLabel', { value: run.version || notReported }),
-          t('library:sourceReader.processingExecutionLabel', { value: run.execution || notReported }),
-          run.quality_status ? t('library:sourceReader.processingQualityLabel', { value: run.quality_status }) : null,
-          t('library:sourceReader.processingDurationLabel', { value: duration || notReported }),
-          run.started_at ? t('library:sourceReader.processingStartedLabel', { value: run.started_at }) : null,
-          providerTimeline.length > 0
-            ? `${t('library:sourceReader.processingProviderTimelineLabel')}\n${providerTimeline.join('\n')}`
-            : null,
+          `${processingStageLabel(run.stage)}: ${blocked ? 'blocked' : provider}`,
+          blocked ? `Attempted tool: ${provider}` : null,
+          run.model ? `Model: ${run.model}` : 'Model: not reported',
+          run.version ? `Version: ${run.version}` : 'Version: not reported',
+          `Execution: ${run.execution || 'not reported'}`,
+          run.quality_status ? `Quality: ${run.quality_status}` : null,
+          duration ? `Duration: ${duration}` : 'Duration: not reported',
+          run.started_at ? `Started: ${run.started_at}` : null,
+          providerTimeline.length > 0 ? `Provider request timeline:\n${providerTimeline.join('\n')}` : null,
           run.estimated_cost_amount != null
-            ? t('library:sourceReader.processingCostLabel', {
-                value: `${run.estimated_cost_currency || ''} ${run.estimated_cost_amount}`
-              })
-            : t('library:sourceReader.processingCostNotReported')
+            ? `Estimated cost: ${run.estimated_cost_currency || ''} ${run.estimated_cost_amount}`.trim()
+            : 'Cost: not reported'
         ].filter(Boolean).join('\n')
         return (
           <span
@@ -2196,7 +2275,7 @@ function ProcessingRunChips({ runs }: { runs: ReaderProcessingRun[] }) {
             data-provider={run.provider}
           >
             {run.execution === 'local' ? <Cpu className="h-3 w-3" /> : <Cloud className="h-3 w-3" />}
-            {processingStageLabel(t, run.stage)}{chipSep}{blocked ? blockedLabel : provider}{duration ? `${chipSep}${duration}` : ''}{statusSuffix}
+            {processingStageLabel(run.stage)} · {blocked ? 'blocked' : provider}{duration ? ` · ${duration}` : ''}{statusSuffix}
           </span>
         )
       })}
@@ -2220,10 +2299,6 @@ interface ReaderPlayerProps {
   durationSec: number
   speakerRanges: DerivedSpeakerRange[]
   events?: TimelineEvent[]
-  /** Rich per-event details (full text + metadata + editability) for the list. */
-  eventDetails?: Record<string, TimelineEventDetail>
-  /** Persist an edit for an editable event; resolves true when saved. */
-  onEventUpdate?: (event: TimelineEvent, patch: TimelineEventPatch) => Promise<boolean>
   sentiment?: SentimentScorePoint[]
   analyzing: boolean
   /**
@@ -2238,8 +2313,16 @@ interface ReaderPlayerProps {
   onSeek: (sec: number) => void
   /** User-selected cut position, rendered independently from the playhead. */
   splitPointSec?: number
-  /** A numbered marker / event-list row was activated (B1 cross-highlight). */
+  /** A numbered marker was activated (B1 cross-highlight). */
   onEventClick?: (event: TimelineEvent) => void
+  /** Highlighted event id, owned by the reader and shared with the list. */
+  activeEventId?: string | null
+  /**
+   * The player section's own controls (layout and section mode). Rendered
+   * immediately after the player's box, on the row that holds the 1x speed
+   * selector, and outside that box, so the player needs no title strip.
+   */
+  controls?: ReactNode
 }
 
 function ReaderPlayer({
@@ -2248,8 +2331,6 @@ function ReaderPlayer({
   durationSec,
   speakerRanges,
   events,
-  eventDetails,
-  onEventUpdate,
   sentiment,
   analyzing,
   analysisFailure = null,
@@ -2258,8 +2339,9 @@ function ReaderPlayer({
   onSeek,
   splitPointSec,
   onEventClick,
+  activeEventId = null,
+  controls,
 }: ReaderPlayerProps) {
-  const { t } = useTranslation()
   const regionRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState<number | null>(null)
@@ -2304,7 +2386,14 @@ function ReaderPlayer({
   }, [mode, big, narrow])
 
   return (
-    <div ref={regionRef} className="relative flex items-start gap-1" data-testid="reader-player-region">
+    <div
+      ref={regionRef}
+      // Compact, the player and its controls share one line, centred. Expanded,
+      // the speed selector is on the transport row at the BOTTOM of the
+      // timeline box, so the controls sit at the bottom too.
+      className={cn('relative flex w-full min-w-0 gap-1', big ? 'items-end' : 'items-center')}
+      data-testid="reader-player-region"
+    >
       <div
         className="relative min-w-0 flex-1 overflow-hidden rounded-lg motion-safe:transition-[max-height] motion-safe:duration-300 motion-safe:ease-out"
         style={{ maxHeight }}
@@ -2318,12 +2407,11 @@ function ReaderPlayer({
             durationSec={durationSec}
             speakerRanges={big ? speakerRanges : undefined}
             events={big ? events : undefined}
-            eventDetails={big ? eventDetails : undefined}
-            onEventUpdate={onEventUpdate}
             sentiment={big ? sentiment : undefined}
             onSeek={onSeek}
             splitPointSec={splitPointSec}
             onEventClick={onEventClick}
+            activeEventId={activeEventId}
           />
         </div>
 
@@ -2336,7 +2424,7 @@ function ReaderPlayer({
             role="status"
           >
             <RefreshCw className="h-3 w-3 animate-spin" aria-hidden="true" />
-            {t('library:readerPlayer.analyzingTimeline')}
+            Analyzing timeline…
           </div>
         )}
 
@@ -2352,20 +2440,31 @@ function ReaderPlayer({
             role="status"
           >
             {analysisFailure === 'permanent'
-              ? t('library:readerPlayer.needsAttentionMessage')
-              : t('library:readerPlayer.willRetryMessage')}
+              ? 'Timeline analysis needs attention'
+              : 'Timeline analysis failed — will retry when you reopen'}
             <button
               type="button"
               onClick={onRetryAnalysis}
               className="rounded font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               data-testid="timeline-analysis-retry"
             >
-              {analysisFailure === 'permanent' ? t('library:readerPlayer.retryButton') : t('library:readerPlayer.retryNowButton')}
+              {analysisFailure === 'permanent' ? 'Retry' : 'Retry now'}
             </button>
           </div>
         )}
       </div>
 
+      {controls && (
+        <div
+          // Expanded, the timeline box ends with its 32px transport row, then
+          // p-3 (12px) and a 1px border, so that row's centre is 29px above the
+          // bottom. The 28px icon buttons need 15px under them to share it.
+          className={cn('shrink-0', big && 'mb-[15px]')}
+          data-testid="reader-player-controls-slot"
+        >
+          {controls}
+        </div>
+      )}
     </div>
   )
 }
@@ -2377,7 +2476,6 @@ function ReaderPlayer({
  * isolated from SourceReader's conditional early return.
  */
 function ProjectAssignmentRow({ knowledgeCaptureId }: { knowledgeCaptureId: string }) {
-  const { t } = useTranslation()
   const [assigned, setAssigned] = useState<PickerProject[]>([])
   const [allProjects, setAllProjects] = useState<PickerProject[]>([])
   const [open, setOpen] = useState(false)
@@ -2423,15 +2521,15 @@ function ProjectAssignmentRow({ knowledgeCaptureId }: { knowledgeCaptureId: stri
       if (res.success) {
         setAssigned(allProjects.filter((p) => nextIds.has(p.id)))
       } else {
-        toast.error(t('library:projectAssignmentRow.updateFailedTitle'))
+        toast.error('Failed to update projects')
       }
     } catch (err) {
       console.error('Failed to set projects:', err)
-      toast.error(t('library:projectAssignmentRow.updateFailedTitle'))
+      toast.error('Failed to update projects')
     } finally {
       setSaving(false)
     }
-  }, [assignedIds, allProjects, knowledgeCaptureId, t])
+  }, [assignedIds, allProjects, knowledgeCaptureId])
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -2452,16 +2550,16 @@ function ProjectAssignmentRow({ knowledgeCaptureId }: { knowledgeCaptureId: stri
         }}
       >
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-6 gap-1 text-xs" title={t('library:projectAssignmentRow.assignToProjectsTitle')}>
+          <Button variant="outline" size="sm" className="h-6 gap-1 text-xs" title="Assign to projects">
             <Plus className="h-3 w-3" />
-            {assigned.length === 0 ? t('library:projectAssignmentRow.assignProjectButton') : t('library:projectAssignmentRow.editButton')}
+            {assigned.length === 0 ? 'Assign project' : 'Edit'}
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-64 p-2">
-          <p className="text-xs font-semibold text-muted-foreground px-2 py-1">{t('library:projectAssignmentRow.assignToProjectsTitle')}</p>
+          <p className="text-xs font-semibold text-muted-foreground px-2 py-1">Assign to projects</p>
           <div className="max-h-64 overflow-auto">
             {allProjects.length === 0 ? (
-              <p className="text-xs text-muted-foreground px-2 py-2">{t('library:projectAssignmentRow.noProjectsYet')}</p>
+              <p className="text-xs text-muted-foreground px-2 py-2">No projects yet.</p>
             ) : (
               allProjects.map((p) => (
                 <button
@@ -2517,25 +2615,17 @@ function ParticipantsChips({
   onAssign: (effectiveLabel: string, turnIndex: number, scope: AssignScope, payload: { contactId?: string; newName?: string }) => void
   onUnassign: (effectiveLabel: string, turnIndex: number) => void
 }) {
-  const { t } = useTranslation()
   const navigate = useNavigate()
   return (
     <div>
       <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
         <Users className="h-3.5 w-3.5" aria-hidden="true" />
-        {t('library:participantsChips.speakersHeading', { count: participants.length })}
-        <span className="font-normal text-muted-foreground/70">{t('library:participantsChips.fromTranscriptsLabel')}</span>
+        Speakers ({participants.length})
+        <span className="font-normal text-muted-foreground/70">From transcripts</span>
       </p>
       <div className="flex flex-wrap gap-1.5">
         {participants.map((p) => {
-          const viewTitle =
-            p.turnCount > 0
-              ? t('library:participantsChips.viewPersonWithTurnsTitle', { name: p.name, count: p.turnCount })
-              : t('library:participantsChips.viewPersonTitle', { name: p.name })
-          const identifyTitle =
-            p.turnCount > 0
-              ? t('library:participantsChips.identifyPersonWithTurnsTitle', { name: p.name, count: p.turnCount })
-              : t('library:participantsChips.identifyPersonTitle', { name: p.name })
+          const turnHint = p.turnCount > 0 ? ` · ${p.turnCount} turn${p.turnCount === 1 ? '' : 's'}` : ''
           const swatch = colorByKey?.get(p.key)
           if (p.contactId) {
             // Resolved to a known person → link to their page, hover for details.
@@ -2546,7 +2636,7 @@ function ParticipantsChips({
                     type="button"
                     onClick={() => navigate(`/person/${p.contactId}`)}
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground text-xs hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                    title={viewTitle}
+                    title={`View ${p.name}${turnHint}`}
                   >
                     {swatch && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: swatch }} aria-hidden="true" />}
                     {p.name}
@@ -2563,7 +2653,7 @@ function ParticipantsChips({
             <span
               key={p.key}
               className="inline-flex items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5 text-xs"
-              title={identifyTitle}
+              title={`${p.name}${turnHint} — click to identify`}
             >
               {swatch && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: swatch }} aria-hidden="true" />}
               <SpeakerAssignPopover
@@ -2605,24 +2695,23 @@ function InvitedChips({
   resolveAttendee: (a: MeetingAttendee) => import('@/types').Contact | undefined
   spokeKey: (a: MeetingAttendee, contactId?: string) => boolean
 }) {
-  const { t } = useTranslation()
   const navigate = useNavigate()
   return (
     <div>
       <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
         <Mail className="h-3.5 w-3.5" aria-hidden="true" />
-        {t('library:invitedChips.invitedHeading', { count: invited.length })}
-        <span className="font-normal text-muted-foreground/70">{t('library:invitedChips.fromCalendarLabel')}</span>
+        Invited ({invited.length})
+        <span className="font-normal text-muted-foreground/70">From calendar</span>
       </p>
       {invited.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {invited.map((a, i) => {
             const contact = resolveAttendee(a)
-            const label = a.name || a.email || t('library:invitedChips.unknownFallback')
+            const label = a.name || a.email || 'Unknown'
             const spoke = spokeKey(a, contact?.id)
             const spokeTag = spoke ? (
-              <span className="ml-1 rounded bg-primary/15 px-1 text-[10px] font-medium text-primary" title={t('library:invitedChips.mappedToSpeakerTitle')}>
-                {t('library:invitedChips.spokeTagLabel')}
+              <span className="ml-1 rounded bg-primary/15 px-1 text-[10px] font-medium text-primary" title="Mapped to a transcript speaker">
+                spoke
               </span>
             ) : null
             return contact ? (
@@ -2631,7 +2720,7 @@ function InvitedChips({
                 type="button"
                 onClick={() => navigate(`/person/${contact.id}`)}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground text-xs hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                title={t('library:invitedChips.viewPersonTitle', { label })}
+                title={`View ${label}`}
               >
                 {label}
                 {spokeTag}
@@ -2650,7 +2739,7 @@ function InvitedChips({
         </div>
       ) : (
         <p className="text-xs text-muted-foreground/70 italic">
-          {t('library:invitedChips.noInviteListMessage')}
+          No invite list captured for this meeting.
         </p>
       )}
     </div>
