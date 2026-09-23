@@ -135,6 +135,17 @@ describe('resolveTemporalRange', () => {
     expect(resolveTemporalRange('yesterday', now)).toMatchObject({ start: '2026-07-19', end: '2026-07-19' })
   })
 
+  it('resolves against the local calendar day, even early in the morning', () => {
+    // 00:30 local is still the previous UTC date anywhere east of Greenwich (in
+    // Japan until 09:00), so reading the date in UTC answered "today" with
+    // yesterday for every question asked on a Japanese morning. Noon, as used
+    // above, hides that.
+    const earlyMorning = new Date(2026, 6, 20, 0, 30, 0)
+    expect(resolveTemporalRange('today', earlyMorning)).toMatchObject({ start: '2026-07-20', end: '2026-07-20' })
+    expect(resolveTemporalRange('yesterday', earlyMorning)).toMatchObject({ start: '2026-07-19', end: '2026-07-19' })
+    expect(resolveTemporalRange('this week', earlyMorning)).toMatchObject({ start: '2026-07-20', end: '2026-07-26' })
+  })
+
   it('returns null without a temporal anchor', () => {
     expect(resolveTemporalRange('who is the project lead?', now)).toBeNull()
   })

@@ -54,23 +54,43 @@ export function detectIntent(message: string): RetrievalIntent {
 // ── Temporal grounding ──────────────────────────────────────────────────────
 
 export interface TemporalRange {
-  /** ISO date (YYYY-MM-DD), inclusive. */
+  /** Local calendar date (YYYY-MM-DD), inclusive. */
   start: string
-  /** ISO date (YYYY-MM-DD), inclusive. */
+  /** Local calendar date (YYYY-MM-DD), inclusive. */
   end: string
   /** Human label injected into the prompt ('this week (Jul 20 – Jul 26, 2026)'). */
   label: string
 }
 
-const iso = (d: Date): string => d.toISOString().slice(0, 10)
-const DAY = 24 * 60 * 60 * 1000
+/**
+ * The LOCAL calendar date (YYYY-MM-DD) `d` falls on — the same frame as the
+ * getDay()/getMonth() arithmetic below and the fmt() label the model is shown.
+ * Deliberately NOT toISOString(): that names the UTC date, which east of
+ * Greenwich is the previous day at local midnight (and in JST until 09:00), so
+ * "last month" resolved to May 31 – Jun 29 and "today" asked on a Japanese
+ * morning to yesterday.
+ */
+export function localIsoDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/**
+ * Local midnight `days` calendar days after `d`. Calendar arithmetic, not
+ * `+ n * 24h`: across a DST change a fixed 24h step lands an hour off, and near
+ * midnight that is the neighbouring date (New York, 00:30 on the Monday after
+ * spring-forward: 24h back is Saturday, not Sunday).
+ */
+const addDays = (d: Date, days: number): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate() + days)
 
 /** Monday-start week bounds (matches business usage in both EN and ES). */
 function weekBounds(now: Date, weekOffset: number): { start: Date; end: Date } {
   const day = now.getDay() // 0=Sun
   const mondayOffset = day === 0 ? -6 : 1 - day
-  const monday = new Date(now.getTime() + (mondayOffset + weekOffset * 7) * DAY)
-  const sunday = new Date(monday.getTime() + 6 * DAY)
+  const monday = addDays(now, mondayOffset + weekOffset * 7)
+  const sunday = addDays(monday, 6)
   return { start: monday, end: sunday }
 }
 
@@ -93,26 +113,26 @@ export function resolveTemporalRange(message: string, now: Date = new Date()): T
 
   if (/\b(this week|esta semana)\b/.test(m)) {
     const { start, end } = weekBounds(now, 0)
-    return { start: iso(start), end: iso(end), label: `this week (${fmt(start)} – ${fmt(end)})` }
+    return { start: localIsoDate(start), end: localIsoDate(end), label: `this week (${fmt(start)} – ${fmt(end)})` }
   }
   if (/\b(last week|past week|la semana pasada|la última semana|última semana)\b/.test(m)) {
     const { start, end } = weekBounds(now, -1)
-    return { start: iso(start), end: iso(end), label: `last week (${fmt(start)} – ${fmt(end)})` }
+    return { start: localIsoDate(start), end: localIsoDate(end), label: `last week (${fmt(start)} – ${fmt(end)})` }
   }
   if (/\b(this month|este mes)\b/.test(m)) {
     const { start, end } = monthBounds(now, 0)
-    return { start: iso(start), end: iso(end), label: `this month (${fmt(start)} – ${fmt(end)})` }
+    return { start: localIsoDate(start), end: localIsoDate(end), label: `this month (${fmt(start)} – ${fmt(end)})` }
   }
   if (/\b(last month|el mes pasado|último mes)\b/.test(m)) {
     const { start, end } = monthBounds(now, -1)
-    return { start: iso(start), end: iso(end), label: `last month (${fmt(start)} – ${fmt(end)})` }
+    return { start: localIsoDate(start), end: localIsoDate(end), label: `last month (${fmt(start)} – ${fmt(end)})` }
   }
   if (/\b(today|hoy)\b/.test(m)) {
-    return { start: iso(now), end: iso(now), label: `today (${fmt(now)})` }
+    return { start: localIsoDate(now), end: localIsoDate(now), label: `today (${fmt(now)})` }
   }
   if (/\b(yesterday|ayer)\b/.test(m)) {
-    const y = new Date(now.getTime() - DAY)
-    return { start: iso(y), end: iso(y), label: `yesterday (${fmt(y)})` }
+    const y = addDays(now, -1)
+    return { start: localIsoDate(y), end: localIsoDate(y), label: `yesterday (${fmt(y)})` }
   }
   return null
 }

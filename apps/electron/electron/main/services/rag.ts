@@ -13,6 +13,7 @@ import {
   dateGroundingPart,
   detectIntent,
   inRange,
+  localIsoDate,
   resolveTemporalRange,
   type TemporalRange,
 } from './retrieval-orchestrator'
@@ -1175,8 +1176,10 @@ ${text}` })
     if (intent === 'actions') {
       // Pending = still open: only a FULLY-PAST range scopes by extraction
       // date ("commitments I took last month"); "actions this week" lists all
-      // open items (they're still actionable this week).
-      const todayIso = now.toISOString().slice(0, 10)
+      // open items (they're still actionable this week). Today in the same
+      // local calendar as the range: a UTC date here made "yesterday" look
+      // not yet past before 09:00 in Japan.
+      const todayIso = localIsoDate(now)
       const dateScoped = !!temporalRange && temporalRange.end < todayIso
       const structured = buildActionablesContext(temporalRange, 15, dateScoped)
       for (const id of structured.recordingIds) provRecordingIds.add(id)
