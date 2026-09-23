@@ -282,7 +282,7 @@
   "features.items.transcription.description": "録音を検索可能な、話者ラベル付きの文字起こしに変換します。",
   "features.items.calendar.label": "カレンダー",
   "features.items.calendar.description": "会議を同期し、録音と関連付けます。",
-  "features.items.meetingIntelligence.label": "ミーティングインテリジェンス",
+  "features.items.meetingIntelligence.label": "会議インテリジェンス",
   "features.items.meetingIntelligence.description": "会議からアクションアイテム・決定事項・タイムライン分析を抽出します。",
   "features.items.assistant.label": "アシスタント",
   "features.items.assistant.description": "ナレッジをもとに、検索拡張生成（RAG）で回答するチャットです。",

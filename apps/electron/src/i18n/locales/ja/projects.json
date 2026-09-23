@@ -54,7 +54,7 @@
   "projectDetail.statsPeopleLabel": "人物",
   "projectDetail.statsPeopleIconTitle": "このプロジェクトに関わる人物",
   "projectDetail.statsInvolvedSuffix": "名",
-  "projectDetail.moreMembersLabel": "+{{count}}名",
+  "projectDetail.moreMembersLabel": "他{{count}}名",
   "projectDetail.statsActionsLabel": "アクション",
   "projectDetail.statsActionsIconTitle": "このプロジェクトにリンクされたアクションアイテム",
   "projectDetail.knowledgeCardIconTitle": "このプロジェクト向けにキャプチャされたナレッジ",

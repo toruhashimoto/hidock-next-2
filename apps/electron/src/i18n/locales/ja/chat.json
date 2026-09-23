@@ -116,7 +116,7 @@
 
   "explore.header.title": "ナレッジ探索",
   "explore.header.subtitle": "すべてのキャプチャ・人物・プロジェクトを横断して、ナレッジを検索・発見・関連付けできます。",
-  "explore.searchPlaceholder": "何でも検索…（例:「Amazon Connect」「Mario」「API decisions」）",
+  "explore.searchPlaceholder": "何でも検索…（例:「Amazon Connect」「Mario」「APIの決定事項」）",
 
   "explore.recurringTopics.heading": "頻出トピック",
   "explore.recurringTopics.subtitle": "最近の会議で頻繁に話題になったトピックです。",
