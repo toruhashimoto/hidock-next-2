@@ -336,7 +336,7 @@ export const SourceRow = memo(function SourceRow({
               {renaming ? (
                 <input
                   autoFocus
-                  aria-label="Rename source"
+                  aria-label={t('sourceRow.renameSourceAriaLabel')}
                   // `title` is a VARCHAR the whole app renders in one line; a
                   // pasted document does not belong in it.
                   maxLength={200}
