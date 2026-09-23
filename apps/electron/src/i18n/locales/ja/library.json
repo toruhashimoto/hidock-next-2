@@ -829,7 +829,7 @@
   "bulkActionsBar.markPersonalButton": "個人としてマーク",
   "bulkActionsBar.moveToTrashTitle": "選択項目をゴミ箱に移動（非表示・復元可能 — 何も削除されません）",
   "bulkActionsBar.moveToTrashButton": "ゴミ箱に移動",
-  "bulkActionsBar.deletePermanentlyTitle": "選択項目とすべての派生データ（文字起こし、埋め込み、対応事項）を完全に削除します — 元に戻せません",
+  "bulkActionsBar.deletePermanentlyTitle": "選択項目とすべての派生データ（文字起こし、埋め込み、アクションアイテム）を完全に削除します — 元に戻せません",
   "bulkActionsBar.deletePermanentlyButton": "完全に削除",
   "bulkActionsBar.clearSelectionAriaLabel": "選択を解除",
   "bulkResultSummary.operationDownload": "ダウンロード",
