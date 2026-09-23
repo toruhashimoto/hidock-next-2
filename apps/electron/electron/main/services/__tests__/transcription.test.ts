@@ -744,6 +744,54 @@ describe('Transcription Service', () => {
       }
     })
 
+    it('records the model the local ASR runner reports, not the default label', { timeout: 20000 }, async () => {
+      mockConfig.transcription.provider = 'local-asr'
+      mockConfig.transcription.geminiApiKey = ''
+      mockConfig.transcription.language = 'ja'
+      mockGetQueueItems.mockImplementation((status?: string) =>
+        status === 'pending'
+          ? [{ id: 'queue-model', recording_id: 'rec-model', filename: 'model.wav', status: 'pending', attempts: 0 }]
+          : []
+      )
+      mockGetRecordingById.mockReturnValue({
+        id: 'rec-model',
+        filename: 'model.wav',
+        file_path: 'G:\\Recordings\\model.wav',
+        status: 'complete'
+      })
+      // Output shape of the faster-whisper runner (scripts/jp/local-asr/mcp_runner.py
+      // in the hidock-next fork), which names the model it actually loaded.
+      mockExecFile.mockImplementation(() =>
+        makeFakeChildProcess(JSON.stringify({
+          text: '本日の会議では試験計画を確認します。',
+          language: 'ja',
+          model: 'mobiuslabsgmbh/faster-whisper-large-v3-turbo',
+          segments: [{ text: '本日の会議では試験計画を確認します。', start: 0, end: 4.9, speaker: null }]
+        }))
+      )
+
+      const database = await import('../database')
+      const { startTranscriptionProcessor, stopTranscriptionProcessor } = await import('../transcription')
+      startTranscriptionProcessor()
+      try {
+        await vi.waitFor(() => {
+          expect(mockInsertTranscript).toHaveBeenCalledWith(expect.objectContaining({
+            recording_id: 'rec-model',
+            transcription_model: 'mobiuslabsgmbh/faster-whisper-large-v3-turbo'
+          }))
+        }, { timeout: 15000, interval: 25 })
+      } finally {
+        stopTranscriptionProcessor()
+      }
+
+      // The provenance row is created before the runner reports its model, so
+      // it must be corrected on completion or it keeps the pre-run label.
+      expect(vi.mocked(database.completeProcessingRun)).toHaveBeenCalledWith(
+        'run-transcription',
+        expect.objectContaining({ model: 'mobiuslabsgmbh/faster-whisper-large-v3-turbo' })
+      )
+    })
+
     it('INC-2 (round-3) — a recording ineligible mid-run is marked cancelled, NOT completed', async () => {
       mockConfig.transcription.provider = 'local-asr'
       mockConfig.transcription.geminiApiKey = ''

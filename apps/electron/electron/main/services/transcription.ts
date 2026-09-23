@@ -1057,6 +1057,7 @@ async function transcribeWithLocalAsr(
   let parsed: {
     text?: string
     language?: string
+    model?: string
     segments?: LocalAsrSegment[]
     error?: boolean
     message?: string
@@ -1089,7 +1090,8 @@ async function transcribeWithLocalAsr(
   return {
     fullText,
     provider: 'local-asr',
-    model: 'CohereLabs/cohere-transcribe-03-2026',
+    // A runner may name the model it actually loaded (e.g. a faster-whisper id).
+    model: parsed.model || 'CohereLabs/cohere-transcribe-03-2026',
     language: parsed.language || language,
     speakers: segments.length > 0 ? JSON.stringify(segments) : undefined
   }
@@ -2285,6 +2287,8 @@ Do not create speaker turns outside these intervals except for up to 1.5 seconds
     throw new Error(message)
   }
   completeProcessingRun(transcriptionRun.id, {
+    // The run was opened with the pre-run label; record the model that actually ran.
+    model: rawTranscript.model,
     outputRefs: { fullText: `trans_${recordingId}.full_text`, speakers: `trans_${recordingId}.speakers` },
     usage: rawTranscript.providerTimeline?.length
       ? {
