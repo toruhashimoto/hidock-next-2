@@ -69,7 +69,7 @@
   "projectDetail.moreKnowledgeLabel": "+{{count}} more in Library",
   "projectDetail.locationLinksHeading": "Location & Links",
   "projectDetail.folderOnDiskLabel": "Folder on disk",
-  "projectDetail.folderPathPlaceholder": "C:\\\\path\\\\to\\\\repo",
+  "projectDetail.folderPathPlaceholder": "C:\\path\\to\\repo",
   "projectDetail.browseButtonLabel": "Browse",
   "projectDetail.saveFolderAriaLabel": "Save folder",
   "projectDetail.cancelAriaLabel": "Cancel",
