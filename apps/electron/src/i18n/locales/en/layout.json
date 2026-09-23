@@ -50,6 +50,8 @@
   "sidebar.countSync_other": "{{count}} files to sync",
   "sidebar.countGeneric": "{{count}} items",
 
+  "navItem.offAfterRestartHint": "Off after restart",
+
   "toast.deviceConnectedTitle": "Device Connected",
   "toast.deviceConnectedDescription": "{{model}} is ready to use",
   "toast.deviceConnectedFallbackModel": "Device",

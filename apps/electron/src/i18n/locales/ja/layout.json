@@ -44,6 +44,7 @@
   "sidebar.countActionables_other": "未処理のアクションアイテム{{count}}件",
   "sidebar.countSync_other": "同期待ちのファイル{{count}}件",
   "sidebar.countGeneric": "{{count}}件",
+  "navItem.offAfterRestartHint": "再起動後にオフ",
   "toast.deviceConnectedTitle": "デバイスに接続しました",
   "toast.deviceConnectedDescription": "{{model}} を使用できます",
   "toast.deviceConnectedFallbackModel": "デバイス",

@@ -36,6 +36,7 @@ import { OperationsPanel } from '@/components/layout/OperationsPanel'
 import { useUIStore } from '@/store/ui/useUIStore'
 import { useActionablesPendingCount, useActionablesStore } from '@/store'
 import { useFeatureStore, describeDisableReason, featureForPath } from '@/store/useFeatureStore'
+import i18n from '@/i18n'
 
 interface LayoutProps {
   children: ReactNode
@@ -139,6 +140,11 @@ export function NavCountBadge({ href, count, collapsed, active }: { href: string
  *                 "Requires X" hint, per the owner's "cascade must surface,
  *                 not silently remove" rule.
  *  - 'hidden'   — feature disabled directly (user flag or preset): removed.
+ *
+ * Hints are resolved via the i18n.t() singleton (like describeDisableReason
+ * below) rather than useTranslation()'s t — this is a plain function, called
+ * directly by FeatureEnforcement.test.tsx as well as from render, not a
+ * component with a hook available.
  */
 export type NavItemVisibility = 'visible' | 'grayed' | 'hidden'
 
@@ -156,7 +162,7 @@ export function navItemVisibility(
   // VISIBLE — hiding e.g. Sync here would orphan disconnect/cancel controls
   // while USB work may still be in flight.
   if (pendingRestart.includes(feature)) {
-    return { visibility: 'visible', hint: 'Off after restart' }
+    return { visibility: 'visible', hint: i18n.t('layout:navItem.offAfterRestartHint') }
   }
   if (state.reason?.startsWith('requires:')) {
     return { visibility: 'grayed', hint: describeDisableReason(state.reason) }
