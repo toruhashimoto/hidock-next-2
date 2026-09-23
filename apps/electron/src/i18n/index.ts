@@ -34,15 +34,17 @@ import enCalendar from './locales/en/calendar.json'
 import jaCalendar from './locales/ja/calendar.json'
 import enChat from './locales/en/chat.json'
 import jaChat from './locales/ja/chat.json'
+import enProjects from './locales/en/projects.json'
+import jaProjects from './locales/ja/projects.json'
 
 export const SUPPORTED_LANGUAGES = ['en', 'ja'] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 
-export const NAMESPACES = ['common', 'layout', 'library', 'device', 'settings', 'today', 'domain', 'people', 'calendar', 'chat'] as const
+export const NAMESPACES = ['common', 'layout', 'library', 'device', 'settings', 'today', 'domain', 'people', 'calendar', 'chat', 'projects'] as const
 
 const resources = {
-  en: { common: enCommon, layout: enLayout, library: enLibrary, settings: enSettings, device: enDevice, today: enToday, domain: enDomain, people: enPeople, calendar: enCalendar, chat: enChat },
-  ja: { common: jaCommon, layout: jaLayout, library: jaLibrary, settings: jaSettings, device: jaDevice, today: jaToday, domain: jaDomain, people: jaPeople, calendar: jaCalendar, chat: jaChat }
+  en: { common: enCommon, layout: enLayout, library: enLibrary, settings: enSettings, device: enDevice, today: enToday, domain: enDomain, people: enPeople, calendar: enCalendar, chat: enChat, projects: enProjects },
+  ja: { common: jaCommon, layout: jaLayout, library: jaLibrary, settings: jaSettings, device: jaDevice, today: jaToday, domain: jaDomain, people: jaPeople, calendar: jaCalendar, chat: jaChat, projects: jaProjects }
 }
 
 export function initI18n(lng: SupportedLanguage): typeof i18n {

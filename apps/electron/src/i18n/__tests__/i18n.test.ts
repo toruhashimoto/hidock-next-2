@@ -33,7 +33,7 @@ describe('initI18n', () => {
     // Phase 2 (Task 17) is registering one namespace per surface in parallel;
     // this list is kept in sync with src/i18n/index.ts's NAMESPACES as each
     // lands, not owned by any single task.
-    expect(NAMESPACES).toEqual(['common', 'layout', 'library', 'device', 'settings', 'today', 'domain', 'people', 'calendar', 'chat'])
+    expect(NAMESPACES).toEqual(['common', 'layout', 'library', 'device', 'settings', 'today', 'domain', 'people', 'calendar', 'chat', 'projects'])
   })
 
   it('warns via console.warn when a key is missing from every catalogue (DEV only)', () => {

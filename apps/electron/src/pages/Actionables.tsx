@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -87,6 +88,7 @@ function ActionableSkeleton() {
 const PAGE_SIZE = 20
 
 export function Actionables() {
+  const { t, i18n } = useTranslation('projects')
   const location = useLocation()
   const navigate = useNavigate()
   const { resolveRecipient } = useContactResolver()
@@ -164,8 +166,8 @@ export function Actionables() {
       // Revert the server-side in_progress status
       window.electronAPI.actionables.updateStatus(actionableId, 'pending').catch(() => {})
     }
-    toast.info('Generation cancelled', 'The output will be discarded when it finishes.')
-  }, [])
+    toast.info(t('actionablesPage.generationCancelledTitle'), t('actionablesPage.generationCancelledMessage'))
+  }, [t])
   const [cancellableActionableId, setCancellableActionableId] = useState<string | undefined>(undefined)
 
   // C-ACT-M02: Cache insertion helper with size eviction
@@ -186,9 +188,9 @@ export function Actionables() {
   // C-ACT-M01: Clean up old timestamps to prevent unbounded growth
   const handleAutoGenerate = useCallback(async (sourceId: string, templateId: string = 'meeting_minutes') => {
     const now = Date.now()
-    const recentGenerations = generationHistoryRef.current.filter(t => now - t < 60000)
+    const recentGenerations = generationHistoryRef.current.filter(ts => now - ts < 60000)
     if (recentGenerations.length >= 5) {
-      toast.warning('Rate limit reached', 'Please wait a minute before generating again.')
+      toast.warning(t('actionablesPage.rateLimitTitle'), t('actionablesPage.rateLimitMessage'))
       return
     }
 
@@ -210,18 +212,18 @@ export function Actionables() {
         setGeneratedOutput(output)
         setShowOutputModal(true)
         // C-ACT-M01: Only keep timestamps within the rate limit window (prune old ones)
-        setGenerationHistory(prev => [...prev.filter(t => now - t < 60000), now])
+        setGenerationHistory(prev => [...prev.filter(ts => now - ts < 60000), now])
       } else {
-        setGenerationError(result.error.message || 'Failed to generate output')
+        setGenerationError(result.error.message || t('actionablesPage.generateOutputFailedFallback'))
       }
     } catch (error: any) {
       if (nonce !== generationNonceRef.current) return
-      setGenerationError(error.message || 'Failed to generate output')
+      setGenerationError(error.message || t('actionablesPage.generateOutputFailedFallback'))
       console.error('Output generation failed:', error)
     } finally {
       if (nonce === generationNonceRef.current) setGenerating(false)
     }
-  }, [])
+  }, [t])
 
   // C-ACT-M05: Show toast feedback for copy to clipboard actions
   const copyToClipboard = async (text?: string) => {
@@ -229,12 +231,12 @@ export function Actionables() {
     try {
       const result = await window.electronAPI.outputs.copyToClipboard(text)
       if (result.success) {
-        toast.success('Copied', 'Content copied to clipboard')
+        toast.success(t('actionablesPage.copiedTitle'), t('actionablesPage.contentCopiedMessage'))
       } else {
-        toast.error('Copy failed', result.error.message || 'Failed to copy to clipboard')
+        toast.error(t('actionablesPage.copyFailedTitle'), result.error.message || t('actionablesPage.copyToClipboardFailedMessage'))
       }
     } catch (error: any) {
-      toast.error('Copy failed', error?.message || 'Failed to copy to clipboard')
+      toast.error(t('actionablesPage.copyFailedTitle'), error?.message || t('actionablesPage.copyToClipboardFailedMessage'))
     }
   }
 
@@ -268,7 +270,10 @@ export function Actionables() {
   }, [location.state, handleAutoGenerate, navigate, location.pathname])
 
   // Distinct actionable types present, for the Type filter dropdown.
-  const typeOptions = useMemo(() => distinctTypes(actionables), [actionables])
+  // i18n.language is a dep even though it isn't read directly: distinctTypes()
+  // calls humanizeActionableType() (i18n.t under the hood), so the memo must
+  // recompute on a language switch or the dropdown labels go stale.
+  const typeOptions = useMemo(() => distinctTypes(actionables), [actionables, i18n.language])
 
   // Filter: status (tabs) + type + date window.
   const filteredActionables = useMemo(() => {
@@ -279,9 +284,10 @@ export function Actionables() {
   }, [actionables, statusFilter, typeFilter, dateFilter])
 
   // Sort by date / confidence / type in the chosen direction.
+  // i18n.language: the 'type' sort key compares humanized (translated) labels.
   const sortedActionables = useMemo(
     () => sortActionables(filteredActionables, sortKey, sortDir),
-    [filteredActionables, sortKey, sortDir]
+    [filteredActionables, sortKey, sortDir, i18n.language]
   )
 
   // Pagination applies only when NOT grouping (grouping renders every bucket).
@@ -294,9 +300,10 @@ export function Actionables() {
   }, [sortedActionables, currentPage, grouped])
 
   // The groups actually rendered (a single unlabelled group when grouping is off).
+  // i18n.language: group labels (status/type/source) are resolved via i18n.t().
   const renderGroups = useMemo(
     () => groupActionables(paginatedActionables, groupKey),
-    [paginatedActionables, groupKey]
+    [paginatedActionables, groupKey, i18n.language]
   )
 
   // C-ACT-005: Reset page when any filter/sort/group input changes.
@@ -346,7 +353,7 @@ export function Actionables() {
       if (nonce !== generationNonceRef.current) return // cancelled — discard
 
       if (!approvalResult.success) {
-        toast.error('Approval failed', approvalResult.error || 'Failed to approve actionable')
+        toast.error(t('actionablesPage.approvalFailedTitle'), approvalResult.error || t('actionablesPage.approveActionableFailedMessage'))
         return
       }
 
@@ -375,16 +382,16 @@ export function Actionables() {
         const savedPath = output.savedPath
         const filename = savedPath ? savedPath.replace(/^.*[\\/]/, '') : undefined
         toast.success(
-          'Output generated',
-          filename ? `Saved as ${filename}` : 'The document is ready.',
+          t('actionablesPage.outputGeneratedTitle'),
+          filename ? t('actionablesPage.savedAsMessage', { filename }) : t('actionablesPage.documentReadyMessage'),
           savedPath
             ? {
                 action: {
-                  label: 'Open file',
+                  label: t('actionablesPage.openFileActionLabel'),
                   onClick: () => {
                     window.electronAPI.outputs.openInFolder(savedPath).then((res) => {
                       if (!res.success) {
-                        toast.error('Open failed', res.error?.message || 'Could not open the file')
+                        toast.error(t('actionablesPage.openFailedTitle'), res.error?.message || t('actionablesPage.couldNotOpenFileMessage'))
                       }
                     })
                   }
@@ -393,15 +400,15 @@ export function Actionables() {
             : undefined
         )
       } else {
-        const errorMsg = result.error?.message || 'Failed to generate output'
-        toast.error('Generation failed', errorMsg)
+        const errorMsg = result.error?.message || t('actionablesPage.generateOutputFailedFallback')
+        toast.error(t('actionablesPage.generationFailedTitle'), errorMsg)
         // Revert status to pending on failure
         await window.electronAPI.actionables.updateStatus(actionable.id, 'pending').catch(() => {})
         await loadActionables()
       }
     } catch (error: any) {
-      const errorMsg = error?.message || 'Failed to generate output'
-      toast.error('Generation failed', errorMsg)
+      const errorMsg = error?.message || t('actionablesPage.generateOutputFailedFallback')
+      toast.error(t('actionablesPage.generationFailedTitle'), errorMsg)
       console.error('Output generation failed:', error)
       // Revert status to pending on failure
       await window.electronAPI.actionables.updateStatus(actionable.id, 'pending').catch(() => {})
@@ -425,11 +432,11 @@ export function Actionables() {
         await loadActionables()
       } else {
         console.error('Failed to dismiss actionable:', result.error)
-        toast.error('Dismiss failed', result.error || 'Failed to dismiss actionable')
+        toast.error(t('actionablesPage.dismissFailedTitle'), result.error || t('actionablesPage.dismissActionableFailedMessage'))
       }
     } catch (error: any) {
       console.error('Error dismissing actionable:', error)
-      toast.error('Dismiss failed', error?.message || 'Failed to dismiss actionable')
+      toast.error(t('actionablesPage.dismissFailedTitle'), error?.message || t('actionablesPage.dismissActionableFailedMessage'))
     }
   }
 
@@ -437,7 +444,7 @@ export function Actionables() {
   const handleBulkDismiss = async () => {
     const targets = actionables.filter((a) => selectedIds.has(a.id) && a.status !== 'dismissed')
     if (targets.length === 0) {
-      toast.info('Nothing to dismiss', 'The selected items are already dismissed.')
+      toast.info(t('actionablesPage.nothingToDismissTitle'), t('actionablesPage.alreadyDismissedMessage'))
       return
     }
     setBulkBusy(true)
@@ -455,8 +462,8 @@ export function Actionables() {
       }
       await loadActionables()
       clearSelection()
-      if (failed === 0) toast.success('Dismissed', `${ok} actionable${ok === 1 ? '' : 's'} dismissed.`)
-      else toast.warning('Partially dismissed', `${ok} dismissed, ${failed} failed.`)
+      if (failed === 0) toast.success(t('actionablesPage.bulkDismissedTitle'), t('actionablesPage.bulkDismissedMessage', { count: ok }))
+      else toast.warning(t('actionablesPage.partiallyDismissedTitle'), t('actionablesPage.partiallyDismissedMessage', { ok, failed }))
     } finally {
       setBulkBusy(false)
     }
@@ -465,7 +472,7 @@ export function Actionables() {
   const handleBulkGenerate = async () => {
     const targets = actionables.filter((a) => selectedIds.has(a.id) && a.status === 'pending')
     if (targets.length === 0) {
-      toast.info('Nothing to generate', 'Select one or more pending actionables to generate.')
+      toast.info(t('actionablesPage.nothingToGenerateTitle'), t('actionablesPage.selectPendingToGenerateMessage'))
       return
     }
     setBulkBusy(true)
@@ -494,8 +501,8 @@ export function Actionables() {
       }
       await loadActionables()
       clearSelection()
-      if (failed === 0) toast.success('Outputs generated', `${ok} output${ok === 1 ? '' : 's'} generated.`)
-      else toast.warning('Partially generated', `${ok} generated, ${failed} failed.`)
+      if (failed === 0) toast.success(t('actionablesPage.outputsGeneratedTitle'), t('actionablesPage.bulkGeneratedMessage', { count: ok }))
+      else toast.warning(t('actionablesPage.partiallyGeneratedTitle'), t('actionablesPage.partiallyGeneratedMessage', { ok, failed }))
     } finally {
       setBulkBusy(false)
     }
@@ -533,13 +540,13 @@ export function Actionables() {
       <header className="border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Actionables</h1>
-            <p className="text-sm text-muted-foreground">Proactive suggestions and tasks from your knowledge</p>
+            <h1 className="text-2xl font-bold">{t('layout:sidebar.actionables')}</h1>
+            <p className="text-sm text-muted-foreground">{t('actionablesPage.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={loadActionables}>
               <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
-              Refresh
+              {t('actionablesPage.refreshButton')}
             </Button>
           </div>
         </div>
@@ -558,7 +565,7 @@ export function Actionables() {
                   : "bg-background border-border text-muted-foreground hover:bg-muted"
               )}
             >
-              <span>{s === 'in_progress' ? 'In Progress' : s}</span>
+              <span>{t(`actionablesPage.statusFilterLabel.${s}`)}</span>
               <span
                 className={cn(
                   "tabular-nums rounded-full px-1.5 text-[10px] font-bold",
@@ -604,11 +611,11 @@ export function Actionables() {
             <Card className="border-dashed bg-muted/5">
               <CardContent className="py-16 text-center">
                 <ListTodo className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-30" />
-                <h3 className="text-lg font-medium mb-2">No matching Actionables</h3>
+                <h3 className="text-lg font-medium mb-2">{t('actionablesPage.noMatchingHeading')}</h3>
                 <p className="text-muted-foreground text-sm max-w-xs mx-auto">
                   {actionables.length === 0
-                    ? 'Suggestions will appear here as you transcribe meetings and capture knowledge.'
-                    : 'No actionables match the current filters. Try widening the status, type, or date filters.'}
+                    ? t('actionablesPage.emptyNoDataMessage')
+                    : t('actionablesPage.emptyFilteredMessage')}
                 </p>
               </CardContent>
             </Card>
@@ -644,7 +651,7 @@ export function Actionables() {
                         <Checkbox
                           checked={selectedIds.has(actionable.id)}
                           onCheckedChange={() => toggleSelect(actionable.id)}
-                          aria-label={`Select actionable: ${actionable.title}`}
+                          aria-label={t('actionablesPage.selectActionableAriaLabel', { title: actionable.title })}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -675,7 +682,7 @@ export function Actionables() {
                             {actionable.title}
                           </h3>
                           {actionable.description && expandedId !== actionable.id && (
-                            <p className="text-sm text-muted-foreground mt-1 line-clamp-1 italic pr-4">&quot;{actionable.description}&quot;</p>
+                            <p className="text-sm text-muted-foreground mt-1 line-clamp-1 italic pr-4">{t('actionablesPage.descriptionQuote', { description: actionable.description })}</p>
                           )}
                         </button>
                         <div className="flex items-center gap-3 mt-3">
@@ -708,7 +715,7 @@ export function Actionables() {
                                 "h-3 w-3",
                                 actionable.confidence >= 0.8 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"
                               )} />
-                              <span>{Math.round(actionable.confidence * 100)}% confidence</span>
+                              <span>{t('actionablesPage.confidenceLabel', { percent: Math.round(actionable.confidence * 100) })}</span>
                             </div>
                           )}
                           {actionable.suggestedRecipients.length > 0 && (
@@ -750,7 +757,7 @@ export function Actionables() {
                                 <Sparkles className="h-4 w-4" />
                               )}
                               {loadingActionableIds.has(actionable.id)
-                                ? 'Generating...'
+                                ? t('actionablesPage.generatingLabel')
                                 : getTemplateInfo(actionable.suggestedTemplate).actionLabel}
                             </Button>
                             <Button
@@ -761,7 +768,7 @@ export function Actionables() {
                               disabled={loadingActionableIds.has(actionable.id)}
                             >
                               <X className="h-4 w-4" />
-                              Dismiss
+                              {t('actionablesPage.dismissButton')}
                             </Button>
                           </>
                         )}
@@ -774,7 +781,7 @@ export function Actionables() {
                             disabled
                           >
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            Processing...
+                            {t('actionablesPage.processingLabel')}
                           </Button>
                         )}
                         {actionable.status === 'generated' && (
@@ -822,14 +829,14 @@ export function Actionables() {
                                     setGeneratedOutput(output)
                                     setShowOutputModal(true)
                                   } else {
-                                    toast.error('Failed to load output', genResult.error?.message || 'Unknown error')
+                                    toast.error(t('actionablesPage.loadOutputFailedTitle'), genResult.error?.message || t('common:errors.unknown'))
                                   }
                                   setGenerating(false)
                                 } else {
-                                  toast.error('Failed to load output', (!result.success && result.error?.message) || 'Unknown error')
+                                  toast.error(t('actionablesPage.loadOutputFailedTitle'), (!result.success && result.error?.message) || t('common:errors.unknown'))
                                 }
                               } catch (error: any) {
-                                toast.error('Failed to load output', error?.message || 'An unexpected error occurred')
+                                toast.error(t('actionablesPage.loadOutputFailedTitle'), error?.message || t('common:errorBoundary.fallbackMessage'))
                               } finally {
                                 setLoadingActionableIds((prev) => {
                                   const next = new Set(prev)
@@ -844,7 +851,7 @@ export function Actionables() {
                             ) : (
                               <FileText className="h-4 w-4" />
                             )}
-                            View Output
+                            {t('actionablesPage.viewOutputButton')}
                           </Button>
                         )}
                       </div>
@@ -861,7 +868,11 @@ export function Actionables() {
           {!grouped && sortedActionables.length > PAGE_SIZE && (
             <div className="flex items-center justify-between pt-2">
               <span className="text-xs text-muted-foreground">
-                Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, sortedActionables.length)} of {sortedActionables.length}
+                {t('actionablesPage.paginationShowing', {
+                  start: (currentPage - 1) * PAGE_SIZE + 1,
+                  end: Math.min(currentPage * PAGE_SIZE, sortedActionables.length),
+                  total: sortedActionables.length
+                })}
               </span>
               <div className="flex items-center gap-1">
                 <Button
@@ -873,7 +884,7 @@ export function Actionables() {
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="text-xs px-2">
-                  Page {currentPage} of {totalPages}
+                  {t('actionablesPage.paginationPageOf', { current: currentPage, total: totalPages })}
                 </span>
                 <Button
                   variant="outline"
@@ -892,11 +903,10 @@ export function Actionables() {
             <CardContent className="p-6">
               <div className="flex items-center gap-2 mb-3">
                 <Bot className="h-5 w-5 text-primary" />
-                <h3 className="font-bold text-sm uppercase tracking-wider">How suggestions work</h3>
+                <h3 className="font-bold text-sm uppercase tracking-wider">{t('actionablesPage.howSuggestionsWorkHeading')}</h3>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                HiDock automatically detects the intent to share information or follow up.
-                For example, after a meeting with a candidate, I&apos;ll suggest generating **Interview Feedback**.
+                {t('actionablesPage.howSuggestionsWorkMessage')}
               </p>
             </CardContent>
           </Card>
@@ -928,7 +938,7 @@ export function Actionables() {
             onClick={() => setGenerationError(null)}
             className="text-destructive hover:text-destructive"
           >
-            Dismiss
+            {t('actionablesPage.errorBannerDismissButton')}
           </Button>
         </div>
       )}
@@ -940,13 +950,13 @@ export function Actionables() {
             <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
             <div>
               <h3 className="text-lg font-semibold mb-1">
-                Generating {getTemplateInfo(currentGeneratingTemplate).name}...
+                {t('actionablesPage.generatingOverlayHeading', { name: getTemplateInfo(currentGeneratingTemplate).name })}
               </h3>
-              <p className="text-sm text-muted-foreground">This may take a few moments...</p>
+              <p className="text-sm text-muted-foreground">{t('actionablesPage.generatingOverlayHint')}</p>
             </div>
             <Button variant="outline" size="sm" onClick={() => cancelGeneration(cancellableActionableId)}>
               <X className="h-4 w-4 mr-2" />
-              Cancel
+              {t('actionablesPage.cancelGenerationButton')}
             </Button>
           </div>
         </div>
@@ -956,13 +966,16 @@ export function Actionables() {
       <Dialog open={!!confirmRegenerate} onOpenChange={(open) => { if (!open) setConfirmRegenerate(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Regenerate Output?</DialogTitle>
+            <DialogTitle>{t('actionablesPage.regenerateTitle')}</DialogTitle>
             <DialogDescription>
-              This will create a new {getTemplateInfo(confirmRegenerate?.suggestedTemplate).name} ({getTemplateInfo(confirmRegenerate?.suggestedTemplate).format}), replacing the previous result.
+              {t('actionablesPage.regenerateDescription', {
+                name: getTemplateInfo(confirmRegenerate?.suggestedTemplate).name,
+                format: getTemplateInfo(confirmRegenerate?.suggestedTemplate).format
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setConfirmRegenerate(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setConfirmRegenerate(null)}>{t('actionablesPage.regenerateCancelButton')}</Button>
             <Button onClick={() => {
               if (confirmRegenerate) {
                 // Invalidate cache for this actionable
@@ -972,7 +985,7 @@ export function Actionables() {
               setConfirmRegenerate(null)
             }}>
               <RefreshCw className="h-4 w-4 mr-2" />
-              Regenerate
+              {t('actionablesPage.regenerateButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -982,13 +995,13 @@ export function Actionables() {
       <Dialog open={showOutputModal} onOpenChange={setShowOutputModal}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto">
           <DialogHeader>
-            <DialogTitle>Generated Output</DialogTitle>
+            <DialogTitle>{t('actionablesPage.outputModalTitle')}</DialogTitle>
             <DialogDescription>
               {getTemplateInfo(generatedOutput?.templateId).name}
               {/* C-ACT-008: Show timestamp on generated output */}
               {generatedOutput?.generatedAt && (
                 <span className="ml-2 text-xs text-muted-foreground">
-                  &middot; {formatSmartDate(generatedOutput.generatedAt)}
+                  {t('actionablesPage.generatedAtLabel', { date: formatSmartDate(generatedOutput.generatedAt) })}
                 </span>
               )}
             </DialogDescription>
@@ -1003,10 +1016,10 @@ export function Actionables() {
               <Button
                 onClick={() => setShowHandoverDialog(true)}
                 className="gap-2 sm:mr-auto"
-                title="Write a handover bundle into the project and optionally run a coding agent on it"
+                title={t('actionablesPage.handOffButtonTitle')}
               >
                 <Terminal className="h-4 w-4" />
-                Hand off →
+                {t('actionablesPage.handOffButton')}
               </Button>
             )}
             {generatedOutput?.sourceId && (
@@ -1015,7 +1028,7 @@ export function Actionables() {
                 onClick={() => navigate('/library', { state: { selectedId: generatedOutput.sourceId } })}
               >
                 <FileText className="h-4 w-4 mr-2" />
-                View Source
+                {t('actionablesPage.viewSourceButton')}
               </Button>
             )}
             {generatedOutput?.savedPath && (
@@ -1024,13 +1037,13 @@ export function Actionables() {
                 onClick={async () => {
                   const res = await window.electronAPI.outputs.openInFolder(generatedOutput.savedPath!)
                   if (!res.success) {
-                    toast.error('Open failed', res.error?.message || 'Could not open folder')
+                    toast.error(t('actionablesPage.openFailedTitle'), res.error?.message || t('actionablesPage.couldNotOpenFolderMessage'))
                   }
                 }}
                 title={generatedOutput.savedPath}
               >
                 <FileText className="h-4 w-4 mr-2" />
-                Show Saved File
+                {t('actionablesPage.showSavedFileButton')}
               </Button>
             )}
             <Button
@@ -1038,9 +1051,9 @@ export function Actionables() {
               onClick={() => copyToClipboard(generatedOutput?.content)}
             >
               <Copy className="h-4 w-4 mr-2" />
-              Copy to Clipboard
+              {t('actionablesPage.copyToClipboardButton')}
             </Button>
-            <Button onClick={() => setShowOutputModal(false)}>Close</Button>
+            <Button onClick={() => setShowOutputModal(false)}>{t('actionablesPage.closeButton')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

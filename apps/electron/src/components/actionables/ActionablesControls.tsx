@@ -4,14 +4,15 @@
  * state lives in the page and is passed in via props.
  */
 
+import { useTranslation } from 'react-i18next'
 import { ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import {
-  SORT_OPTIONS,
-  GROUP_OPTIONS,
-  DATE_FILTER_OPTIONS,
+  getSortOptions,
+  getGroupOptions,
+  getDateFilterOptions,
   type ActionableSortKey,
   type ActionableGroupKey,
   type DateFilterKey,
@@ -51,6 +52,7 @@ export function ActionablesControls({
   onToggleSelectAll,
   visibleCount
 }: ActionablesControlsProps) {
+  const { t } = useTranslation('projects')
   return (
     <div className="flex flex-wrap items-center gap-3 mb-4">
       {/* Select-all for bulk actions */}
@@ -58,23 +60,23 @@ export function ActionablesControls({
         <Checkbox
           checked={allSelected}
           onCheckedChange={onToggleSelectAll}
-          aria-label={allSelected ? 'Clear selection' : 'Select all visible actionables'}
+          aria-label={allSelected ? t('actionablesControls.clearSelectionAriaLabel') : t('actionablesControls.selectAllVisibleAriaLabel')}
           disabled={visibleCount === 0}
         />
-        Select all
+        {t('actionablesControls.selectAllLabel')}
       </label>
 
       <div className="h-5 w-px bg-border" aria-hidden />
 
       {/* Sort */}
       <div className="flex items-center gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Sort</span>
+        <span className="text-xs font-medium text-muted-foreground">{t('actionablesControls.sortLabel')}</span>
         <Select value={sortKey} onValueChange={(v) => onSortKeyChange(v as ActionableSortKey)}>
-          <SelectTrigger className="h-8 w-[140px]" aria-label="Sort actionables by">
+          <SelectTrigger className="h-8 w-[140px]" aria-label={t('actionablesControls.sortSelectAriaLabel')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {SORT_OPTIONS.map((o) => (
+            {getSortOptions().map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}
               </SelectItem>
@@ -86,8 +88,8 @@ export function ActionablesControls({
           size="sm"
           className="h-8 px-2"
           onClick={onToggleSortDir}
-          aria-label={sortDir === 'asc' ? 'Sort ascending (click for descending)' : 'Sort descending (click for ascending)'}
-          title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+          aria-label={sortDir === 'asc' ? t('actionablesControls.sortAscAriaLabel') : t('actionablesControls.sortDescAriaLabel')}
+          title={sortDir === 'asc' ? t('actionablesControls.ascendingTitle') : t('actionablesControls.descendingTitle')}
         >
           {sortDir === 'asc' ? <ArrowUpNarrowWide className="h-4 w-4" /> : <ArrowDownWideNarrow className="h-4 w-4" />}
         </Button>
@@ -95,13 +97,13 @@ export function ActionablesControls({
 
       {/* Group */}
       <div className="flex items-center gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Group</span>
+        <span className="text-xs font-medium text-muted-foreground">{t('actionablesControls.groupLabel')}</span>
         <Select value={groupKey} onValueChange={(v) => onGroupKeyChange(v as ActionableGroupKey)}>
-          <SelectTrigger className="h-8 w-[140px]" aria-label="Group actionables by">
+          <SelectTrigger className="h-8 w-[140px]" aria-label={t('actionablesControls.groupSelectAriaLabel')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {GROUP_OPTIONS.map((o) => (
+            {getGroupOptions().map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}
               </SelectItem>
@@ -112,13 +114,13 @@ export function ActionablesControls({
 
       {/* Type filter */}
       <div className="flex items-center gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Type</span>
+        <span className="text-xs font-medium text-muted-foreground">{t('actionablesControls.typeLabel')}</span>
         <Select value={typeFilter} onValueChange={onTypeFilterChange}>
-          <SelectTrigger className="h-8 w-[150px]" aria-label="Filter by type">
+          <SelectTrigger className="h-8 w-[150px]" aria-label={t('actionablesControls.typeFilterAriaLabel')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
+            <SelectItem value="all">{t('actionablesControls.allTypesOption')}</SelectItem>
             {typeOptions.map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}
@@ -130,13 +132,13 @@ export function ActionablesControls({
 
       {/* Date filter */}
       <div className="flex items-center gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Date</span>
+        <span className="text-xs font-medium text-muted-foreground">{t('actionablesControls.dateLabel')}</span>
         <Select value={dateFilter} onValueChange={(v) => onDateFilterChange(v as DateFilterKey)}>
-          <SelectTrigger className="h-8 w-[140px]" aria-label="Filter by date">
+          <SelectTrigger className="h-8 w-[140px]" aria-label={t('actionablesControls.dateFilterAriaLabel')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {DATE_FILTER_OPTIONS.map((o) => (
+            {getDateFilterOptions().map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}
               </SelectItem>

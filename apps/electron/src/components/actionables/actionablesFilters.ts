@@ -3,35 +3,52 @@
  *
  * Kept free of React and IPC so they are trivially unit-testable and reusable.
  * All functions are non-mutating (they return new arrays).
+ *
+ * i18n note (Task 17-C): the option-label lists below used to be module-scope
+ * constants, which freeze their (English) label text at import time and never
+ * pick up a runtime language switch — the same trap `library/utils/durationFilter.ts`
+ * documents (Task 11d). `SORT_OPTIONS`/`GROUP_OPTIONS`/`DATE_FILTER_OPTIONS` are
+ * only ever indexed by `.map()` in `ActionablesControls.tsx` (never by a stored
+ * property key the way `durationFilter.ts`'s getters are), so they became plain
+ * functions instead — called fresh at render time, same effect as a getter.
+ * `STATUS_LABELS` stays a Record (it's still keyed by id below), but its values
+ * are resolved through `i18n.t()` at the point of use rather than frozen here.
  */
 
 import type { Actionable, ActionableStatus } from '@/types/knowledge'
 import { humanizeActionableType } from './templateInfo'
+import i18n from '@/i18n'
 
 export type ActionableSortKey = 'date' | 'confidence' | 'type'
 export type SortDirection = 'asc' | 'desc'
 export type ActionableGroupKey = 'none' | 'type' | 'status' | 'source'
 export type DateFilterKey = 'all' | '7d' | '30d' | '90d'
 
-export const SORT_OPTIONS: { value: ActionableSortKey; label: string }[] = [
-  { value: 'date', label: 'Date' },
-  { value: 'confidence', label: 'Confidence' },
-  { value: 'type', label: 'Type' }
-]
+export function getSortOptions(): { value: ActionableSortKey; label: string }[] {
+  return [
+    { value: 'date', label: i18n.t('projects:actionablesFilters.sortOption.date', { defaultValue: 'Date' }) },
+    { value: 'confidence', label: i18n.t('projects:actionablesFilters.sortOption.confidence', { defaultValue: 'Confidence' }) },
+    { value: 'type', label: i18n.t('projects:actionablesFilters.sortOption.type', { defaultValue: 'Type' }) }
+  ]
+}
 
-export const GROUP_OPTIONS: { value: ActionableGroupKey; label: string }[] = [
-  { value: 'none', label: 'No grouping' },
-  { value: 'type', label: 'By type' },
-  { value: 'status', label: 'By status' },
-  { value: 'source', label: 'By source' }
-]
+export function getGroupOptions(): { value: ActionableGroupKey; label: string }[] {
+  return [
+    { value: 'none', label: i18n.t('projects:actionablesFilters.groupOption.none', { defaultValue: 'No grouping' }) },
+    { value: 'type', label: i18n.t('projects:actionablesFilters.groupOption.type', { defaultValue: 'By type' }) },
+    { value: 'status', label: i18n.t('projects:actionablesFilters.groupOption.status', { defaultValue: 'By status' }) },
+    { value: 'source', label: i18n.t('projects:actionablesFilters.groupOption.source', { defaultValue: 'By source' }) }
+  ]
+}
 
-export const DATE_FILTER_OPTIONS: { value: DateFilterKey; label: string }[] = [
-  { value: 'all', label: 'All time' },
-  { value: '7d', label: 'Last 7 days' },
-  { value: '30d', label: 'Last 30 days' },
-  { value: '90d', label: 'Last 90 days' }
-]
+export function getDateFilterOptions(): { value: DateFilterKey; label: string }[] {
+  return [
+    { value: 'all', label: i18n.t('projects:actionablesFilters.dateFilterOption.all', { defaultValue: 'All time' }) },
+    { value: '7d', label: i18n.t('projects:actionablesFilters.dateFilterOption.7d', { defaultValue: 'Last 7 days' }) },
+    { value: '30d', label: i18n.t('projects:actionablesFilters.dateFilterOption.30d', { defaultValue: 'Last 30 days' }) },
+    { value: '90d', label: i18n.t('projects:actionablesFilters.dateFilterOption.90d', { defaultValue: 'Last 90 days' }) }
+  ]
+}
 
 const DATE_FILTER_DAYS: Record<DateFilterKey, number | null> = {
   all: null,
@@ -43,12 +60,17 @@ const DATE_FILTER_DAYS: Record<DateFilterKey, number | null> = {
 /** Fixed, meaningful order for status groups (not alphabetical). */
 const STATUS_ORDER: ActionableStatus[] = ['pending', 'in_progress', 'generated', 'shared', 'dismissed']
 
+/** English fallback text, keyed by status id — the live label is resolved via i18n.t() at use. */
 const STATUS_LABELS: Record<ActionableStatus, string> = {
   pending: 'Pending',
   in_progress: 'In Progress',
   generated: 'Generated',
   shared: 'Shared',
   dismissed: 'Dismissed'
+}
+
+function statusLabel(status: ActionableStatus): string {
+  return i18n.t(`projects:actionablesFilters.status.${status}`, { defaultValue: STATUS_LABELS[status] })
 }
 
 function timeOf(value: string | null | undefined): number {
@@ -126,14 +148,16 @@ export function groupActionables(items: Actionable[], key: ActionableGroupKey): 
     let label: string
     if (key === 'status') {
       bucketKey = a.status
-      label = STATUS_LABELS[a.status] ?? a.status
+      label = statusLabel(a.status)
     } else if (key === 'type') {
       bucketKey = a.type || 'unknown'
       label = humanizeActionableType(a.type)
     } else {
       // source
       bucketKey = a.sourceKnowledgeId || 'unknown'
-      label = a.sourceKnowledgeId ? `Source ${a.sourceKnowledgeId.slice(0, 8)}` : 'Unknown source'
+      label = a.sourceKnowledgeId
+        ? i18n.t('projects:actionablesFilters.sourceGroupLabel', { id: a.sourceKnowledgeId.slice(0, 8), defaultValue: `Source ${a.sourceKnowledgeId.slice(0, 8)}` })
+        : i18n.t('projects:actionablesFilters.unknownSourceLabel', { defaultValue: 'Unknown source' })
     }
     const existing = buckets.get(bucketKey)
     if (existing) existing.items.push(a)
