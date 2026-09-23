@@ -6,8 +6,27 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/**
+ * Japanese rendering for formatDate: kanji year/month/day plus the short
+ * weekday in parentheses, e.g. "2026年9月23日(水)" — this ICU's own ja-JP
+ * pattern for { year: 'numeric', month: 'short', day: 'numeric', weekday:
+ * 'short' } (verified with a standalone `node -e` run against this repo's
+ * own Node/ICU, the same one vitest runs under; see utils.test.ts). Only
+ * reached when the UI language is ja, so the English branch below keeps
+ * producing its established "Wed, Sep 23" form (no year) byte-for-byte.
+ */
+function formatDateJa(d: Date): string {
+  return d.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    weekday: 'short'
+  })
+}
+
 export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
+  if (i18n.language === 'ja') return formatDateJa(d)
   return d.toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
@@ -15,8 +34,23 @@ export function formatDate(date: Date | string): string {
   })
 }
 
+/**
+ * Japanese rendering for formatTime: 24-hour clock ("15:30"), never the
+ * English 12-hour + AM/PM convention — hour12 is an English-ism. hour:
+ * '2-digit' zero-pads single-digit hours the same way the English branch's
+ * '2-digit' does ("03:05", not "3:05").
+ */
+function formatTimeJa(d: Date): string {
+  return d.toLocaleTimeString('ja-JP', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
+}
+
 export function formatTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
+  if (i18n.language === 'ja') return formatTimeJa(d)
   return d.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
@@ -24,15 +58,35 @@ export function formatTime(date: Date | string): string {
   })
 }
 
+/**
+ * The date/time joiner lives in the catalogue for both languages, never as a
+ * bare literal: English resolves to " at " (byte-identical to the old
+ * hardcoded template literal), and Japanese resolves to " · " — no
+ * preposition reads naturally there, and · matches the same date/time join
+ * smartDate.ts already uses for formatSmartDate.
+ */
 export function formatDateTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return `${formatDate(d)} at ${formatTime(d)}`
+  return `${formatDate(d)}${i18n.t('common:date.dateTimeJoiner')}${formatTime(d)}`
+}
+
+/**
+ * Japanese rendering for formatDuration: "1時間30分" / "5分20秒" / "45秒".
+ * Mirrors the English three-way branch (hours>0 / minutes>0 / else) exactly
+ * — only the unit words change, via the common catalogue.
+ */
+function formatDurationJa(hours: number, minutes: number, secs: number): string {
+  if (hours > 0) return i18n.t('common:duration.hoursMinutes', { hours, minutes })
+  if (minutes > 0) return i18n.t('common:duration.minutesSeconds', { minutes, seconds: secs })
+  return i18n.t('common:duration.seconds', { seconds: secs })
 }
 
 export function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   const secs = Math.floor(seconds % 60)
+
+  if (i18n.language === 'ja') return formatDurationJa(hours, minutes, secs)
 
   if (hours > 0) {
     return `${hours}h ${minutes}m`

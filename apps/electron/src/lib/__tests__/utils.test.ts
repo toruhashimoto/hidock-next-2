@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
-import { getRelativeTime, formatDateTime, formatDuration, formatBytes, validateId } from '../utils'
+import { describe, it, expect, afterEach } from 'vitest'
+import { getRelativeTime, formatDate, formatTime, formatDateTime, formatDuration, formatBytes, validateId } from '../utils'
+import i18n from '@/i18n'
 
 describe('getRelativeTime', () => {
   it('should return "Just now" for dates less than 1 minute ago', () => {
@@ -98,5 +99,121 @@ describe('validateId', () => {
   it('should reject prototype pollution attempts', () => {
     expect(validateId('__proto__')).toBe(false)
     expect(validateId('constructor')).toBe(false)
+  })
+})
+
+// Task 17-E — formatDate/formatTime/formatDateTime/formatDuration follow the
+// active UI language (i18n.language), mirroring the lib/smartDate.ts pattern:
+// the English branch below is the original, untouched code (reached whenever
+// the language isn't 'ja'), and a separate Japanese path is measured against
+// this repo's own Node/ICU — the same one vitest runs under — rather than
+// guessed. i18n is a module-level singleton shared across the whole test
+// run, so every test below that switches to 'ja' restores 'en' in its own
+// afterEach, or the language leaks into unrelated test files that run after
+// this one (see smartDate.test.ts).
+//
+// Dates are written as local-time ISO strings (`'2026-09-23T15:30:00'`, no
+// 'Z'/offset), which `new Date(...)` parses in the machine's local timezone.
+// This machine runs JST (UTC+9), so these are the same values the
+// measurements below were taken against — no UTC/JST mismatch.
+
+describe('formatDate — locale', () => {
+  afterEach(() => {
+    void i18n.changeLanguage('en')
+  })
+
+  it('keeps the English rendering unchanged (weekday + short month + day, no year)', () => {
+    const date = new Date('2026-09-23T15:30:00') // Wednesday
+    expect(formatDate(date)).toBe('Wed, Sep 23')
+  })
+
+  it('formats in Japanese when the UI language is ja', async () => {
+    await i18n.changeLanguage('ja')
+    // Measured with:
+    //   node -e "console.log(new Date('2026-09-23T15:30:00').toLocaleDateString(
+    //     'ja-JP', {year:'numeric',month:'short',day:'numeric',weekday:'short'}))"
+    // → "2026年9月23日(水)"
+    const date = new Date('2026-09-23T15:30:00')
+    expect(formatDate(date)).toBe('2026年9月23日(水)')
+  })
+})
+
+describe('formatTime — locale', () => {
+  afterEach(() => {
+    void i18n.changeLanguage('en')
+  })
+
+  it('keeps the English 12-hour rendering unchanged', () => {
+    const date = new Date('2026-09-23T15:30:00')
+    expect(formatTime(date)).toBe('03:30 PM')
+  })
+
+  it('formats as a 24-hour clock when the UI language is ja', async () => {
+    await i18n.changeLanguage('ja')
+    // Measured with:
+    //   node -e "console.log(new Date('2026-09-23T15:30:00').toLocaleTimeString(
+    //     'ja-JP', {hour:'2-digit',minute:'2-digit',hour12:false}))"
+    // → "15:30" — 24-hour, no AM/PM (hour12 is an English-ism).
+    const date = new Date('2026-09-23T15:30:00')
+    expect(formatTime(date)).toBe('15:30')
+  })
+
+  it('zero-pads single-digit hours in Japanese the same way the English branch does', async () => {
+    await i18n.changeLanguage('ja')
+    // Measured the same way as above, at 03:05 → "03:05" (not "3:05"),
+    // matching the English branch's own hour: '2-digit' zero-padding.
+    const date = new Date('2026-09-23T03:05:00')
+    expect(formatTime(date)).toBe('03:05')
+  })
+})
+
+describe('formatDateTime — locale', () => {
+  afterEach(() => {
+    void i18n.changeLanguage('en')
+  })
+
+  it('joins date and time with " · " (no English preposition) when the UI language is ja', async () => {
+    await i18n.changeLanguage('ja')
+    const date = new Date('2026-09-23T15:30:00')
+    expect(formatDateTime(date)).toBe('2026年9月23日(水) · 15:30')
+  })
+})
+
+describe('formatDuration — locale', () => {
+  afterEach(() => {
+    void i18n.changeLanguage('en')
+  })
+
+  it('formats seconds only in Japanese', async () => {
+    await i18n.changeLanguage('ja')
+    expect(formatDuration(45)).toBe('45秒')
+  })
+
+  it('formats minutes and seconds in Japanese', async () => {
+    await i18n.changeLanguage('ja')
+    expect(formatDuration(320)).toBe('5分20秒')
+  })
+
+  it('formats hours and minutes in Japanese', async () => {
+    await i18n.changeLanguage('ja')
+    expect(formatDuration(5400)).toBe('1時間30分')
+  })
+})
+
+describe('getRelativeTime — locale (long-tail falls through to formatDate)', () => {
+  afterEach(() => {
+    void i18n.changeLanguage('en')
+  })
+
+  it('renders the localized formatDate for dates over a week old when the UI language is ja', async () => {
+    await i18n.changeLanguage('ja')
+    // Pure epoch-millisecond arithmetic (not a parsed date-time string), so
+    // this holds the same way in JST (this machine) as in any other timezone
+    // — see smartDate.test.ts for the same reasoning applied there.
+    const twoWeeksAgo = new Date(Date.now() - 14 * 86400000)
+    const result = getRelativeTime(twoWeeksAgo)
+    expect(result).toBe(formatDate(twoWeeksAgo))
+    expect(result).not.toContain('ago')
+    expect(result).toContain('年')
   })
 })

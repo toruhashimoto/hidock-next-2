@@ -1,6 +1,11 @@
 {
   "date.unknown": "日付不明",
   "date.justNow": "たった今",
+  "date.dateTimeJoiner": " · ",
+
+  "duration.hoursMinutes": "{{hours}}時間{{minutes}}分",
+  "duration.minutesSeconds": "{{minutes}}分{{seconds}}秒",
+  "duration.seconds": "{{seconds}}秒",
 
   "errors.unknown": "不明なエラー",
 

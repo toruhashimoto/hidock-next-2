@@ -1,6 +1,11 @@
 {
   "date.unknown": "Unknown date",
   "date.justNow": "just now",
+  "date.dateTimeJoiner": " at ",
+
+  "duration.hoursMinutes": "{{hours}}h {{minutes}}m",
+  "duration.minutesSeconds": "{{minutes}}m {{seconds}}s",
+  "duration.seconds": "{{seconds}}s",
 
   "errors.unknown": "Unknown error",
 
