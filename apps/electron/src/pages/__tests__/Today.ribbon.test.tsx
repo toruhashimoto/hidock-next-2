@@ -7,9 +7,10 @@
  * a far-off meeting is a compact "later" row.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import i18n from '@/i18n'
 import { Today } from '../Today'
 import { useAppStore } from '@/store'
 import { resetMeetingParticipantsCache } from '@/lib/meeting-participants'
@@ -153,6 +154,55 @@ describe('Today ribbon — hover cards (regression: capsule rows wrapped)', () =
 
     // Hover card content (portal) reveals the meeting location → proves the wrapper.
     expect(await screen.findByText('Room 401')).toBeInTheDocument()
+  })
+})
+
+/**
+ * The pre-first-meeting hero shows the countdown as a bare number in large
+ * type, under a label that already names what it counts down to. It used to
+ * strip an English-only "in " prefix off the formatted phrase, which was a
+ * no-op in Japanese (「あと3時間」) and left the whole phrase in the hero's
+ * large type. Both languages are asserted so the next catalogue that phrases
+ * the connector differently cannot regress this silently.
+ */
+describe('Today ribbon — pre-first-meeting hero countdown', () => {
+  // Nothing earlier, nothing recent, nothing in the focus band — a single
+  // meeting far enough ahead to be a `later` row is what gates the hero.
+  function preFirstMeetingBriefing() {
+    return {
+      ...briefing(),
+      todayMeetings: [{ id: 'first', subject: 'Morning Planning', start_time: iso(180), end_time: iso(210) }]
+    }
+  }
+
+  beforeEach(() => {
+    ;(global.window.electronAPI as any).briefing.get = vi
+      .fn()
+      .mockResolvedValue({ success: true, data: preFirstMeetingBriefing() })
+  })
+
+  afterEach(async () => {
+    // Never let a later test file in this run inherit Japanese.
+    await i18n.changeLanguage('en')
+  })
+
+  it('renders the countdown without its connector word in English', async () => {
+    renderToday()
+    await screen.findByText('Morning Planning')
+
+    const countdown = screen.getByTestId('first-meeting-countdown')
+    expect(countdown).toHaveTextContent('3 h')
+    expect(countdown.textContent).not.toMatch(/^in /)
+  })
+
+  it('renders the countdown without its connector word in Japanese', async () => {
+    await i18n.changeLanguage('ja')
+    renderToday()
+    await screen.findByText('Morning Planning')
+
+    const countdown = screen.getByTestId('first-meeting-countdown')
+    expect(countdown).toHaveTextContent('3時間')
+    expect(countdown.textContent).not.toContain('あと')
   })
 })
 

@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
+import i18n from '@/i18n'
 import {
   classifyMeetingTimings,
   isCancelledSubject,
@@ -7,6 +8,7 @@ import {
   allDayMeetingOnLocalDate,
   localDateString,
   formatMinutesUntil,
+  formatMinutesUntilBare,
   formatMinutesLeft,
   formatMinutesSinceEnd,
   type TimeableMeeting
@@ -284,5 +286,53 @@ describe('relative time formatting', () => {
     expect(formatMinutesSinceEnd(60)).toBe('ended 1 h ago')
     expect(formatMinutesSinceEnd(75)).toBe('ended 1 h 15 min ago')
     expect(formatMinutesSinceEnd(0)).toBe('just ended')
+  })
+
+  it('formats a bare minutes-until with no leading connector', () => {
+    expect(formatMinutesUntilBare(4)).toBe('4 min')
+    expect(formatMinutesUntilBare(59)).toBe('59 min')
+    expect(formatMinutesUntilBare(60)).toBe('1 h')
+    expect(formatMinutesUntilBare(85)).toBe('1 h 25 min')
+    // Nothing to strip at zero — the hero keeps saying "starting now".
+    expect(formatMinutesUntilBare(0)).toBe('starting now')
+  })
+})
+
+/**
+ * The Today hero renders the countdown as a bare number in large type, under a
+ * "First meeting" label that already says what it counts down to. It used to
+ * get there with `formatMinutesUntil(n).replace(/^in /, '')` — which only works
+ * because English happens to put its connector in front. Japanese writes
+ * "あと5分", so the strip silently became a no-op and the hero rendered the
+ * full phrase. These cases pin the bare form to the catalogue instead.
+ *
+ * This file is otherwise the only place that exercises formatMinutesUntilBare:
+ * the suite runs in English by construction (test/setup.ts pins initI18n('en')),
+ * so a defect that only shows in Japanese is invisible to every other test.
+ */
+describe('bare minutes-until across languages', () => {
+  afterEach(async () => {
+    // Never let a later test file in this run inherit Japanese.
+    await i18n.changeLanguage('en')
+  })
+
+  it('drops the connector in Japanese, where it is not a leading "in "', async () => {
+    await i18n.changeLanguage('ja')
+
+    // The connector-bearing form is unchanged — and is prefix-stripping proof.
+    expect(formatMinutesUntil(5)).toBe('あと5分')
+
+    expect(formatMinutesUntilBare(5)).toBe('5分')
+    expect(formatMinutesUntilBare(60)).toBe('1時間')
+    expect(formatMinutesUntilBare(85)).toBe('1時間25分')
+    expect(formatMinutesUntilBare(0)).toBe('まもなく開始')
+  })
+
+  it('re-resolves through i18n on every call, so a live language switch is picked up', async () => {
+    expect(formatMinutesUntilBare(5)).toBe('5 min')
+    await i18n.changeLanguage('ja')
+    expect(formatMinutesUntilBare(5)).toBe('5分')
+    await i18n.changeLanguage('en')
+    expect(formatMinutesUntilBare(5)).toBe('5 min')
   })
 })
