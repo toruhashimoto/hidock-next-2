@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { NAMESPACES } from '../index'
+import { NAMESPACES, resources, SUPPORTED_LANGUAGES } from '../index'
 
 type Catalogue = Record<string, string>
 
@@ -55,6 +55,24 @@ describe('catalogue parity', () => {
   it('has a Japanese catalogue for every English one', () => {
     const missing = CATALOGUE_NAMES.filter((ns) => !JA[ns]).sort()
     expect(missing).toEqual([])
+  })
+
+  /**
+   * NAMESPACES itself is protected above (derived-from-disk vs the declared
+   * list). But i18n/index.ts's `resources` map — what initI18n actually hands
+   * to i18next — is a SEPARATE hand-maintained object keyed the same way. A
+   * merge can drop one namespace's entry from `resources.ja` (or `.en`)
+   * without touching NAMESPACES or any *.json file: every catalogue test above
+   * stays green, the English suite stays green (resources.en is untouched),
+   * and the Japanese screen for that namespace silently renders raw keys —
+   * exactly the failure mode this whole file exists to catch, just one layer
+   * further down. Tests run in English (test/setup.ts), so nothing else in
+   * the suite would ever notice.
+   */
+  it('registers every namespace in the resources map', () => {
+    for (const lng of SUPPORTED_LANGUAGES) {
+      expect(Object.keys(resources[lng]).sort(), `resources.${lng}`).toEqual([...NAMESPACES].sort())
+    }
   })
 
   for (const ns of CATALOGUE_NAMES) {
