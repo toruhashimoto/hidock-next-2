@@ -186,6 +186,7 @@
   "entityHoverCard.meeting.recordedTranscriptAvailable": "録音済み · 文字起こしあり",
   "entityHoverCard.meeting.recordedOnly": "録音済み",
   "entityHoverCard.meeting.joinMeeting": "会議に参加",
+  "entityHoverCard.meeting.moreParticipants_other": "他{{count}}名",
 
   "entityMention.ariaLabel.dateOpen": "{{label}}のカレンダーを開く",
   "entityMention.ariaLabel.typedOpen": "{{type}}「{{label}}」を開く",

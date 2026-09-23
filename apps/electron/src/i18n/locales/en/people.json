@@ -190,6 +190,8 @@
   "entityHoverCard.meeting.recordedTranscriptAvailable": "Recorded · transcript available",
   "entityHoverCard.meeting.recordedOnly": "Recorded",
   "entityHoverCard.meeting.joinMeeting": "Join meeting",
+  "entityHoverCard.meeting.moreParticipants_one": "+{{count}} more",
+  "entityHoverCard.meeting.moreParticipants_other": "+{{count}} more",
 
   "entityMention.ariaLabel.dateOpen": "Open calendar on {{label}}",
   "entityMention.ariaLabel.typedOpen": "Open {{type}} {{label}}",

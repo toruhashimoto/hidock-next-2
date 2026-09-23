@@ -447,7 +447,9 @@ export function MeetingHoverCard({
           ))}
           {participants.length > HOVER_PARTICIPANT_LIMIT && (
             <span className="text-[11px] text-muted-foreground">
-              +{participants.length - HOVER_PARTICIPANT_LIMIT} more
+              {t('people:entityHoverCard.meeting.moreParticipants', {
+                count: participants.length - HOVER_PARTICIPANT_LIMIT
+              })}
             </span>
           )}
         </div>
