@@ -9,6 +9,17 @@ import { isUnknownDate } from './unknownDate'
 import i18n from '@/i18n'
 
 /**
+ * The BCP 47 tag to format a time-of-day with. Derived from the active UI
+ * language rather than the OS locale — mirrors lib/smartDate.ts's dateLocale():
+ * a user who picked English in Settings expects English time formatting even on
+ * a Japanese Windows. ja-JP with { hour: 'numeric', minute: '2-digit' } renders
+ * 24-hour ("15:00"), so no extra branching is needed to suppress AM/PM.
+ */
+function timeLocale(): string {
+  return i18n.language === 'ja' ? 'ja-JP' : 'en-US'
+}
+
+/**
  * A meeting this long (or flagged all-day) is a low-precision "bridge" window. A
  * recording merely contained in one must NOT be picked as its best match — see
  * getRecordingMeetingMatchScore. Kept in sync with LONG_MEETING_MS in the main
@@ -327,7 +338,7 @@ export function assignOverlapLanes<T extends { startTime: Date; endTime: Date }>
  */
 export function buildEventAriaLabel(subject: string, start: Date, end: Date): string {
   const fmt = (d: Date) =>
-    d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    d.toLocaleTimeString(timeLocale(), { hour: 'numeric', minute: '2-digit' })
   const name = subject && subject.trim().length > 0 ? subject.trim() : i18n.t('calendar:ariaLabel.untitledEvent')
   return i18n.t('calendar:ariaLabel.eventTimeRange', { name, start: fmt(start), end: fmt(end) })
 }
@@ -660,7 +671,7 @@ export function recordingBlockTitle(recording: CalendarRecording): string {
   if (recording.linkedMeeting) return recording.linkedMeeting.subject
   const title = recording.title?.trim()
   if (title) return title
-  const time = recording.startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const time = recording.startTime.toLocaleTimeString(timeLocale(), { hour: 'numeric', minute: '2-digit' })
   return i18n.t('calendar:recordingBlock.unnamedTitle', { time })
 }
 
@@ -670,7 +681,7 @@ export function recordingBlockTitle(recording: CalendarRecording): string {
  */
 export function formatUnmatchedRecordingMeta(recording: CalendarRecording): string {
   const duration = formatDurationStr(recording.durationSeconds)
-  const time = recording.startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const time = recording.startTime.toLocaleTimeString(timeLocale(), { hour: 'numeric', minute: '2-digit' })
   return i18n.t('calendar:recordingBlock.unmatchedMeta', { duration, time })
 }
 
