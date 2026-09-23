@@ -1,4 +1,5 @@
 import { AlertCircle, RefreshCw, Usb } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 
 interface DeviceDisconnectBannerProps {
@@ -14,6 +15,7 @@ export function DeviceDisconnectBanner({
   onNavigateToDevice,
   onRetry
 }: DeviceDisconnectBannerProps) {
+  const { t } = useTranslation('library')
   if (!show) return null
 
   return (
@@ -26,12 +28,12 @@ export function DeviceDisconnectBanner({
         )}
         <div>
           <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
-            {isReconnecting ? 'Reconnecting to device...' : 'Device disconnected'}
+            {isReconnecting ? t('deviceDisconnectBanner.reconnectingTitle') : t('deviceDisconnectBanner.disconnectedTitle')}
           </p>
           <p className="text-xs text-orange-600 dark:text-orange-400">
             {isReconnecting
-              ? 'Please wait while we reconnect to your HiDock.'
-              : 'Downloads have been paused. Reconnect to continue.'}
+              ? t('deviceDisconnectBanner.reconnectingMessage')
+              : t('deviceDisconnectBanner.disconnectedMessage')}
           </p>
         </div>
       </div>
@@ -39,7 +41,7 @@ export function DeviceDisconnectBanner({
         {onRetry && !isReconnecting && (
           <Button variant="outline" size="sm" onClick={onRetry} className="border-orange-300 dark:border-orange-700">
             <RefreshCw className="h-4 w-4 mr-2" />
-            Retry
+            {t('deviceDisconnectBanner.retryButton')}
           </Button>
         )}
         <Button
@@ -49,7 +51,7 @@ export function DeviceDisconnectBanner({
           className="border-orange-300 dark:border-orange-700"
         >
           <Usb className="h-4 w-4 mr-2" />
-          Go to Device
+          {t('deviceDisconnectBanner.goToDeviceButton')}
         </Button>
       </div>
     </div>

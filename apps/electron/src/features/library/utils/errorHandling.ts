@@ -2,7 +2,21 @@
  * Error Handling Utilities for Library
  *
  * Provides consistent error handling for audio playback, downloads, and transcription.
+ *
+ * i18n note (Task 11c): these are plain functions (not React components), so
+ * `useTranslation()` is unavailable. `parseError`/`getErrorMessage`/
+ * `getRecoveryAction` are all consumed directly — with fixed call signatures
+ * — by several files outside this task's scope (hooks/useAudioPlayback.ts,
+ * hooks/useBulkOperation.ts, hooks/useDownloadOrchestrator.ts,
+ * store/useLibraryStore.ts), so their exported signatures cannot change.
+ * They resolve copy via the shared `i18n` singleton (`i18n.t(...)`, task
+ * brief "approach 2") instead of taking a `t` parameter. Unlike the
+ * module-scope constants in deletionCopy.ts, every translated value here is
+ * built freshly *inside* a function body on each call, so all three
+ * functions are fully reactive to a language switch (no restart needed).
  */
+
+import i18n from '@/i18n'
 
 export type LibraryErrorType =
   | 'audio_not_found'
@@ -39,28 +53,28 @@ export function parseError(error: unknown, context: string = ''): LibraryError {
     if (errorName === 'NotFoundError' || errorMessage.includes('not found')) {
       return {
         type: 'audio_not_found',
-        message: 'Audio file not found',
+        message: i18n.t('library:errorHandling.audioNotFoundMessage'),
         recoverable: false,
         retryable: false,
-        details: 'The audio file may have been moved or deleted.'
+        details: i18n.t('library:errorHandling.audioNotFoundDetails')
       }
     }
     if (errorName === 'NotSupportedError' || errorMessage.includes('codec') || errorMessage.includes('format')) {
       return {
         type: 'audio_codec_error',
-        message: 'Audio format not supported',
+        message: i18n.t('library:errorHandling.audioCodecErrorMessage'),
         recoverable: false,
         retryable: false,
-        details: 'Try re-downloading the file or converting to a supported format.'
+        details: i18n.t('library:errorHandling.audioCodecErrorDetails')
       }
     }
     if (errorName === 'NotAllowedError' || errorMessage.includes('permission')) {
       return {
         type: 'audio_permission_denied',
-        message: 'Permission denied to play audio',
+        message: i18n.t('library:errorHandling.audioPermissionDeniedMessage'),
         recoverable: true,
         retryable: true,
-        details: 'Check your browser permissions for audio playback.'
+        details: i18n.t('library:errorHandling.audioPermissionDeniedDetails')
       }
     }
   }
@@ -70,24 +84,24 @@ export function parseError(error: unknown, context: string = ''): LibraryError {
     if (errorMessage.includes('disk') || errorMessage.includes('space') || errorMessage.includes('full')) {
       return {
         type: 'download_disk_full',
-        message: 'Not enough disk space',
+        message: i18n.t('library:errorHandling.downloadDiskFullMessage'),
         recoverable: true,
         retryable: true,
-        details: 'Free up some disk space and try again.'
+        details: i18n.t('library:errorHandling.downloadDiskFullDetails')
       }
     }
     if (errorMessage.includes('disconnect') || errorMessage.includes('USB')) {
       return {
         type: 'download_interrupted',
-        message: 'Download interrupted',
+        message: i18n.t('library:errorHandling.downloadInterruptedMessage'),
         recoverable: true,
         retryable: true,
-        details: 'Device was disconnected during download. Reconnect and try again.'
+        details: i18n.t('library:errorHandling.downloadInterruptedDetails')
       }
     }
     return {
       type: 'download_failed',
-      message: 'Download failed',
+      message: i18n.t('library:errorHandling.downloadFailedMessage'),
       recoverable: true,
       retryable: true,
       details: errorMessage
@@ -99,24 +113,24 @@ export function parseError(error: unknown, context: string = ''): LibraryError {
     if (errorMessage.includes('timeout')) {
       return {
         type: 'transcription_timeout',
-        message: 'Transcription timed out',
+        message: i18n.t('library:errorHandling.transcriptionTimeoutMessage'),
         recoverable: true,
         retryable: true,
-        details: 'The transcription service took too long. Try again or use a shorter audio file.'
+        details: i18n.t('library:errorHandling.transcriptionTimeoutDetails')
       }
     }
     if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
       return {
         type: 'transcription_rate_limit',
-        message: 'Transcription service busy',
+        message: i18n.t('library:errorHandling.transcriptionRateLimitMessage'),
         recoverable: true,
         retryable: true,
-        details: 'Too many requests. Please wait a moment and try again.'
+        details: i18n.t('library:errorHandling.transcriptionRateLimitDetails')
       }
     }
     return {
       type: 'transcription_failed',
-      message: 'Transcription failed',
+      message: i18n.t('library:errorHandling.transcriptionFailedMessage'),
       recoverable: true,
       retryable: true,
       details: errorMessage
@@ -127,10 +141,10 @@ export function parseError(error: unknown, context: string = ''): LibraryError {
   if (errorMessage.includes('device') || errorMessage.includes('USB') || errorMessage.includes('disconnect')) {
     return {
       type: 'device_disconnected',
-      message: 'Device disconnected',
+      message: i18n.t('library:errorHandling.deviceDisconnectedMessage'),
       recoverable: true,
       retryable: true,
-      details: 'Reconnect your HiDock device to continue.'
+      details: i18n.t('library:errorHandling.deviceDisconnectedDetails')
     }
   }
 
@@ -138,17 +152,17 @@ export function parseError(error: unknown, context: string = ''): LibraryError {
   if (errorMessage.includes('network') || errorMessage.includes('fetch') || errorMessage.includes('connection')) {
     return {
       type: 'network_error',
-      message: 'Network error',
+      message: i18n.t('library:errorHandling.networkErrorMessage'),
       recoverable: true,
       retryable: true,
-      details: 'Check your internet connection and try again.'
+      details: i18n.t('library:errorHandling.networkErrorDetails')
     }
   }
 
   // Unknown error
   return {
     type: 'unknown',
-    message: 'An error occurred',
+    message: i18n.t('library:errorHandling.unknownErrorMessage'),
     recoverable: true,
     retryable: true,
     details: errorMessage
@@ -160,18 +174,18 @@ export function parseError(error: unknown, context: string = ''): LibraryError {
  */
 export function getErrorMessage(type: LibraryErrorType): string {
   const messages: Record<LibraryErrorType, string> = {
-    audio_not_found: 'Audio file not found. The file may have been moved or deleted.',
-    audio_codec_error: 'This audio format is not supported. Try re-downloading the file.',
-    audio_permission_denied: 'Permission denied to play audio. Check your browser settings.',
-    download_failed: 'Download failed. Please try again.',
-    download_interrupted: 'Download interrupted. Reconnect your device and try again.',
-    download_disk_full: 'Not enough disk space. Free up some space and try again.',
-    transcription_failed: 'Transcription failed. Please try again.',
-    transcription_timeout: 'Transcription timed out. Try again with a shorter audio file.',
-    transcription_rate_limit: 'Transcription service is busy. Please wait and try again.',
-    device_disconnected: 'Device disconnected. Please reconnect your HiDock.',
-    network_error: 'Network error. Check your connection and try again.',
-    unknown: 'An unexpected error occurred. Please try again.'
+    audio_not_found: i18n.t('library:errorHandling.friendlyAudioNotFound'),
+    audio_codec_error: i18n.t('library:errorHandling.friendlyAudioCodecError'),
+    audio_permission_denied: i18n.t('library:errorHandling.friendlyAudioPermissionDenied'),
+    download_failed: i18n.t('library:errorHandling.friendlyDownloadFailed'),
+    download_interrupted: i18n.t('library:errorHandling.friendlyDownloadInterrupted'),
+    download_disk_full: i18n.t('library:errorHandling.friendlyDownloadDiskFull'),
+    transcription_failed: i18n.t('library:errorHandling.friendlyTranscriptionFailed'),
+    transcription_timeout: i18n.t('library:errorHandling.friendlyTranscriptionTimeout'),
+    transcription_rate_limit: i18n.t('library:errorHandling.friendlyTranscriptionRateLimit'),
+    device_disconnected: i18n.t('library:errorHandling.friendlyDeviceDisconnected'),
+    network_error: i18n.t('library:errorHandling.friendlyNetworkError'),
+    unknown: i18n.t('library:errorHandling.friendlyUnknown')
   }
   return messages[type]
 }
@@ -184,26 +198,26 @@ export function getRecoveryAction(
 ): { label: string; action: 'retry' | 'dismiss' | 'settings' | 'device' | 'delete' } | null {
   switch (type) {
     case 'audio_not_found':
-      return { label: 'Remove from library', action: 'delete' }
+      return { label: i18n.t('library:errorHandling.recoveryRemoveFromLibrary'), action: 'delete' }
     case 'audio_codec_error':
-      return { label: 'Re-download', action: 'retry' }
+      return { label: i18n.t('library:errorHandling.recoveryRedownload'), action: 'retry' }
     case 'audio_permission_denied':
-      return { label: 'Open settings', action: 'settings' }
+      return { label: i18n.t('library:errorHandling.recoveryOpenSettings'), action: 'settings' }
     case 'download_failed':
     case 'download_interrupted':
     case 'download_disk_full':
-      return { label: 'Retry download', action: 'retry' }
+      return { label: i18n.t('library:errorHandling.recoveryRetryDownload'), action: 'retry' }
     case 'transcription_failed':
     case 'transcription_timeout':
-      return { label: 'Retry transcription', action: 'retry' }
+      return { label: i18n.t('library:errorHandling.recoveryRetryTranscription'), action: 'retry' }
     case 'transcription_rate_limit':
-      return { label: 'Dismiss', action: 'dismiss' }
+      return { label: i18n.t('library:errorHandling.recoveryDismiss'), action: 'dismiss' }
     case 'device_disconnected':
-      return { label: 'Go to Device', action: 'device' }
+      return { label: i18n.t('library:errorHandling.recoveryGoToDevice'), action: 'device' }
     case 'network_error':
-      return { label: 'Retry', action: 'retry' }
+      return { label: i18n.t('library:errorHandling.recoveryRetry'), action: 'retry' }
     case 'unknown':
-      return { label: 'Dismiss', action: 'dismiss' }
+      return { label: i18n.t('library:errorHandling.recoveryDismiss'), action: 'dismiss' }
     default:
       return null
   }

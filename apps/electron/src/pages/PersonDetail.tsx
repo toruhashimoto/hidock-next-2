@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation, Trans } from 'react-i18next'
+import { personTypeBadgeLabel } from '@/lib/person-type'
+import type { TFunction } from 'i18next'
 import {
   ArrowLeft,
   Mail,
@@ -94,17 +97,18 @@ interface PersonAlias {
 }
 
 /** Human phrase for where an alias came from, for the per-chip tooltip. */
-function aliasSourceLabel(source: PersonAlias['source']): string {
+function aliasSourceLabel(source: PersonAlias['source'], t: TFunction): string {
   switch (source) {
-    case 'merge': return 'from merge'
-    case 'speaker_assign': return 'speaker assignment'
-    case 'manual': return 'confirmed suggestion'
-    case 'inferred': return 'inferred from context'
-    default: return 'alias'
+    case 'merge': return t('people:personDetail.aliasSource.merge')
+    case 'speaker_assign': return t('people:personDetail.aliasSource.speakerAssign')
+    case 'manual': return t('people:personDetail.aliasSource.manual')
+    case 'inferred': return t('people:personDetail.aliasSource.inferred')
+    default: return t('people:personDetail.aliasSource.fallback')
   }
 }
 
 export function PersonDetail() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [person, setPerson] = useState<Person | null>(null)
@@ -223,18 +227,18 @@ export function PersonDetail() {
     // Validate name (required, non-empty)
     const trimmedName = editForm.name.trim()
     if (!trimmedName) {
-      toast.error('Validation Error', 'Name is required and cannot be empty.')
+      toast.error(t('people:personDetail.toast.validationErrorTitle'), t('people:personDetail.toast.nameRequiredMessage'))
       return
     }
     if (trimmedName.length < 2) {
-      toast.error('Validation Error', 'Name must be at least 2 characters.')
+      toast.error(t('people:personDetail.toast.validationErrorTitle'), t('people:personDetail.toast.nameTooShortMessage'))
       return
     }
 
     // Validate email format if provided
     const trimmedEmail = editForm.email.trim()
     if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      toast.error('Validation Error', 'Please enter a valid email address.')
+      toast.error(t('people:personDetail.toast.validationErrorTitle'), t('people:shared.invalidEmailError'))
       return
     }
 
@@ -260,18 +264,18 @@ export function PersonDetail() {
       const currentTags = person.tags || []
       const nextTags = editForm.tags
       const tagsChanged =
-        nextTags.length !== currentTags.length || nextTags.some((t, i) => t !== currentTags[i])
+        nextTags.length !== currentTags.length || nextTags.some((tagValue, i) => tagValue !== currentTags[i])
       if (tagsChanged) {
         updatePayload.tags = nextTags
       }
 
       await window.electronAPI.contacts.update(updatePayload as any)
-      toast.success('Contact updated', 'Contact details have been saved.')
+      toast.success(t('people:personDetail.toast.contactUpdatedTitle'), t('people:personDetail.toast.contactUpdatedMessage'))
       setIsEditing(false)
       await loadDetails()
     } catch (error) {
       console.error('Failed to update person:', error)
-      toast.error('Failed to update contact', error instanceof Error ? error.message : 'Unknown error')
+      toast.error(t('common:contacts.updateFailedFallback'), error instanceof Error ? error.message : t('common:errors.unknown'))
     }
   }
 
@@ -297,14 +301,14 @@ export function PersonDetail() {
     try {
       const result = await window.electronAPI.contacts.delete(id)
       if (result.success) {
-        toast.success('Contact deleted', `${person.name} has been removed.`)
+        toast.success(t('people:sharedToast.contactDeletedTitle'), t('people:personDetail.toast.contactDeletedMessage', { name: person.name }))
         navigate('/people')
       } else {
-        toast.error('Failed to delete contact', (result as any).error?.message || 'Unknown error')
+        toast.error(t('common:contacts.deleteFailedFallback'), (result as any).error?.message || t('common:errors.unknown'))
       }
     } catch (error) {
       console.error('Failed to delete contact:', error)
-      toast.error('Failed to delete contact', error instanceof Error ? error.message : 'Unknown error')
+      toast.error(t('common:contacts.deleteFailedFallback'), error instanceof Error ? error.message : t('common:errors.unknown'))
     }
     setDeleteDialogOpen(false)
   }
@@ -322,7 +326,7 @@ export function PersonDetail() {
   }
 
   const removeTag = (tag: string) => {
-    setEditForm((prev) => ({ ...prev, tags: prev.tags.filter((t) => t !== tag) }))
+    setEditForm((prev) => ({ ...prev, tags: prev.tags.filter((existingTag) => existingTag !== tag) }))
   }
 
   // R1b: merge — fold another contact into this one (canonical entity dedupe)
@@ -339,7 +343,7 @@ export function PersonDetail() {
       }
     } catch (error) {
       console.error('Failed to load merge candidates:', error)
-      toast.error('Failed to load contacts')
+      toast.error(t('common:contacts.loadFailedFallback'))
     }
   }
 
@@ -420,7 +424,7 @@ export function PersonDetail() {
     try {
       const result = await window.electronAPI.contacts.merge({ keeperId: id, loserId: mergeTarget.id })
       if (result.success) {
-        toast.success('Contacts merged', `${mergeTarget.name} was merged into ${person.name}.`)
+        toast.success(t('people:sharedToast.contactsMergedTitle'), t('people:sharedToast.contactsMergedMessage', { loserName: mergeTarget.name, keeperName: person.name }))
         setMergeDialogOpen(false)
         setMergeTarget(null)
         setMergeImpact(null)
@@ -428,11 +432,11 @@ export function PersonDetail() {
         await loadDetails()
         await loadMergeJournal()
       } else {
-        toast.error('Failed to merge contacts', (result as any).error?.message || 'Unknown error')
+        toast.error(t('people:sharedToast.mergeFailedTitle'), (result as any).error?.message || t('common:errors.unknown'))
       }
     } catch (error) {
       console.error('Failed to merge contacts:', error)
-      toast.error('Failed to merge contacts', error instanceof Error ? error.message : 'Unknown error')
+      toast.error(t('people:sharedToast.mergeFailedTitle'), error instanceof Error ? error.message : t('common:errors.unknown'))
     } finally {
       setMerging(false)
     }
@@ -447,12 +451,19 @@ export function PersonDetail() {
       const result = await window.electronAPI.contacts.unmerge(unmergeTarget.id)
       if (result.success && result.data) {
         const { restored, orphanedSinceMerge, loserName } = result.data
-        toast.success(
-          'Merge undone',
-          `Restored ${loserName}: ${restored.meetingLinks} meeting, ${restored.speakerLinks} speaker link(s)` +
-            (restored.skipped ? `, ${restored.skipped} skipped` : '') +
-            '.'
-        )
+        const undoneMessage = restored.skipped
+          ? t('people:personDetail.toast.mergeUndoneMessageWithSkipped', {
+              name: loserName,
+              meetings: restored.meetingLinks,
+              speakerLinks: restored.speakerLinks,
+              skipped: restored.skipped
+            })
+          : t('people:personDetail.toast.mergeUndoneMessage', {
+              name: loserName,
+              meetings: restored.meetingLinks,
+              speakerLinks: restored.speakerLinks
+            })
+        toast.success(t('people:personDetail.toast.mergeUndoneTitle'), undoneMessage)
         setUnmergeTarget(null)
         if (orphanedSinceMerge.length > 0) {
           setOrphanReview({ loserName, orphans: orphanedSinceMerge as OrphanLink[] })
@@ -460,11 +471,11 @@ export function PersonDetail() {
         await loadDetails()
         await loadMergeJournal()
       } else {
-        toast.error('Failed to undo merge', (result as any).error?.message || 'Unknown error')
+        toast.error(t('people:personDetail.toast.undoMergeFailedTitle'), (result as any).error?.message || t('common:errors.unknown'))
       }
     } catch (error) {
       console.error('Failed to undo merge:', error)
-      toast.error('Failed to undo merge', error instanceof Error ? error.message : 'Unknown error')
+      toast.error(t('people:personDetail.toast.undoMergeFailedTitle'), error instanceof Error ? error.message : t('common:errors.unknown'))
     } finally {
       setUnmerging(false)
     }
@@ -499,11 +510,11 @@ export function PersonDetail() {
   /** Human phrase describing a person's type, for the colored-glyph tooltips. */
   const getTypeLabel = (type: PersonType): string => {
     switch (type) {
-      case 'team': return 'Team member'
-      case 'candidate': return 'Candidate'
-      case 'customer': return 'Customer'
-      case 'external': return 'External contact'
-      default: return 'Unclassified contact'
+      case 'team': return t('people:personType.team')
+      case 'candidate': return t('people:personType.candidate')
+      case 'customer': return t('people:personType.customer')
+      case 'external': return t('people:personType.external')
+      default: return t('people:personType.unclassified')
     }
   }
 
@@ -518,8 +529,8 @@ export function PersonDetail() {
   if (!person) {
     return (
       <div className="flex flex-col h-full items-center justify-center gap-4">
-        <p className="text-muted-foreground">Person not found</p>
-        <Button onClick={() => navigate('/people')}>Back to People</Button>
+        <p className="text-muted-foreground">{t('people:personDetail.notFound.message')}</p>
+        <Button onClick={() => navigate('/people')}>{t('people:personDetail.notFound.backButton')}</Button>
       </div>
     )
   }
@@ -550,7 +561,7 @@ export function PersonDetail() {
                     value={editForm.name}
                     onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
                     className="text-xl font-bold leading-tight border rounded px-2 py-1 bg-background w-full"
-                    placeholder="Name..."
+                    placeholder={t('people:personDetail.header.namePlaceholder')}
                   />
                 ) : (
                   <h1 className="text-xl font-bold leading-tight">{person.name}</h1>
@@ -561,13 +572,13 @@ export function PersonDetail() {
                       value={editForm.type}
                       onValueChange={(value) => setEditForm((prev) => ({ ...prev, type: value as PersonType }))}
                     >
-                      <SelectTrigger className="h-7 w-[130px] text-xs" aria-label="Person type">
+                      <SelectTrigger className="h-7 w-[130px] text-xs" aria-label={t('people:shared.personTypeAriaLabel')}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {PERSON_TYPES.map((t) => (
-                          <SelectItem key={t} value={t} className="capitalize">
-                            {t}
+                        {PERSON_TYPES.map((pt) => (
+                          <SelectItem key={pt} value={pt}>
+                            {t(`people:personTypeOption.${pt}`)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -580,7 +591,7 @@ export function PersonDetail() {
                       )}
                       title={getTypeLabel(person.type)}
                     >
-                      {person.type}
+                      {personTypeBadgeLabel(t, person.type)}
                     </span>
                   )}
                   {person.company && (
@@ -593,17 +604,17 @@ export function PersonDetail() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => loadDetails()} disabled={loading}>
               <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
-              Refresh
+              {t('people:shared.refreshButton')}
             </Button>
             {isEditing ? (
               <>
                 <Button size="sm" variant="default" onClick={handleSaveEdit} disabled={loading}>
                   <Check className="h-4 w-4 mr-2" />
-                  Save
+                  {t('people:personDetail.header.saveButton')}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
                   <X className="h-4 w-4 mr-2" />
-                  Cancel
+                  {t('people:shared.cancelButton')}
                 </Button>
               </>
             ) : (
@@ -611,12 +622,12 @@ export function PersonDetail() {
                 {/* B-PPL-002: Disable edit button while loading */}
                 <Button size="sm" variant="default" onClick={() => setIsEditing(true)} disabled={loading}>
                   <Edit className="h-4 w-4 mr-2" />
-                  Edit
+                  {t('people:personDetail.header.editButton')}
                 </Button>
                 {/* R1b: Merge another contact into this one */}
                 <Button size="sm" variant="outline" onClick={openMergeDialog} disabled={loading}>
                   <GitMerge className="h-4 w-4 mr-2" />
-                  Merge…
+                  {t('people:personDetail.header.mergeButton')}
                 </Button>
                 <Button
                   size="sm"
@@ -642,9 +653,12 @@ export function PersonDetail() {
                 <div className="flex items-start gap-2">
                   <Users className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500" />
                   <p className="text-sm">
-                    This may be several people —{' '}
-                    <span className="font-medium">{bucketSummary.resolvedCount} resolved</span>,{' '}
-                    <span className="font-medium">{bucketSummary.pendingCount} pending</span>.
+                    <Trans
+                      i18nKey="people:personDetail.bucketBanner.summary"
+                      values={{ resolved: bucketSummary.resolvedCount, pending: bucketSummary.pendingCount }}
+                    >
+                      This may be several people — <span className="font-medium">{{ resolved: bucketSummary.resolvedCount } as unknown as string} resolved</span>, <span className="font-medium">{{ pending: bucketSummary.pendingCount } as unknown as string} pending</span>.
+                    </Trans>
                   </p>
                 </div>
                 <Button
@@ -654,7 +668,7 @@ export function PersonDetail() {
                   onClick={() => setShowResolve((v) => !v)}
                   aria-expanded={showResolve}
                 >
-                  {showResolve ? 'Hide' : 'Resolve'}
+                  {showResolve ? t('people:personDetail.bucketBanner.hideButton') : t('people:personDetail.bucketBanner.resolveButton')}
                 </Button>
               </div>
               {showResolve && (
@@ -673,7 +687,7 @@ export function PersonDetail() {
             <div className="space-y-6 animate-rise-in">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Information</CardTitle>
+                  <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('people:personDetail.info.title')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* B-PPL-003: Email is now editable */}
@@ -681,14 +695,14 @@ export function PersonDetail() {
                     <div className="flex items-start gap-3">
                       <Mail className="h-4 w-4 text-muted-foreground mt-0.5" />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted-foreground mb-0.5">Email</p>
+                        <p className="text-xs text-muted-foreground mb-0.5">{t('people:shared.emailLabel')}</p>
                         {isEditing ? (
                           <input
                             type="email"
                             value={editForm.email}
                             onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))}
                             className="text-sm font-medium w-full border rounded px-2 py-1 bg-background"
-                            placeholder="Enter email..."
+                            placeholder={t('people:personDetail.info.emailPlaceholder')}
                           />
                         ) : (
                           <p className="text-sm font-medium truncate">{person.email}</p>
@@ -700,14 +714,14 @@ export function PersonDetail() {
                     <div className="flex items-start gap-3">
                       <Briefcase className="h-4 w-4 text-muted-foreground mt-0.5" />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted-foreground mb-0.5">Role</p>
+                        <p className="text-xs text-muted-foreground mb-0.5">{t('people:shared.roleLabel')}</p>
                         {isEditing ? (
                           <input
                             type="text"
                             value={editForm.role}
                             onChange={(e) => setEditForm((prev) => ({ ...prev, role: e.target.value }))}
                             className="text-sm font-medium w-full border rounded px-2 py-1 bg-background"
-                            placeholder="Enter role..."
+                            placeholder={t('people:personDetail.info.rolePlaceholder')}
                           />
                         ) : (
                           <p className="text-sm font-medium truncate">{person.role}</p>
@@ -719,14 +733,14 @@ export function PersonDetail() {
                     <div className="flex items-start gap-3">
                       <Briefcase className="h-4 w-4 text-muted-foreground mt-0.5" />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted-foreground mb-0.5">Company</p>
+                        <p className="text-xs text-muted-foreground mb-0.5">{t('people:personDetail.info.companyLabel')}</p>
                         {isEditing ? (
                           <input
                             type="text"
                             value={editForm.company}
                             onChange={(e) => setEditForm((prev) => ({ ...prev, company: e.target.value }))}
                             className="text-sm font-medium w-full border rounded px-2 py-1 bg-background"
-                            placeholder="Enter company..."
+                            placeholder={t('people:personDetail.info.companyPlaceholder')}
                           />
                         ) : (
                           <p className="text-sm font-medium truncate">{person.company}</p>
@@ -737,14 +751,14 @@ export function PersonDetail() {
                   <div className="flex items-start gap-3">
                     <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs text-muted-foreground mb-0.5">Last Interaction</p>
+                      <p className="text-xs text-muted-foreground mb-0.5">{t('people:personDetail.info.lastInteractionLabel')}</p>
                       <p className="text-sm font-medium">{formatDateTime(person.lastSeenAt)}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 border-t pt-4">
                     <MessageSquare className="h-4 w-4 text-primary mt-0.5" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs text-muted-foreground mb-0.5">Total Interactions</p>
+                      <p className="text-xs text-muted-foreground mb-0.5">{t('people:personDetail.info.totalInteractionsLabel')}</p>
                       <p className="text-sm font-bold">{person.interactionCount}</p>
                     </div>
                   </div>
@@ -754,7 +768,7 @@ export function PersonDetail() {
               {(person.tags.length > 0 || isEditing) && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Tags</CardTitle>
+                    <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('people:personDetail.tags.title')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {isEditing ? (
@@ -768,14 +782,14 @@ export function PersonDetail() {
                                 type="button"
                                 onClick={() => removeTag(tag)}
                                 className="ml-0.5 text-muted-foreground hover:text-destructive"
-                                aria-label={`Remove tag ${tag}`}
+                                aria-label={t('people:personDetail.tags.removeAriaLabel', { tag })}
                               >
                                 <X className="h-3 w-3" />
                               </button>
                             </div>
                           ))}
                           {editForm.tags.length === 0 && (
-                            <span className="text-xs text-muted-foreground">No tags yet</span>
+                            <span className="text-xs text-muted-foreground">{t('people:personDetail.tags.noneYet')}</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
@@ -790,11 +804,11 @@ export function PersonDetail() {
                               }
                             }}
                             className="flex-1 text-sm border rounded px-2 py-1 bg-background"
-                            placeholder="Add a tag..."
-                            aria-label="Add a tag"
+                            placeholder={t('people:personDetail.tags.addPlaceholder')}
+                            aria-label={t('people:personDetail.tags.addAriaLabel')}
                           />
                           <Button size="sm" variant="outline" onClick={addTag} disabled={!tagInput.trim()}>
-                            Add
+                            {t('people:personDetail.tags.addButton')}
                           </Button>
                         </div>
                       </div>
@@ -817,7 +831,7 @@ export function PersonDetail() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                      Also known as
+                      {t('people:personDetail.aliases.title')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -831,7 +845,7 @@ export function PersonDetail() {
                               </span>
                             </TooltipTrigger>
                             <TooltipContent>
-                              {aliasSourceLabel(a.source)} · {formatDateTime(a.created_at)}
+                              {t('people:personDetail.aliases.tooltip', { source: aliasSourceLabel(a.source, t), date: formatDateTime(a.created_at) })}
                             </TooltipContent>
                           </Tooltip>
                         ))}
@@ -847,7 +861,7 @@ export function PersonDetail() {
                   <CardHeader>
                     <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                       <History className="h-4 w-4" />
-                      Merge history
+                      {t('people:personDetail.mergeHistory.title')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
@@ -861,7 +875,7 @@ export function PersonDetail() {
                             {entry.loserName}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {entry.linkCount} link(s) · {formatDateTime(entry.createdAt)}
+                            {t('people:personDetail.mergeHistory.linkCount', { count: entry.linkCount, date: formatDateTime(entry.createdAt) })}
                           </p>
                         </div>
                         <Button
@@ -869,10 +883,10 @@ export function PersonDetail() {
                           size="sm"
                           className="flex-shrink-0"
                           onClick={() => setUnmergeTarget(entry)}
-                          title={`Undo merge with ${entry.loserName}`}
+                          title={t('people:personDetail.mergeHistory.undoAriaLabel', { name: entry.loserName })}
                         >
                           <Undo2 className="h-3.5 w-3.5 mr-1" />
-                          Undo
+                          {t('people:personDetail.mergeHistory.undoButton')}
                         </Button>
                       </div>
                     ))}
@@ -893,7 +907,7 @@ export function PersonDetail() {
                     )}
                   >
                     <Calendar className="h-4 w-4" />
-                    Timeline
+                    {t('people:personDetail.tabs.timeline')}
                   </button>
                   <button
                     onClick={() => setActiveTab('knowledge')}
@@ -903,7 +917,7 @@ export function PersonDetail() {
                     )}
                   >
                     <Bot className="h-4 w-4" />
-                    Knowledge Map
+                    {t('people:personDetail.tabs.knowledgeMap')}
                   </button>
                 </div>
 
@@ -912,7 +926,7 @@ export function PersonDetail() {
                     {meetings.length === 0 ? (
                       <div className="text-center py-12 border rounded-xl bg-muted/5">
                         <Calendar className="h-10 w-10 mx-auto text-muted-foreground opacity-20 mb-3" />
-                        <p className="text-sm text-muted-foreground">No meetings recorded with this person</p>
+                        <p className="text-sm text-muted-foreground">{t('people:personDetail.timeline.empty')}</p>
                       </div>
                     ) : (
                       meetings.map((meeting) => (
@@ -949,9 +963,9 @@ export function PersonDetail() {
                     <Card>
                       <CardContent className="py-12 text-center">
                         <Bot className="h-12 w-12 mx-auto text-primary opacity-20 mb-4" />
-                        <h3 className="text-lg font-medium mb-2">Knowledge Map</h3>
+                        <h3 className="text-lg font-medium mb-2">{t('people:personDetail.tabs.knowledgeMap')}</h3>
                         <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                          AI visualization of topics and discussions related to {person.name} is coming soon.
+                          {t('people:personDetail.knowledge.description', { name: person.name })}
                         </p>
                       </CardContent>
                     </Card>
@@ -962,7 +976,7 @@ export function PersonDetail() {
               {(person.notes || isEditing) && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Notes</CardTitle>
+                    <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('people:personDetail.notes.title')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {isEditing ? (
@@ -970,7 +984,7 @@ export function PersonDetail() {
                         value={editForm.notes}
                         onChange={(e) => setEditForm((prev) => ({ ...prev, notes: e.target.value }))}
                         className="text-sm w-full border rounded px-2 py-1 bg-background min-h-[80px] leading-relaxed"
-                        placeholder="Add notes..."
+                        placeholder={t('people:personDetail.notes.placeholder')}
                       />
                     ) : (
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">{person.notes}</p>
@@ -987,18 +1001,18 @@ export function PersonDetail() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+            <AlertDialogTitle>{t('people:shared.deleteContactTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {person.name}? This will permanently remove this contact and all their meeting associations. This action cannot be undone.
+              {t('people:shared.deleteContactDescription', { name: person.name })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('people:shared.cancelButton')}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={handleDeleteContact}
             >
-              Delete
+              {t('people:shared.deleteButton')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1008,11 +1022,11 @@ export function PersonDetail() {
       <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Merge into {person.name}</DialogTitle>
+            <DialogTitle>{t('people:personDetail.mergeDialog.title', { name: person.name })}</DialogTitle>
             <DialogDescription>
               {mergeTarget
-                ? `Merge ${mergeTarget.name} into ${person.name}? All meetings, transcripts, and details will be folded into ${person.name}. You can undo this from ${person.name}'s Merge history.`
-                : `Pick a duplicate contact to fold into ${person.name}. The other contact will be deleted.`}
+                ? t('people:personDetail.mergeDialog.descriptionWithTarget', { targetName: mergeTarget.name, name: person.name })
+                : t('people:personDetail.mergeDialog.descriptionPickTarget', { name: person.name })}
             </DialogDescription>
           </DialogHeader>
 
@@ -1022,13 +1036,13 @@ export function PersonDetail() {
                 type="text"
                 value={mergeSearch}
                 onChange={(e) => setMergeSearch(e.target.value)}
-                placeholder="Search contacts..."
-                aria-label="Search contacts to merge"
+                placeholder={t('people:personDetail.mergeDialog.searchPlaceholder')}
+                aria-label={t('people:personDetail.mergeDialog.searchAriaLabel')}
                 className="w-full text-sm border rounded px-2 py-1.5 bg-background"
               />
               <div className="max-h-64 overflow-auto space-y-1 mt-1">
                 {filteredMergeCandidates.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">No other contacts found.</p>
+                  <p className="text-sm text-muted-foreground text-center py-6">{t('people:personDetail.mergeDialog.noOtherContacts')}</p>
                 ) : (
                   filteredMergeCandidates.map((c) => (
                     <button
@@ -1048,15 +1062,24 @@ export function PersonDetail() {
           {mergeTarget && highStakesMerge && (
             <div className="rounded-lg border border-amber-500/40 bg-amber-500/[0.06] px-3 py-2 text-xs">
               <p className="text-amber-700 dark:text-amber-400 font-medium">
-                High-stakes merge: {person.name} has {mergeImpact!.keeper} links and {mergeTarget.name} has{' '}
-                {mergeImpact!.loser}. To confirm, type <span className="font-semibold">{mergeTarget.name}</span>.
+                <Trans
+                  i18nKey="people:shared.highStakesMergeWarning"
+                  values={{
+                    keeperName: person.name,
+                    keeperCount: mergeImpact!.keeper,
+                    loserName: mergeTarget.name,
+                    loserCount: mergeImpact!.loser
+                  }}
+                >
+                  High-stakes merge: {{ keeperName: person.name } as unknown as string} has {{ keeperCount: mergeImpact!.keeper } as unknown as string} links and {{ loserName: mergeTarget.name } as unknown as string} has {{ loserCount: mergeImpact!.loser } as unknown as string}. To confirm, type <span className="font-semibold">{{ loserName: mergeTarget.name } as unknown as string}</span>.
+                </Trans>
               </p>
               <input
                 type="text"
                 value={mergeConfirmText}
                 onChange={(e) => setMergeConfirmText(e.target.value)}
                 placeholder={mergeTarget.name}
-                aria-label={`Type ${mergeTarget.name} to confirm merge`}
+                aria-label={t('people:shared.typeToConfirmAriaLabel', { name: mergeTarget.name })}
                 className="w-full text-sm border rounded px-2 py-1.5 bg-background mt-2"
               />
             </div>
@@ -1066,7 +1089,7 @@ export function PersonDetail() {
             {mergeTarget ? (
               <>
                 <Button variant="outline" onClick={() => setMergeTarget(null)} disabled={merging}>
-                  Back
+                  {t('people:personDetail.mergeDialog.backButton')}
                 </Button>
                 <Button
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -1074,12 +1097,12 @@ export function PersonDetail() {
                   disabled={merging || !mergeConfirmed}
                 >
                   {merging ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <GitMerge className="h-4 w-4 mr-2" />}
-                  Merge
+                  {t('people:shared.mergeButton')}
                 </Button>
               </>
             ) : (
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button variant="outline">{t('people:shared.cancelButton')}</Button>
               </DialogClose>
             )}
           </DialogFooter>
@@ -1090,18 +1113,21 @@ export function PersonDetail() {
       <AlertDialog open={!!unmergeTarget} onOpenChange={(open) => !open && setUnmergeTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Undo merge with {unmergeTarget?.loserName}?</AlertDialogTitle>
+            <AlertDialogTitle>{t('people:personDetail.unmergeDialog.title', { name: unmergeTarget?.loserName })}</AlertDialogTitle>
             <AlertDialogDescription>
-              This recreates {unmergeTarget?.loserName} as a separate contact and moves the{' '}
-              {unmergeTarget?.linkCount ?? 0} link(s) recorded at merge time back to it. Links added to {person.name}{' '}
-              <em>after</em> the merge stay put and are listed for you to reassign by hand.
+              <Trans
+                i18nKey="people:personDetail.unmergeDialog.description"
+                values={{ loserName: unmergeTarget?.loserName, count: unmergeTarget?.linkCount ?? 0, name: person.name }}
+              >
+                This recreates {{ loserName: unmergeTarget?.loserName } as unknown as string} as a separate contact and moves the {{ count: unmergeTarget?.linkCount ?? 0 } as unknown as string} link(s) recorded at merge time back to it. Links added to {{ name: person.name } as unknown as string} <em>after</em> the merge stay put and are listed for you to reassign by hand.
+              </Trans>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={unmerging}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={unmerging}>{t('people:shared.cancelButton')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleUnmerge} disabled={unmerging}>
               {unmerging ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Undo2 className="h-4 w-4 mr-2" />}
-              Undo merge
+              {t('people:personDetail.unmergeDialog.confirmButton')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1113,12 +1139,14 @@ export function PersonDetail() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
-              Review links added after the merge
+              {t('people:personDetail.orphanReview.title')}
             </DialogTitle>
             <DialogDescription>
-              These {orphanReview?.orphans.length ?? 0} link(s) were attached to {person.name} after the original merge,
-              so unmerge left them in place. If any of them actually belong to {orphanReview?.loserName}, open it and
-              reassign it by hand.
+              {t('people:personDetail.orphanReview.description', {
+                count: orphanReview?.orphans.length ?? 0,
+                name: person.name,
+                loserName: orphanReview?.loserName
+              })}
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-64 overflow-auto space-y-1">
@@ -1126,7 +1154,7 @@ export function PersonDetail() {
               <div key={`${o.table}:${o.key}`} className="p-2 border rounded-lg text-sm">
                 <p className="font-medium">{o.label}</p>
                 <p className="text-xs text-muted-foreground">
-                  {o.table === 'transcript_speakers' ? 'Speaker binding' : 'Meeting link'}
+                  {o.table === 'transcript_speakers' ? t('people:personDetail.orphanReview.speakerBindingLabel') : t('people:personDetail.orphanReview.meetingLinkLabel')}
                   {o.date ? ` · ${formatDateTime(o.date)}` : ''}
                 </p>
               </div>
@@ -1134,7 +1162,7 @@ export function PersonDetail() {
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Done</Button>
+              <Button variant="outline">{t('people:personDetail.orphanReview.doneButton')}</Button>
             </DialogClose>
           </DialogFooter>
         </DialogContent>

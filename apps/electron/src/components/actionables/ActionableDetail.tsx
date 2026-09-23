@@ -1,9 +1,10 @@
 import { useEffect, useState, type ElementType, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { FileText, Sparkles, Clock, Users, CalendarDays, ArrowRight } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { EntityMention, type ResolvedContact } from '@/components/entity'
-import { getTemplateInfo, OUTPUT_DESTINATION } from './templateInfo'
+import { getTemplateInfo, getOutputDestination } from './templateInfo'
 import type { Actionable, KnowledgeCapture } from '@/types/knowledge'
 
 interface ActionableDetailProps {
@@ -59,6 +60,7 @@ function DetailSection({
  * the clickable source meeting/recording, recipients, and the detected date.
  */
 export function ActionableDetail({ actionable, resolveRecipient }: ActionableDetailProps) {
+  const { t } = useTranslation('projects')
   const navigate = useNavigate()
   const [source, setSource] = useState<ResolvedSource>({ kind: 'none' })
   const [sourceLoading, setSourceLoading] = useState(true)
@@ -97,18 +99,18 @@ export function ActionableDetail({ actionable, resolveRecipient }: ActionableDet
   const capture = source.kind === 'capture' ? source.capture : null
   const recording = source.kind === 'recording' ? source.recording : null
 
-  const captureTitle = capture?.title?.trim() || 'Source recording'
+  const captureTitle = capture?.title?.trim() || t('actionableDetail.sourceRecordingFallback')
   const captureDate = capture?.capturedAt ? formatDateTime(capture.capturedAt) : null
 
   const recordingTitle =
-    recording?.original_filename?.trim() || recording?.filename?.trim() || 'Recording'
+    recording?.original_filename?.trim() || recording?.filename?.trim() || t('actionableDetail.recordingFallback')
   const recordingDate = recording?.date_recorded ? formatDateTime(recording.date_recorded) : null
 
   return (
     <div className="mt-4 border-t pt-4 space-y-4">
       {/* Full description / quote — never truncated here */}
       {actionable.description && (
-        <DetailSection icon={FileText} label="What was detected">
+        <DetailSection icon={FileText} label={t('actionableDetail.whatWasDetectedLabel')}>
           <p className="italic text-muted-foreground leading-relaxed whitespace-pre-wrap">
             &quot;{actionable.description}&quot;
           </p>
@@ -116,7 +118,7 @@ export function ActionableDetail({ actionable, resolveRecipient }: ActionableDet
       )}
 
       {/* Generate WHAT — the concrete outcome before approval */}
-      <DetailSection icon={Sparkles} label="Will generate">
+      <DetailSection icon={Sparkles} label={t('actionableDetail.willGenerateLabel')}>
         <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-1">
           <div className="flex items-center gap-2">
             <span className="font-semibold">{template.name}</span>
@@ -125,15 +127,15 @@ export function ActionableDetail({ actionable, resolveRecipient }: ActionableDet
             </span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">{template.description}</p>
-          <p className="text-xs text-muted-foreground/80 leading-relaxed pt-1">{OUTPUT_DESTINATION}</p>
+          <p className="text-xs text-muted-foreground/80 leading-relaxed pt-1">{getOutputDestination()}</p>
         </div>
       </DetailSection>
 
       {/* Source — clickable meeting (hover card) or recording/library link.
           Resolves a knowledge capture OR a raw recording id; honest fallback. */}
-      <DetailSection icon={CalendarDays} label="Source">
+      <DetailSection icon={CalendarDays} label={t('actionableDetail.sourceLabel')}>
         {sourceLoading ? (
-          <span className="text-xs text-muted-foreground">Loading source…</span>
+          <span className="text-xs text-muted-foreground">{t('actionableDetail.loadingSourceMessage')}</span>
         ) : capture?.meetingId ? (
           <span className="inline-flex items-center gap-1.5 flex-wrap">
             <EntityMention type="meeting" id={capture.meetingId} name={captureTitle} showIcon />
@@ -176,13 +178,13 @@ export function ActionableDetail({ actionable, resolveRecipient }: ActionableDet
             <ArrowRight className="h-3 w-3 shrink-0 opacity-60" />
           </button>
         ) : (
-          <span className="text-xs text-muted-foreground italic">Source unavailable</span>
+          <span className="text-xs text-muted-foreground italic">{t('actionableDetail.sourceUnavailableMessage')}</span>
         )}
       </DetailSection>
 
       {/* Recipients — resolver-backed person chips */}
       {actionable.suggestedRecipients.length > 0 && (
-        <DetailSection icon={Users} label="Recipients">
+        <DetailSection icon={Users} label={t('actionableDetail.recipientsLabel')}>
           <div className="flex items-center gap-1.5 flex-wrap">
             {actionable.suggestedRecipients.map((recipient, ri) => {
               const contact = resolveRecipient(recipient)
@@ -200,7 +202,7 @@ export function ActionableDetail({ actionable, resolveRecipient }: ActionableDet
       )}
 
       {/* Detected date */}
-      <DetailSection icon={Clock} label="Detected">
+      <DetailSection icon={Clock} label={t('actionableDetail.detectedLabel')}>
         <span className="text-sm text-muted-foreground">{formatDateTime(actionable.createdAt)}</span>
       </DetailSection>
     </div>

@@ -10,6 +10,7 @@ import {
   createActivityLogKey,
   isValidActivityLogEntry
 } from '@/constants/activity-log'
+import i18n from '@/i18n'
 
 /**
  * Returns the canonical download queue key for a recording.
@@ -250,7 +251,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     settings: null,
     recordingCount: 0
   },
-  connectionStatus: { step: 'idle', message: 'Not connected' },
+  connectionStatus: { step: 'idle', get message() { return i18n.t('device:connectionStatus.notConnected') } },
   activityLog: [],
   deviceRecording: false,
   activeRecordingFilename: null,

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation, Trans } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { ChevronDown, ChevronRight, Users, Check, HelpCircle, Mic, CalendarCheck, MessageSquare, Link2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -10,12 +12,12 @@ import { groupBucketRecordings, assignedCandidateId } from './bucketGrouping'
 const UNCLEAR_VALUE = '__unclear__'
 
 /** One-line description of a bucket's real candidates: "Sergio Hurtado or Sergio Reyes (or others)". */
-function candidateSummary(candidates: Array<{ name: string }>): string {
+function candidateSummary(candidates: Array<{ name: string }>, t: TFunction): string {
   const names = candidates.map((c) => c.name)
-  if (names.length === 0) return 'several people'
+  if (names.length === 0) return t('people:resolvePerMeeting.candidateSummary.none')
   if (names.length === 1) return names[0]
-  if (names.length === 2) return `${names[0]} or ${names[1]}`
-  return `${names[0]}, ${names[1]} (or others)`
+  if (names.length === 2) return t('people:resolvePerMeeting.candidateSummary.two', { first: names[0], second: names[1] })
+  return t('people:resolvePerMeeting.candidateSummary.threeOrMore', { first: names[0], second: names[1] })
 }
 
 /** Icon for the signal behind a best guess (mirrors the signal-tier hierarchy). */
@@ -43,6 +45,7 @@ function RecordingRow({
   onLink: (rec: BucketRecording) => void
   busy: boolean
 }) {
+  const { t } = useTranslation()
   const current = assignedCandidateId(rec) ?? UNCLEAR_VALUE
   return (
     <div className="flex items-center gap-2 py-1.5">
@@ -50,7 +53,7 @@ function RecordingRow({
         type="button"
         onClick={() => onOpenRecording(rec.recordingId)}
         className="min-w-0 flex-1 text-left group"
-        aria-label={`Open recording: ${rec.title}`}
+        aria-label={t('people:resolvePerMeeting.openRecordingAriaLabel', { title: rec.title })}
       >
         <div className="truncate text-xs font-medium group-hover:underline">{rec.title}</div>
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -69,17 +72,17 @@ function RecordingRow({
           className="h-7 text-[11px]"
           disabled={busy}
           onClick={() => onLink(rec)}
-          aria-label={`Link '${rec.title}' to its meeting`}
+          aria-label={t('people:resolvePerMeeting.linkToMeetingAriaLabel', { title: rec.title })}
         >
           <Link2 className="h-3 w-3 mr-1" />
-          Link to meeting
+          {t('people:resolvePerMeeting.linkToMeetingButton')}
         </Button>
       ) : (
         <select
           value={current}
           disabled={busy}
           onChange={(e) => onAssign(rec, e.target.value === UNCLEAR_VALUE ? null : e.target.value)}
-          aria-label={`Assign '${rec.title}' to a person`}
+          aria-label={t('people:resolvePerMeeting.assignAriaLabel', { title: rec.title })}
           className="h-7 max-w-[9rem] rounded-md border bg-background px-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {candidates.map((c) => (
@@ -87,11 +90,11 @@ function RecordingRow({
               {c.name}
             </option>
           ))}
-          <option value={UNCLEAR_VALUE}>Unclear</option>
+          <option value={UNCLEAR_VALUE}>{t('people:resolvePerMeeting.unclearOption')}</option>
         </select>
       )}
       {rec.resolved && rec.resolvedContactId && (
-        <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" aria-label="Resolved" />
+        <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" aria-label={t('people:resolvePerMeeting.resolvedAriaLabel')} />
       )}
     </div>
   )
@@ -116,6 +119,7 @@ export function ResolvePerMeetingCard({
   onOpenRecording: (recordingId: string) => void
   onResolved: () => void
 }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const [resolution, setResolution] = useState<BucketResolution | null>(null)
   const [loading, setLoading] = useState(false)
@@ -185,29 +189,30 @@ export function ResolvePerMeetingCard({
           <Users className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500" />
           <div className="min-w-0 flex-1">
             <p className="text-sm leading-snug">
-              <span className="font-semibold">&lsquo;{bucket.name}&rsquo;</span> appears in {bucket.recordingCount}{' '}
-              recording{bucket.recordingCount === 1 ? '' : 's'} and may be{' '}
-              <span className="font-medium">{candidateSummary(bucket.candidates)}</span>.
+              <Trans
+                i18nKey="people:resolvePerMeeting.summary"
+                count={bucket.recordingCount}
+                values={{ name: bucket.name, count: bucket.recordingCount, candidates: candidateSummary(bucket.candidates, t) }}
+              >
+                <span className="font-semibold">{{ name: bucket.name } as unknown as string}</span> appears in {{ count: bucket.recordingCount } as unknown as string} recordings and may be <span className="font-medium">{{ candidates: candidateSummary(bucket.candidates, t) } as unknown as string}</span>.
+              </Trans>
             </p>
             <p className="text-xs text-muted-foreground">
-              {bucket.resolvedCount} resolved · {bucket.pendingCount} pending — resolve per meeting, not by merging.
+              {t('people:resolvePerMeeting.statusLine', { resolved: bucket.resolvedCount, pending: bucket.pendingCount })}
             </p>
           </div>
         </button>
 
         {expanded && (
           <div className="space-y-3 pl-1">
-            {loading && <p className="text-xs text-muted-foreground">Loading recordings…</p>}
+            {loading && <p className="text-xs text-muted-foreground">{t('people:resolvePerMeeting.loadingRecordings')}</p>}
             {!loading && groups.length === 0 && (
-              <p className="text-xs text-muted-foreground">No linked recordings to resolve.</p>
+              <p className="text-xs text-muted-foreground">{t('people:resolvePerMeeting.noLinkedRecordings')}</p>
             )}
             {showNoCalendarNote && (
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/[0.06] px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
                 <CalendarCheck className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" aria-hidden />
-                <span>
-                  No calendar attendee lists yet — guesses below are from transcript context. Connect Microsoft 365 for
-                  automatic, attendee-based resolution.
-                </span>
+                <span>{t('people:resolvePerMeeting.noCalendarNote')}</span>
               </div>
             )}
             {!loading &&
@@ -224,7 +229,7 @@ export function ResolvePerMeetingCard({
                   >
                     <div className="mb-1.5 flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold">
-                        {isUnclear ? 'Unclear' : `Likely ${group.candidateName}`}
+                        {isUnclear ? t('people:resolvePerMeeting.unclearOption') : t('people:resolvePerMeeting.groupLikelyLabel', { name: group.candidateName })}
                         <span className="ml-1 font-normal text-muted-foreground">
                           ({group.recordings.length})
                         </span>
@@ -236,10 +241,10 @@ export function ResolvePerMeetingCard({
                           className="h-6 text-[11px]"
                           disabled={busy}
                           onClick={() => assignGroup(unresolvedInGroup, group.candidateId as string)}
-                          aria-label={`Assign all ${unresolvedInGroup.length} to ${group.candidateName}`}
+                          aria-label={t('people:resolvePerMeeting.assignAllAriaLabel', { count: unresolvedInGroup.length, name: group.candidateName })}
                         >
                           <Check className="h-3 w-3 mr-1" />
-                          Assign all {unresolvedInGroup.length} to {group.candidateName}
+                          {t('people:resolvePerMeeting.assignAllButton', { count: unresolvedInGroup.length, name: group.candidateName })}
                         </Button>
                       )}
                     </div>

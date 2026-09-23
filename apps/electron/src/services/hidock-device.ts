@@ -21,6 +21,7 @@ import {
 import { validateDevicePath } from '../utils/path-validation'
 import { withTimeout, isAbortError } from '../utils/timeout'
 import { shouldLogQa } from './qa-monitor'
+import i18n from '../i18n'
 
 export interface HiDockRecording {
   id: string
@@ -116,7 +117,7 @@ class HiDockDeviceService {
   private activityListeners: Set<ActivityListener> = new Set()
   private stateChangeListeners: Set<StateChangeListener> = new Set()
   private autoConnectInterval: number | null = null
-  private connectionStatus: ConnectionStatus = { step: 'idle', message: 'Not connected' }
+  private connectionStatus: ConnectionStatus = { step: 'idle', get message() { return i18n.t('device:connectionStatus.notConnected') } }
   private autoConnectEnabled: boolean = false
   private userInitiatedDisconnect: boolean = false // Track if user clicked disconnect
 
@@ -482,7 +483,7 @@ class HiDockDeviceService {
       // Note: handleConnect() is called via the onconnect callback in jensen.ts
       // We should NOT call it here to avoid duplicate initialization
       if (success) {
-        this.updateStatus('opening', 'Device found, connecting...', 10)
+        this.updateStatus('opening', i18n.t('device:connectionStatus.deviceFoundConnecting'), 10)
         this.logActivity('success', 'Auto-connect', 'Device found and connected')
       } else {
         // A device is plugged in but wouldn't open — most often it's busy (e.g.
@@ -520,7 +521,7 @@ class HiDockDeviceService {
     this.lastConnectFailureAt = Date.now()
     this.connectionStatus = {
       step: 'idle',
-      message: devicePresent ? 'Connection failed — device may be busy' : 'Connection failed',
+      message: devicePresent ? i18n.t('device:connectionStatus.failedDeviceBusy') : i18n.t('device:connectionStatus.failedGeneric'),
       connectFailed: true,
       devicePresent
     }
@@ -559,7 +560,7 @@ class HiDockDeviceService {
         // Device unplugged: clear a stale "failed" pill so it reverts to the neutral
         // "Connect device" state (nothing to retry until it's plugged back in).
         if (!this.state.connected && this.connectionStatus.connectFailed) {
-          this.updateStatus('idle', 'Device disconnected')
+          this.updateStatus('idle', i18n.t('device:connectionStatus.deviceDisconnected'))
         }
       }
       navigator.usb.addEventListener('connect', this.usbAttachHandler)
@@ -584,12 +585,12 @@ class HiDockDeviceService {
   async tryConnect(): Promise<boolean> {
     if (this.state.connected) return true
 
-    this.updateStatus('requesting', 'Looking for device...', 5)
+    this.updateStatus('requesting', i18n.t('device:connectionStatus.lookingForDevice'), 5)
     const success = await this.jensen.tryConnect()
     // Note: handleConnect() is called via the onconnect callback in jensen.ts
     // We should NOT call it here to avoid duplicate initialization
     if (!success) {
-      this.updateStatus('idle', 'No device found')
+      this.updateStatus('idle', i18n.t('device:connectionStatus.noDeviceFound'))
     }
     return success
   }
@@ -600,7 +601,7 @@ class HiDockDeviceService {
     this.enableAutoConnect()
 
     this.logActivity('info', 'User initiated connection')
-    this.updateStatus('requesting', 'Requesting device access...', 5)
+    this.updateStatus('requesting', i18n.t('device:connectionStatus.requestingAccess'), 5)
 
     // Create AbortController for connection timeout
     const controller = new AbortController()
@@ -617,7 +618,7 @@ class HiDockDeviceService {
       // Note: handleConnect() is called via the onconnect callback in jensen.ts
       // We should NOT call it here to avoid duplicate initialization
       if (!success) {
-        this.updateStatus('idle', 'Connection cancelled or failed')
+        this.updateStatus('idle', i18n.t('device:connectionStatus.connectionCancelledOrFailed'))
         this.logActivity('info', 'Connection cancelled or no device selected')
       }
       return success
@@ -697,7 +698,7 @@ class HiDockDeviceService {
         this.state.firmwareVersion = mainState.versionCode ?? null
         this.initializationComplete = true
         this.notifyStateChange()
-        this.updateStatus('ready', 'Device ready', 100)
+        this.updateStatus('ready', i18n.t('device:connectionStatus.deviceReady'), 100)
         this.notifyConnectionChange(true)
       }
       return true
@@ -1104,7 +1105,7 @@ class HiDockDeviceService {
       this.logActivity('info', 'Waiting for initialization', 'File list request waiting for device init...')
       // FL-06: Emit periodic status updates so the UI shows "Initializing device..."
       // instead of appearing frozen during the wait
-      this.updateStatus('getting-info', 'Initializing device...', 15)
+      this.updateStatus('getting-info', i18n.t('device:connectionStatus.initializingDevice'), 15)
       // Wait up to 60 seconds for initialization (initialization itself can take up to 60s with 4x15s timeouts)
       const maxWait = 60000
       const startWait = Date.now()
@@ -1122,7 +1123,7 @@ class HiDockDeviceService {
         if (secondsElapsed > lastProgressUpdate && secondsElapsed % 5 === 0) {
           lastProgressUpdate = secondsElapsed
           const progress = Math.min(15 + Math.round((elapsed / maxWait) * 50), 65)
-          this.updateStatus('getting-info', `Initializing device... (${secondsElapsed}s)`, progress)
+          this.updateStatus('getting-info', i18n.t('device:connectionStatus.initializingDeviceElapsed', { seconds: secondsElapsed }), progress)
         }
       }
       if (!this.initializationComplete) {
@@ -1209,7 +1210,7 @@ class HiDockDeviceService {
     if (shouldLogQa()) console.log('[HiDockDevice] >>> listRecordings: CALLING JENSEN.LISTFILES(), expected:', expectedFileCount)
 
     // BUG-002: Update connection status so UI shows scan progress instead of frozen "ready"
-    this.updateStatus('counting-files', `Scanning files (0/${expectedFileCount})...`, 0)
+    this.updateStatus('counting-files', i18n.t('device:connectionStatus.scanningFiles', { current: 0, total: expectedFileCount }), 0)
 
     // Send initial progress immediately so UI shows 0/N
     onProgress?.(0, expectedFileCount)
@@ -1235,7 +1236,7 @@ class HiDockDeviceService {
       const pct = expectedFileCount > 0 ? Math.round((animationProgress / expectedFileCount) * 100) : 0
       if (pct !== lastStatusUpdateProgress && pct % 5 === 0) {
         lastStatusUpdateProgress = pct
-        this.updateStatus('counting-files', `Scanning files (${animationProgress}/${expectedFileCount})...`, pct)
+        this.updateStatus('counting-files', i18n.t('device:connectionStatus.scanningFiles', { current: animationProgress, total: expectedFileCount }), pct)
       }
     }, 50)
 
@@ -1251,7 +1252,7 @@ class HiDockDeviceService {
             clearInterval(animationInterval)
             onProgress?.(filesFound, expectedFiles)
             const pct = expectedFiles > 0 ? Math.round((filesFound / expectedFiles) * 100) : 0
-            this.updateStatus('counting-files', `Scanning files (${filesFound}/${expectedFiles})...`, pct)
+            this.updateStatus('counting-files', i18n.t('device:connectionStatus.scanningFiles', { current: filesFound, total: expectedFiles }), pct)
           }
         }, expectedFileCount)
 
@@ -1338,11 +1339,11 @@ class HiDockDeviceService {
         // instead (so downloads don't start against an unhealthy device).
         if (this.connectionStatus.step === 'counting-files') {
           if (scanSucceeded && this.isConnected()) {
-            this.updateStatus('ready', 'Device ready', 100)
+            this.updateStatus('ready', i18n.t('device:connectionStatus.deviceReady'), 100)
           } else if (this.isConnected()) {
-            this.updateStatus('error', 'File scan failed — will retry')
+            this.updateStatus('error', i18n.t('device:connectionStatus.fileScanFailedRetry'))
           } else {
-            this.updateStatus('idle', 'Not connected')
+            this.updateStatus('idle', i18n.t('device:connectionStatus.notConnected'))
           }
         }
       }
@@ -1354,13 +1355,13 @@ class HiDockDeviceService {
   async deleteRecording(filename: string): Promise<boolean> {
     this.lastDeleteError = null
     if (!this.isConnected()) {
-      this.lastDeleteError = 'The HiDock disconnected before the erase could start.'
+      this.lastDeleteError = i18n.t('device:deleteError.disconnectedBeforeErase')
       return false
     }
 
     // SECURITY: Validate path to prevent directory traversal attacks
     if (!validateDevicePath(filename)) {
-      this.lastDeleteError = `The device filename is invalid: ${filename}`
+      this.lastDeleteError = i18n.t('device:deleteError.invalidFilename', { filename })
       this.logActivity('error', 'Delete rejected', `Invalid filename: ${filename}`)
       throw new Error(`Invalid filename: ${filename}`)
     }
@@ -1382,8 +1383,8 @@ class HiDockDeviceService {
       }
     } else {
       this.lastDeleteError = result === null
-        ? 'The HiDock did not confirm the erase. It may have disconnected or rejected the command.'
-        : `The HiDock rejected the erase command (${result.result}).`
+        ? i18n.t('device:deleteError.noConfirmation')
+        : i18n.t('device:deleteError.rejected', { result: result.result })
       this.logActivity('error', 'Failed to delete file', `${filename}: ${this.lastDeleteError}`)
     }
     return deleteSatisfied
@@ -1647,7 +1648,7 @@ class HiDockDeviceService {
     // firmware may need extra stabilization time. A quick 5s probe + retry handles
     // this without making the user wait 15s on a truly unresponsive device.
     if (this.initAborted) return
-    this.updateStatus('getting-info', 'Reading device information...', 20)
+    this.updateStatus('getting-info', i18n.t('device:connectionStatus.readingDeviceInfo'), 20)
     let deviceInfo: DeviceInfo | null = null
     try {
       deviceInfo = await withTimeout(this.refreshDeviceInfo(), FIRST_CMD_TIMEOUT, new AbortController())
@@ -1655,7 +1656,7 @@ class HiDockDeviceService {
     } catch (firstError) {
       if (isAbortError(firstError) && !this.initAborted) {
         this.logActivity('info', 'Device not ready', 'Retrying...')
-        this.updateStatus('getting-info', 'Device initializing, retrying...', 20)
+        this.updateStatus('getting-info', i18n.t('device:connectionStatus.deviceInitializingRetrying'), 20)
         await new Promise(r => setTimeout(r, 500))
 
         if (!this.initAborted) {
@@ -1705,7 +1706,7 @@ class HiDockDeviceService {
 
     // Step 2: Get storage info (non-fatal)
     if (this.initAborted) return
-    this.updateStatus('getting-storage', 'Reading storage information...', 40)
+    this.updateStatus('getting-storage', i18n.t('device:connectionStatus.readingStorageInfo'), 40)
     try {
       await withTimeout(this.refreshStorageInfo(), INIT_STEP_TIMEOUT, controller)
       successCount++
@@ -1719,14 +1720,14 @@ class HiDockDeviceService {
     // Check if we should abort due to too many timeouts
     if (timeoutCount >= MAX_TIMEOUTS_BEFORE_FAIL) {
       this.logActivity('error', 'Device initialization failed', 'Device is not responding. Please disconnect and reconnect your device.')
-      this.updateStatus('error', 'Device not responding - try reconnecting', 0)
+      this.updateStatus('error', i18n.t('device:connectionStatus.notRespondingTryReconnect'), 0)
       this.initializationComplete = false
       return
     }
 
     // Step 3: Get settings (non-fatal)
     if (this.initAborted) return
-    this.updateStatus('getting-settings', 'Loading device settings...', 70)
+    this.updateStatus('getting-settings', i18n.t('device:connectionStatus.loadingDeviceSettings'), 70)
     try {
       await withTimeout(this.refreshSettings(), INIT_STEP_TIMEOUT, controller)
       successCount++
@@ -1740,7 +1741,7 @@ class HiDockDeviceService {
     // Check if we should abort due to too many timeouts
     if (timeoutCount >= MAX_TIMEOUTS_BEFORE_FAIL) {
       this.logActivity('error', 'Device initialization failed', 'Device is not responding. Please disconnect and reconnect your device.')
-      this.updateStatus('error', 'Device not responding - try reconnecting', 0)
+      this.updateStatus('error', i18n.t('device:connectionStatus.notRespondingTryReconnect'), 0)
       this.initializationComplete = false
       return
     }
@@ -1750,7 +1751,7 @@ class HiDockDeviceService {
 
     // Step 4: Sync time (non-fatal)
     if (this.initAborted) return
-    this.updateStatus('syncing-time', 'Syncing device time...', 90)
+    this.updateStatus('syncing-time', i18n.t('device:connectionStatus.syncingDeviceTime'), 90)
     try {
       await withTimeout(this.syncTime(), INIT_STEP_TIMEOUT, controller)
       successCount++
@@ -1768,7 +1769,7 @@ class HiDockDeviceService {
     if (successCount === 0) {
       // Try USB reset before giving up — device firmware may need a hard reset after first open
       this.logActivity('warning', 'Device not responding — attempting USB reset...')
-      this.updateStatus('getting-info', 'Resetting device...', 10)
+      this.updateStatus('getting-info', i18n.t('device:connectionStatus.resettingDevice'), 10)
       let resetAndReconnected = false
       try {
         const resetOk = await this.jensen.reset()
@@ -1794,7 +1795,7 @@ class HiDockDeviceService {
 
       // Reset failed or reconnect failed — disconnect cleanly so user isn't stuck in limbo
       this.logActivity('error', 'Device initialization failed', 'Could not communicate with device after USB reset. Please unplug and reconnect your device.')
-      this.updateStatus('error', 'Device not responding — please reconnect', 0)
+      this.updateStatus('error', i18n.t('device:connectionStatus.notRespondingPleaseReconnect'), 0)
       this.initializationComplete = false
       this.state.connected = false
       this.state.serialNumber = null
@@ -1808,10 +1809,10 @@ class HiDockDeviceService {
 
     this.initializationComplete = true  // Mark initialization as complete
     if (timeoutCount > 0) {
-      this.updateStatus('ready', `Device ready (${timeoutCount} feature(s) unavailable)`, 100)
+      this.updateStatus('ready', i18n.t('device:connectionStatus.deviceReadyWithWarnings', { count: timeoutCount }), 100)
       this.logActivity('warning', 'Device initialization complete with warnings', `${successCount}/4 features available`)
     } else {
-      this.updateStatus('ready', 'Device ready', 100)
+      this.updateStatus('ready', i18n.t('device:connectionStatus.deviceReady'), 100)
       this.logActivity('success', 'Device initialization complete')
     }
 
@@ -1847,7 +1848,7 @@ class HiDockDeviceService {
     // Cache count is reset to -1 so reconnect always fetches fresh data.
     this.notifyStateChange()
     this.logActivity('info', 'USB device disconnected', 'Recording count and cache preserved for quick reconnect')
-    this.updateStatus('idle', 'Device disconnected')
+    this.updateStatus('idle', i18n.t('device:connectionStatus.deviceDisconnected'))
     this.notifyConnectionChange(false)
 
     // Quick recovery (2026-07-22): the HiDock drops USB transiently during normal

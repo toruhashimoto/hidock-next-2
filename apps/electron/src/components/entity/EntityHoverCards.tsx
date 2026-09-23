@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Loader2, Mail, Briefcase, CalendarDays, Users, Folder, MapPin, Video, Mic, ArrowRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime } from '@/lib/utils'
@@ -54,7 +55,8 @@ function HoverCardSkeleton({ label }: { label: string }) {
 
 /** The quiet fallback shown when a card has nothing net-new to add. */
 function NoAdditionalDetails() {
-  return <p className="text-xs italic text-muted-foreground/70">No additional details</p>
+  const { t } = useTranslation()
+  return <p className="text-xs italic text-muted-foreground/70">{t('people:entityHoverCard.noAdditionalDetails')}</p>
 }
 
 /** A discoverability affordance echoing that the trigger click navigates. */
@@ -76,6 +78,7 @@ export function PersonHoverCard({
   name: string
   visibleFields?: PersonHoverField[]
 }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [contact, setContact] = useState<Record<string, unknown> | null>(null)
   const [meetings, setMeetings] = useState<Array<Record<string, unknown>>>([])
@@ -161,7 +164,7 @@ export function PersonHoverCard({
           {showMeetings && (
             <span className="flex items-center gap-1">
               <Users className="h-3 w-3" />
-              {meetingCount} meeting{meetingCount === 1 ? '' : 's'}
+              {t('people:entityHoverCard.meetingsCount', { count: meetingCount })}
             </span>
           )}
           {showLastSeen && (
@@ -174,7 +177,7 @@ export function PersonHoverCard({
       )}
       {showRecent && (
         <div className="space-y-1 border-t border-border/60 pt-1.5">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">Recent meetings</p>
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">{t('people:entityHoverCard.person.recentMeetingsHeading')}</p>
           {meetings.slice(0, HOVER_MEETING_LIMIT).map((m) => (
             <button
               key={m.id as string}
@@ -183,7 +186,7 @@ export function PersonHoverCard({
               className="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <CalendarDays className="h-3 w-3 shrink-0 text-violet-600" />
-              <span className="truncate flex-1">{(m.subject as string) || 'Meeting'}</span>
+              <span className="truncate flex-1">{(m.subject as string) || t('people:entityHoverCard.person.meetingFallback')}</span>
               {m.start_time ? (
                 <span className="shrink-0 text-[10px] text-muted-foreground">
                   {new Date(m.start_time as string).toLocaleDateString()}
@@ -206,6 +209,7 @@ export function ProjectHoverCard({
   name: string
   visibleFields?: ProjectHoverField[]
 }) {
+  const { t } = useTranslation()
   const [project, setProject] = useState<Record<string, unknown> | null>(null)
   const [meetings, setMeetings] = useState<Array<Record<string, unknown>>>([])
   const [topics, setTopics] = useState<string[]>([])
@@ -277,20 +281,22 @@ export function ProjectHoverCard({
           {meetings.length > 0 && (
             <span className="flex items-center gap-1">
               <CalendarDays className="h-3 w-3" />
-              {meetings.length} meeting{meetings.length === 1 ? '' : 's'}
+              {t('people:entityHoverCard.meetingsCount', { count: meetings.length })}
             </span>
           )}
-          {lastActivity && <span className="truncate">Last activity {formatDateTime(lastActivity)}</span>}
+          {lastActivity && (
+            <span className="truncate">{t('people:entityHoverCard.project.lastActivity', { date: formatDateTime(lastActivity) })}</span>
+          )}
         </div>
       )}
       {showTopics && (
         <div className="flex flex-wrap items-center gap-1 pt-0.5">
-          {topics.slice(0, HOVER_TOPIC_LIMIT).map((t) => (
+          {topics.slice(0, HOVER_TOPIC_LIMIT).map((topic) => (
             <span
-              key={t}
+              key={topic}
               className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground"
             >
-              {t}
+              {topic}
             </span>
           ))}
         </div>
@@ -308,6 +314,7 @@ export function MeetingHoverCard({
   name: string
   visibleFields?: MeetingHoverField[]
 }) {
+  const { t } = useTranslation()
   const [meeting, setMeeting] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
   const { participants, loading: participantsLoading } = useMeetingParticipants(id)
@@ -377,9 +384,9 @@ export function MeetingHoverCard({
     ? ''
     : intel.transcribed
       ? intel.wordCount
-        ? `Recorded · transcribed (${intel.wordCount.toLocaleString()} words)`
-        : 'Recorded · transcript available'
-      : 'Recorded'
+        ? t('people:entityHoverCard.meeting.recordedTranscribedWithWords', { words: intel.wordCount.toLocaleString() })
+        : t('people:entityHoverCard.meeting.recordedTranscriptAvailable')
+      : t('people:entityHoverCard.meeting.recordedOnly')
 
   return (
     <div className="space-y-2">
@@ -419,7 +426,7 @@ export function MeetingHoverCard({
           className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Video className="h-3 w-3 shrink-0" />
-          <span className="truncate">Join meeting</span>
+          <span className="truncate">{t('people:entityHoverCard.meeting.joinMeeting')}</span>
         </a>
       )}
       {showRecording && (
@@ -440,12 +447,14 @@ export function MeetingHoverCard({
           ))}
           {participants.length > HOVER_PARTICIPANT_LIMIT && (
             <span className="text-[11px] text-muted-foreground">
-              +{participants.length - HOVER_PARTICIPANT_LIMIT} more
+              {t('people:entityHoverCard.meeting.moreParticipants', {
+                count: participants.length - HOVER_PARTICIPANT_LIMIT
+              })}
             </span>
           )}
         </div>
       )}
-      <OpenAffordance label="Open meeting" />
+      <OpenAffordance label={t('people:entityHoverCard.openMeeting')} />
     </div>
   )
 }

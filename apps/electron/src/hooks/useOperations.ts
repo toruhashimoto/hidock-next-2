@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from '@/components/ui/toaster'
 import { useTranscriptionStore } from '@/store/features/useTranscriptionStore'
 import {
@@ -29,6 +30,7 @@ import { getHiDockDeviceService } from '@/services/hidock-device'
  * - DRY: single place to change operation behavior
  */
 export function useOperations() {
+  const { t } = useTranslation()
   const addToQueue = useTranscriptionStore((s) => s.addToQueue)
 
   const validateTranscriptionConfig = useCallback(async (): Promise<boolean> => {
@@ -41,8 +43,8 @@ export function useOperations() {
         const apiKey = config?.transcription?.geminiApiKey
         if (!apiKey || apiKey.trim() === '') {
           toast({
-            title: 'API key required',
-            description: 'Please configure your Gemini API key in Settings before transcribing.',
+            title: t('layout:operationsToasts.apiKeyRequiredTitle'),
+            description: t('layout:operationsToasts.apiKeyRequiredDescription'),
             variant: 'error'
           })
           return false
@@ -53,8 +55,8 @@ export function useOperations() {
         const asrPath = config?.transcription?.localAsrPath
         if (!asrPath || asrPath.trim() === '') {
           toast({
-            title: 'ASR path required',
-            description: 'Please configure the Local ASR MCP path in Settings before transcribing.',
+            title: t('layout:operationsToasts.asrPathRequiredTitle'),
+            description: t('layout:operationsToasts.asrPathRequiredDescription'),
             variant: 'error'
           })
           return false
@@ -64,8 +66,8 @@ export function useOperations() {
         const hfToken = config?.transcription?.localAsrHfToken
         if (diarize && (!hfToken || hfToken.trim() === '')) {
           toast({
-            title: 'Hugging Face token required',
-            description: 'Please configure your Hugging Face token in Settings or disable speaker diarization.',
+            title: t('layout:operationsToasts.hfTokenRequiredTitle'),
+            description: t('layout:operationsToasts.hfTokenRequiredDescription'),
             variant: 'error'
           })
           return false
@@ -75,16 +77,16 @@ export function useOperations() {
       return true
     } catch (e) {
       console.error('Failed to check transcription configuration:', e)
-      toast({ title: 'Configuration error', description: 'Could not verify transcription configuration', variant: 'error' })
+      toast({ title: t('layout:operationsToasts.configErrorTitle'), description: t('layout:operationsToasts.configErrorDescription'), variant: 'error' })
       return false
     }
-  }, [])
+  }, [t])
 
   // ── Transcription ──────────────────────────────────────
 
   const queueTranscription = useCallback(async (recording: UnifiedRecording) => {
     if (!hasLocalPath(recording)) {
-      toast({ title: 'Cannot transcribe', description: 'File not available locally. Download first.', variant: 'error' })
+      toast({ title: t('layout:operationsToasts.cannotTranscribeTitle'), description: t('layout:operationsToasts.fileNotAvailableDescription'), variant: 'error' })
       return false
     }
     if (recording.transcriptionStatus === 'processing') {
@@ -117,14 +119,14 @@ export function useOperations() {
         const result = await window.electronAPI.recordings.reprocessWith(recording.id, provider)
         if (!result?.success || !result.queueItemId) {
           toast({
-            title: 'Failed to re-transcribe',
-            description: result?.error || 'Could not add corrective transcription to the queue',
+            title: t('layout:operationsToasts.failedToRetranscribeTitle'),
+            description: result?.error || t('layout:operationsToasts.couldNotAddCorrectiveDescription'),
             variant: 'error'
           })
           return false
         }
         addToQueue(result.queueItemId, recording.id, recording.filename)
-        toast({ title: 'Re-transcription queued', description: recording.filename })
+        toast({ title: t('layout:operationsToasts.retranscriptionQueuedTitle'), description: recording.filename })
         return true
       }
 
@@ -132,53 +134,53 @@ export function useOperations() {
       // Single explicit request → priority: jumps ahead of the recency-ordered backlog.
       const queueItemId = await window.electronAPI.recordings.addToQueue(recording.id, true)
       if (!queueItemId) {
-        toast({ title: 'Failed to queue transcription', description: 'Could not add to queue', variant: 'error' })
+        toast({ title: t('layout:operationsToasts.failedToQueueTranscriptionTitle'), description: t('layout:operationsToasts.couldNotAddToQueueDescription'), variant: 'error' })
         return false
       }
       addToQueue(queueItemId, recording.id, recording.filename)
-      toast({ title: 'Transcription queued', description: recording.filename })
+      toast({ title: t('layout:operationsToasts.transcriptionQueuedTitle'), description: recording.filename })
       return true
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unknown error'
-      toast({ title: 'Failed to queue transcription', description: msg, variant: 'error' })
+      const msg = e instanceof Error ? e.message : t('common:errors.unknown')
+      toast({ title: t('layout:operationsToasts.failedToQueueTranscriptionTitle'), description: msg, variant: 'error' })
       return false
     }
-  }, [addToQueue, validateTranscriptionConfig])
+  }, [addToQueue, validateTranscriptionConfig, t])
 
   const reprocessWithVibeVoice = useCallback(async (recording: UnifiedRecording) => {
     if (!hasLocalPath(recording)) {
-      toast({ title: 'Cannot re-transcribe', description: 'File not available locally. Download first.', variant: 'error' })
+      toast({ title: t('layout:operationsToasts.cannotRetranscribeTitle'), description: t('layout:operationsToasts.fileNotAvailableDescription'), variant: 'error' })
       return false
     }
     if (recording.transcriptionStatus === 'processing') {
-      toast({ title: 'Already in progress', description: recording.filename })
+      toast({ title: t('layout:operationsToasts.alreadyInProgressTitle'), description: recording.filename })
       return false
     }
 
     try {
       const result = await window.electronAPI.recordings.reprocessWith(recording.id, 'vibevoice')
       if (!result?.success) {
-        toast({ title: 'Failed to re-transcribe', description: result?.error || 'Could not queue VibeVoice', variant: 'error' })
+        toast({ title: t('layout:operationsToasts.failedToRetranscribeTitle'), description: result?.error || t('layout:operationsToasts.couldNotQueueVibevoiceDescription'), variant: 'error' })
         return false
       }
       if (result.queueItemId) {
         addToQueue(result.queueItemId, recording.id, recording.filename)
       }
-      toast({ title: 'Re-transcribing with VibeVoice', description: recording.filename })
+      toast({ title: t('layout:operationsToasts.retranscribingVibevoiceTitle'), description: recording.filename })
       return true
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unknown error'
-      toast({ title: 'Failed to re-transcribe', description: msg, variant: 'error' })
+      const msg = e instanceof Error ? e.message : t('common:errors.unknown')
+      toast({ title: t('layout:operationsToasts.failedToRetranscribeTitle'), description: msg, variant: 'error' })
       return false
     }
-  }, [addToQueue])
+  }, [addToQueue, t])
 
   const queueBulkTranscriptions = useCallback(async (recordings: UnifiedRecording[]) => {
     const eligible = recordings.filter(
       (r) => hasLocalPath(r) && r.transcriptionStatus !== 'processing' && r.transcriptionStatus !== 'complete'
     )
     if (eligible.length === 0) {
-      toast({ title: 'No recordings to transcribe', description: 'All selected recordings are already transcribed or in progress.' })
+      toast({ title: t('layout:operationsToasts.noRecordingsToTranscribeTitle'), description: t('layout:operationsToasts.allAlreadyTranscribedDescription') })
       return 0
     }
 
@@ -202,9 +204,15 @@ export function useOperations() {
       }
     }
 
-    toast({ title: `${queued} transcription${queued > 1 ? 's' : ''} queued`, description: 'Processing will begin shortly.' })
+    // Original ternary was `queued > 1` — singular at BOTH 0 and 1, unlike i18next's
+    // default English plural rule. Fake the plural-category count (1 vs 2) so
+    // `_one`/`_other` resolve the same way, while `{{queued}}` interpolates the real number.
+    toast({
+      title: t('layout:operationsToasts.transcriptionsQueuedTitle', { count: queued > 1 ? 2 : 1, queued }),
+      description: t('layout:operationsToasts.processingWillBeginDescription')
+    })
     return queued
-  }, [addToQueue, validateTranscriptionConfig])
+  }, [addToQueue, validateTranscriptionConfig, t])
 
   const cancelTranscription = useCallback(async (recordingId: string) => {
     try {
@@ -216,21 +224,24 @@ export function useOperations() {
       if (item) {
         store.remove(item.id)
       }
-      toast({ title: 'Transcription cancelled' })
+      toast({ title: t('layout:operationsToasts.transcriptionCancelledTitle') })
     } catch (e) {
       console.error('Failed to cancel transcription:', e)
     }
-  }, [])
+  }, [t])
 
   const cancelAllTranscriptions = useCallback(async () => {
     try {
       const result = await window.electronAPI.recordings.cancelAllTranscriptions()
       useTranscriptionStore.getState().clear()
-      toast({ title: 'All transcriptions cancelled', description: `${result.count} items removed from queue.` })
+      toast({
+        title: t('layout:operationsToasts.allTranscriptionsCancelledTitle'),
+        description: t('layout:operationsToasts.itemsRemovedFromQueueDescription', { n: result.count })
+      })
     } catch (e) {
       console.error('Failed to cancel transcriptions:', e)
     }
-  }, [])
+  }, [t])
 
   // ── Downloads ──────────────────────────────────────────
 
@@ -276,14 +287,14 @@ export function useOperations() {
       // above plus an explicit drain makes the visible Download/Start action actually
       // start that row instead of leaving it in a permanent "pending" state.
       drainDownloadQueue()
-      toast({ title: 'Download queued', description: recording.filename })
+      toast({ title: t('layout:operationsToasts.downloadQueuedTitle'), description: recording.filename })
       return true
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unknown error'
-      toast({ title: 'Download failed', description: msg, variant: 'error' })
+      const msg = e instanceof Error ? e.message : t('common:errors.unknown')
+      toast({ title: t('device:fileList.downloadFailedShort'), description: msg, variant: 'error' })
       return false
     }
-  }, [])
+  }, [t])
 
   const queueBulkDownloads = useCallback(async (recordings: UnifiedRecording[]) => {
     const eligible = recordings.filter(isDeviceOnly)
@@ -312,25 +323,37 @@ export function useOperations() {
           if (!stillPending.has(r.deviceFilename)) releaseDownloadBookkeeping(r.deviceFilename)
         }
         toast({
-          title: stillPending.size > 0 ? 'Already in the download queue' : 'Nothing queued',
-          description: skipped[0]?.reason ?? 'All selected files were skipped',
+          title: stillPending.size > 0
+            ? t('layout:operationsToasts.alreadyInDownloadQueueTitle')
+            : t('layout:operationsToasts.nothingQueuedTitle'),
+          description:
+            skipped[0]?.reason ?? t('layout:operationsToasts.allSelectedFilesSkippedDescription'),
           variant: 'default'
         })
         return stillPending.size > 0 ? stillPending.size : 0
       }
       toast({
-        title: `${queued.length} download${queued.length > 1 ? 's' : ''} queued`,
+        // Upstream's ternary is `queued.length > 1` — singular at BOTH 0 and 1. Fake the
+        // plural-category count (1 vs 2) so `_one`/`_other` resolve the same way, while
+        // `{{n}}` interpolates the real number.
+        title: t('layout:operationsToasts.bulkDownloadsQueuedTitle', {
+          count: queued.length > 1 ? 2 : 1,
+          n: queued.length
+        }),
         description: skipped.length > 0
-          ? `${skipped.length} skipped: ${skipped[0].reason}`
+          ? t('layout:operationsToasts.filesSkippedDescription', {
+              count: skipped.length,
+              reason: skipped[0].reason
+            })
           : undefined
       })
       return queued.length
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unknown error'
-      toast({ title: 'Downloads failed', description: msg, variant: 'error' })
+      const msg = e instanceof Error ? e.message : t('common:errors.unknown')
+      toast({ title: t('layout:operationsToasts.downloadsFailedTitle'), description: msg, variant: 'error' })
       return 0
     }
-  }, [])
+  }, [t])
 
   /**
    * Cancel a single in-progress or pending download. Awaits the main-process
@@ -353,18 +376,18 @@ export function useOperations() {
         // Nothing was cancelled (e.g. already terminal / not in flight) — drop the
         // marker so a genuinely running transfer is never mislabeled as cancelled.
         clearDownloadCancelled(filename)
-        toast({ title: 'Could not cancel download', description: res.error || filename, variant: 'error' })
+        toast({ title: t('layout:operationsToasts.couldNotCancelDownloadTitle'), description: res.error || filename, variant: 'error' })
         return false
       }
-      toast({ title: 'Download cancelled', description: filename })
+      toast({ title: t('layout:operationsToasts.downloadCancelledTitle'), description: filename })
       return true
     } catch (e) {
       clearDownloadCancelled(filename)
-      const msg = e instanceof Error ? e.message : 'Unknown error'
-      toast({ title: 'Could not cancel download', description: msg, variant: 'error' })
+      const msg = e instanceof Error ? e.message : t('common:errors.unknown')
+      toast({ title: t('layout:operationsToasts.couldNotCancelDownloadTitle'), description: msg, variant: 'error' })
       return false
     }
-  }, [])
+  }, [t])
 
   const cancelAllDownloads = useCallback(async () => {
     try {
@@ -374,19 +397,19 @@ export function useOperations() {
       cancelDownloads()
       await window.electronAPI.downloadService.cancelAll()
       clearAllDownloadBookkeeping()
-      toast({ title: 'All downloads cancelled' })
+      toast({ title: t('layout:operationsToasts.allDownloadsCancelledTitle') })
     } catch (e) {
       console.error('Failed to cancel downloads:', e)
-      toast({ title: 'Could not cancel downloads', variant: 'error' })
+      toast({ title: t('layout:operationsToasts.couldNotCancelDownloadsTitle'), variant: 'error' })
     } finally {
       cancelDownloadsComplete()
     }
-  }, [])
+  }, [t])
 
   const retryFailedDownloads = useCallback(async (): Promise<number> => {
     const deviceService = getHiDockDeviceService()
     if (!deviceService.isConnected()) {
-      toast({ title: 'Connect the HiDock to retry downloads', variant: 'error' })
+      toast({ title: t('layout:operationsToasts.connectToRetryDownloadsTitle'), variant: 'error' })
       return 0
     }
 
@@ -398,18 +421,20 @@ export function useOperations() {
       const result = await window.electronAPI.downloadService.retryFailed(true, false)
       if (result.count === 0) {
         for (const item of failed) releaseDownloadBookkeeping(item.filename)
-        toast({ title: 'No downloads were retried', description: result.error, variant: 'error' })
+        toast({ title: t('layout:operationsToasts.noDownloadsRetriedTitle'), description: result.error, variant: 'error' })
         return 0
       }
       drainDownloadQueue()
-      toast({ title: `${result.count} download${result.count === 1 ? '' : 's'} queued for retry` })
+      // Standard i18next English rule (singular at 1, plural at 0 and 2+) matches the
+      // original `=== 1` ternary exactly, so the real count drives pluralization directly.
+      toast({ title: t('layout:operationsToasts.downloadsQueuedForRetryTitle', { count: result.count }) })
       return result.count
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unknown error'
-      toast({ title: 'Could not retry downloads', description: message, variant: 'error' })
+      const message = e instanceof Error ? e.message : t('common:errors.unknown')
+      toast({ title: t('layout:operationsToasts.couldNotRetryDownloadsTitle'), description: message, variant: 'error' })
       return 0
     }
-  }, [])
+  }, [t])
 
   return {
     // Transcription

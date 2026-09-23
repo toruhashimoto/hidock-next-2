@@ -1,0 +1,70 @@
+{
+  "date.unknown": "Unknown date",
+  "date.justNow": "just now",
+  "date.dateTimeJoiner": " at ",
+
+  "duration.hoursMinutes": "{{hours}}h {{minutes}}m",
+  "duration.minutesSeconds": "{{minutes}}m {{seconds}}s",
+  "duration.seconds": "{{seconds}}s",
+
+  "errors.unknown": "Unknown error",
+
+  "relativeTime.justNow": "Just now",
+  "relativeTime.minutesAgo": "{{n}}m ago",
+  "relativeTime.hoursAgo": "{{n}}h ago",
+  "relativeTime.daysAgo": "{{n}}d ago",
+
+  "meetingTiming.startingNow": "starting now",
+  "meetingTiming.inMinutes": "in {{n}} min",
+  "meetingTiming.inHours": "in {{n}} h",
+  "meetingTiming.inHoursMinutes": "in {{h}} h {{m}} min",
+  "meetingTiming.bareMinutes": "{{n}} min",
+  "meetingTiming.bareHours": "{{n}} h",
+  "meetingTiming.bareHoursMinutes": "{{h}} h {{m}} min",
+  "meetingTiming.justEnded": "just ended",
+  "meetingTiming.endedMinutesAgo": "ended {{n}} min ago",
+  "meetingTiming.endedHoursAgo": "ended {{n}} h ago",
+  "meetingTiming.endedHoursMinutesAgo": "ended {{h}} h {{m}} min ago",
+  "meetingTiming.nowWrappingUp": "Now · wrapping up",
+  "meetingTiming.nowMinutesLeft": "Now · {{n}} min left",
+  "meetingTiming.nowHoursLeft": "Now · {{n}} h left",
+  "meetingTiming.nowHoursMinutesLeft": "Now · {{h}} h {{m}} min left",
+  "meetingTiming.dayPartMorning": "Morning",
+  "meetingTiming.dayPartAfternoon": "Afternoon",
+  "meetingTiming.dayPartEvening": "Evening",
+  "meetingTiming.categoryRecurring": "Recurring / team",
+  "meetingTiming.categoryOneOnOne": "1:1",
+  "meetingTiming.categoryExternal": "Client / external",
+  "meetingTiming.categoryPersonal": "Personal",
+  "meetingTiming.categoryGeneral": "Meeting",
+
+  "contacts.loadFailedFallback": "Failed to load contacts",
+  "contacts.notFound": "Contact not found",
+  "contacts.loadOneFailedFallback": "Failed to load contact",
+  "contacts.updateFailedFallback": "Failed to update contact",
+  "contacts.deleteFailedFallback": "Failed to delete contact",
+
+  "projects.loadFailedFallback": "Failed to load projects",
+  "projects.notFound": "Project not found",
+  "projects.loadOneFailedFallback": "Failed to load project",
+  "projects.createFailedFallback": "Failed to create project",
+  "projects.updateFailedFallback": "Failed to update project",
+  "projects.deleteFailedFallback": "Failed to delete project",
+
+  "features.disabledByUser": "Turned off in Settings",
+  "features.disabledByPreset": "Not included in the current preset",
+  "features.disabledRequires": "Requires {{label}}",
+
+  "featureDisabledPage.defaultReason": "This feature is turned off.",
+  "featureDisabledPage.title": "{{label}} is turned off",
+  "featureDisabledPage.enableButton": "Enable in Settings",
+  "featureDisabledPage.restartHint": "Enabling {{label}} takes effect after a restart.",
+
+  "playback.errorTitle": "Error",
+  "playback.loadFailedDescription": "Failed to load audio file",
+  "playback.playbackErrorTitle": "Playback error",
+
+  "errorBoundary.title": "Something went wrong",
+  "errorBoundary.fallbackMessage": "An unexpected error occurred",
+  "errorBoundary.retry": "Try again"
+}

@@ -18,6 +18,8 @@ import {
   ChevronDown,
   Trash2
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -48,11 +50,17 @@ interface OperationsPanelProps {
 }
 
 /** Human-readable status for a transcription queue item. */
-const STATUS_LABEL: Record<TranscriptionStatus, string> = {
-  pending: 'Queued',
-  processing: 'Transcribing…',
-  completed: 'Done',
-  failed: 'Failed'
+function statusLabel(t: TFunction, status: TranscriptionStatus): string {
+  switch (status) {
+    case 'pending':
+      return t('layout:status.queued')
+    case 'processing':
+      return t('layout:status.transcribing')
+    case 'completed':
+      return t('layout:status.done')
+    case 'failed':
+      return t('layout:status.failed')
+  }
 }
 
 /** Display order: active first, then queued (by priority), then failed. */
@@ -83,27 +91,29 @@ function formatOperationTime(value?: Date): string | null {
   return OPERATION_TIME_FORMAT.format(value)
 }
 
-function attemptLabel(item: TranscriptionItem): string {
+function attemptLabel(t: TFunction, item: TranscriptionItem): string {
   const attempts = item.attempts || 0
-  if (attempts === 0) return 'Not attempted yet'
-  return `${attempts} attempt${attempts === 1 ? '' : 's'}`
+  if (attempts === 0) return t('layout:operations.notAttempted')
+  return t('layout:operations.attemptCount', { count: attempts })
 }
 
 /** Human-readable status line for a download row. */
-function downloadStatusLabel(dl: DownloadQueueEntry): string {
+function downloadStatusLabel(t: TFunction, dl: DownloadQueueEntry): string {
   switch (dl.status) {
     case 'pending':
-      return 'Queued'
+      return t('layout:status.queued')
     case 'cancelling':
-      return 'Cancelling…'
+      return t('layout:status.cancelling')
     case 'cancelled':
-      return 'Cancelled'
+      return t('layout:status.cancelled')
     case 'failed':
-      return 'Failed'
+      return t('layout:status.failed')
     case 'completed':
-      return 'Done'
+      return t('layout:status.done')
     default:
-      return dl.progress > 0 ? `Downloading… ${Math.round(dl.progress)}%` : 'Starting download…'
+      return dl.progress > 0
+        ? t('layout:status.downloadingProgress', { progress: Math.round(dl.progress) })
+        : t('layout:status.startingDownload')
   }
 }
 
@@ -141,6 +151,7 @@ function sourceTitleFor(item: TranscriptionItem, rec?: UnifiedRecording): string
  * The whole list is in the overlay, never crammed into the nav column.
  */
 export function OperationsPanel({ sidebarOpen }: OperationsPanelProps) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const downloadQueue = useDownloadQueue()
   const transcriptionStats = useTranscriptionStats()
@@ -220,27 +231,27 @@ export function OperationsPanel({ sidebarOpen }: OperationsPanelProps) {
   const goToSource = useCallback((item: TranscriptionItem) => {
     const rec = recordings.find((r) => r.id === item.recordingId)
     if (!rec) {
-      toast.warning('Source unavailable', 'This source is no longer in the Library.')
+      toast.warning(t('layout:operations.sourceUnavailable'), t('layout:operations.sourceUnavailableInLibrary'))
       return
     }
     navigate('/library', { state: { selectedId: rec.id } })
     closeOverlay()
-  }, [recordings, navigate, closeOverlay])
+  }, [recordings, navigate, closeOverlay, t])
 
   const goToDownloadSource = useCallback((filename: string) => {
     const rec = recordings.find((r) => r.filename === filename || ('deviceFilename' in r && r.deviceFilename === filename))
     if (!rec) {
-      toast.warning('Source unavailable', 'This file is no longer available in the Library.')
+      toast.warning(t('layout:operations.sourceUnavailable'), t('layout:operations.fileUnavailableInLibrary'))
       return
     }
     navigate('/library', { state: { selectedId: rec.id } })
     closeOverlay()
-  }, [recordings, navigate, closeOverlay])
+  }, [recordings, navigate, closeOverlay, t])
 
   const clearFinishedDownloads = useCallback(async () => {
     await window.electronAPI.downloadService.clearCompleted()
-    toast.success('Finished downloads cleared')
-  }, [])
+    toast.success(t('layout:operations.finishedDownloadsCleared'))
+  }, [t])
 
   const dismissDownload = useCallback(async (filename: string) => {
     return window.electronAPI.downloadService.dismiss(filename)
@@ -293,7 +304,11 @@ export function OperationsPanel({ sidebarOpen }: OperationsPanelProps) {
           <button
             type="button"
             onClick={openOverlay}
-            aria-label={`Operations: ${activeTranscriptions} transcribing${errorCount ? `, ${errorCount} error(s)` : ''}`}
+            aria-label={
+              errorCount
+                ? t('layout:operations.railAriaLabelWithErrors', { count: activeTranscriptions, errorCount })
+                : t('layout:operations.railAriaLabel', { count: activeTranscriptions })
+            }
             className="relative flex w-full flex-col items-center gap-1 rounded-md py-1 text-slate-300 hover:bg-slate-800"
           >
             {hasTranscriptions && (
@@ -321,12 +336,12 @@ export function OperationsPanel({ sidebarOpen }: OperationsPanelProps) {
   // Expanded sidebar: activity + honest indeterminate stage + error count.
   const primaryLabel =
     activeTranscriptions > 0
-      ? `${activeTranscriptions} transcribing`
+      ? t('layout:operations.countTranscribing', { count: activeTranscriptions })
       : hasDownloads
-        ? `${activeDownloadCount} downloading`
+        ? t('layout:operations.countDownloading', { count: activeDownloadCount })
         : errorCount > 0
-          ? `${errorCount} failed`
-          : 'Operations'
+          ? t('layout:operations.countFailed', { count: errorCount })
+          : t('layout:operations.title')
 
   return (
     <>
@@ -334,14 +349,14 @@ export function OperationsPanel({ sidebarOpen }: OperationsPanelProps) {
         <button
           type="button"
           onClick={openOverlay}
-          aria-label="Open operations detail"
+          aria-label={t('layout:operations.openDetailAriaLabel')}
           className="w-full rounded-md px-2 py-1.5 text-left hover:bg-slate-800"
         >
           <div className="flex items-center gap-2 text-xs text-slate-300">
             <Sparkles className={cn('h-3.5 w-3.5 shrink-0', activeTranscriptions > 0 ? 'text-purple-400 animate-pulse' : 'text-slate-500')} />
             <span className="truncate">{primaryLabel}</span>
             {queuePaused && (
-              <span className="rounded bg-amber-500/20 px-1 text-[9px] font-medium uppercase tracking-wide text-amber-300">Paused</span>
+              <span className="rounded bg-amber-500/20 px-1 text-[9px] font-medium uppercase tracking-wide text-amber-300">{t('layout:operations.paused')}</span>
             )}
             <span className="ml-auto flex items-center gap-1.5">
               {errorCount > 0 && (
@@ -355,7 +370,7 @@ export function OperationsPanel({ sidebarOpen }: OperationsPanelProps) {
               <div className="h-1 flex-1 overflow-hidden rounded-full bg-slate-700" aria-hidden="true">
                 <div className="h-full w-1/2 animate-pulse rounded-full bg-purple-500" />
               </div>
-              <span className="text-[9px] text-slate-400">Transcribing · progress unavailable</span>
+              <span className="text-[9px] text-slate-400">{t('layout:operations.transcribingProgressUnavailable')}</span>
             </div>
           )}
         </button>
@@ -414,6 +429,7 @@ function OperationsOverlay({
   onDismissDownload,
   onRetryFailedDownloads
 }: OperationsOverlayProps) {
+  const { t } = useTranslation()
   const [copiedErrorId, setCopiedErrorId] = useState<string | null>(null)
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
 
@@ -422,7 +438,7 @@ function OperationsOverlay({
     try {
       const ok = await action()
       if (ok) toast.success(successMessage)
-      else toast.error('Operation could not be updated')
+      else toast.error(t('layout:operations.updateFailed'))
     } finally {
       setBusyIds((current) => {
         const next = new Set(current)
@@ -430,7 +446,7 @@ function OperationsOverlay({
         return next
       })
     }
-  }, [])
+  }, [t])
 
   const copyError = useCallback(async (item: TranscriptionItem) => {
     if (!item.error) return
@@ -465,16 +481,16 @@ function OperationsOverlay({
   }).length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="Operations detail">
-      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/50" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label={t('layout:operations.detailDialogAriaLabel')}>
+      <button type="button" aria-label={t('layout:operations.close')} className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative z-10 flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-purple-400" />
-            <h2 className="text-sm font-semibold">Operations</h2>
+            <h2 className="text-sm font-semibold">{t('layout:operations.title')}</h2>
             <span className="rounded-full bg-slate-700 px-1.5 text-[10px] text-slate-300">{totalCount}</span>
             {paused && (
-              <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-300">Paused</span>
+              <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-300">{t('layout:operations.paused')}</span>
             )}
           </div>
           <div className="flex items-center gap-1">
@@ -486,7 +502,7 @@ function OperationsOverlay({
                 onClick={() => void onRetryFailedDownloads()}
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                Retry downloads
+                {t('layout:operations.retryDownloads')}
               </Button>
             )}
             {(failedTranscriptionCount > 0 || terminalDownloadCount > 0) && (
@@ -499,13 +515,13 @@ function OperationsOverlay({
                     failedTranscriptionCount > 0 ? onDismissAllFailed() : Promise.resolve(0),
                     terminalDownloadCount > 0 ? onClearFinishedDownloads() : Promise.resolve()
                   ]).then(([count]) => {
-                    if (count > 0) toast.success(`${count} transcription failure${count === 1 ? '' : 's'} dismissed`)
+                    if (count > 0) toast.success(t('layout:operations.failuresDismissed', { count }))
                   })
                 }}
-                aria-label="Clear failed operations"
+                aria-label={t('layout:operations.clearFailuresAriaLabel')}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                Clear failures
+                {t('layout:operations.clearFailures')}
               </Button>
             )}
             {canCancelAllDownloads && (
@@ -514,10 +530,10 @@ function OperationsOverlay({
                 size="sm"
                 className="h-7 gap-1.5 px-2 text-xs text-red-400 hover:text-red-300"
                 onClick={onCancelAllDownloads}
-                aria-label="Cancel all downloads"
+                aria-label={t('layout:operations.cancelAllDownloads')}
               >
                 <X className="h-3.5 w-3.5" />
-                Cancel all downloads
+                {t('layout:operations.cancelAllDownloads')}
               </Button>
             )}
             {items.some((i) => i.status === 'pending' || i.status === 'processing') && (
@@ -526,13 +542,13 @@ function OperationsOverlay({
                 size="sm"
                 className="h-7 gap-1.5 px-2 text-xs text-slate-300 hover:text-slate-100"
                 onClick={onTogglePause}
-                aria-label={paused ? 'Resume transcription queue' : 'Pause transcription queue'}
+                aria-label={paused ? t('layout:operations.resumeQueue') : t('layout:operations.pauseQueue')}
               >
                 {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-                {paused ? 'Resume' : 'Pause'}
+                {paused ? t('layout:operations.resume') : t('layout:operations.pause')}
               </Button>
             )}
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-100" onClick={onClose} aria-label="Close">
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-100" onClick={onClose} aria-label={t('layout:operations.close')}>
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -540,14 +556,14 @@ function OperationsOverlay({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {totalCount === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">No active operations.</p>
+            <p className="py-8 text-center text-sm text-slate-500">{t('layout:operations.noActiveOperations')}</p>
           ) : (
             <div className="space-y-3">
               {downloads.length > 0 && (
-                <section aria-label="Downloads">
+                <section aria-label={t('layout:operations.downloadsHeading')}>
                   <h3 className="mb-1 flex items-center gap-1.5 px-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
                     <Download className="h-3 w-3" />
-                    Downloads
+                    {t('layout:operations.downloadsHeading')}
                     <span className="rounded-full bg-slate-700 px-1.5 text-[10px] text-slate-300">{downloads.length}</span>
                   </h3>
                   <ul className="space-y-1">
@@ -563,7 +579,7 @@ function OperationsOverlay({
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm text-slate-100">{displayName(dl.filename)}</div>
                           <div className="truncate text-[11px] text-slate-500">
-                            {downloadStatusLabel(dl)}
+                            {downloadStatusLabel(t, dl)}
                             {dl.size > 0 ? ` · ${formatBytes(dl.size)}` : ''}
                             {dl.error ? ` · ${dl.error}` : ''}
                           </div>
@@ -583,10 +599,10 @@ function OperationsOverlay({
                                   onClick={() => onGoToDownload(dl.filename)}
                                 >
                                   <CornerUpRight className="h-3.5 w-3.5" />
-                                  View source
+                                  {t('layout:operations.viewSource')}
                                 </Button>
                               ) : dl.status === 'failed' ? (
-                                <span className="px-2 text-[11px] text-amber-300">Source unavailable</span>
+                                <span className="px-2 text-[11px] text-amber-300">{t('layout:operations.sourceUnavailable')}</span>
                               ) : null}
                             </div>
                           )
@@ -600,17 +616,17 @@ function OperationsOverlay({
                             onClick={() => void withBusy(
                               `download:${dl.filename}`,
                               () => onDismissDownload(dl.filename),
-                              'Download failure dismissed'
+                              t('layout:operations.downloadFailureDismissed')
                             )}
-                            aria-label={`Dismiss download failure ${displayName(dl.filename)}`}
+                            aria-label={t('layout:operations.dismissDownloadFailure', { filename: displayName(dl.filename) })}
                           >
                             <X className="h-3.5 w-3.5" />
-                            Dismiss
+                            {t('layout:operations.dismiss')}
                           </Button>
                         )}
                         {(isCancelableDownload(dl) || dl.status === 'cancelling') && (
                           <IconBtn
-                            label={`Cancel download ${displayName(dl.filename)}`}
+                            label={t('layout:operations.cancelDownloadNamed', { filename: displayName(dl.filename) })}
                             danger
                             disabled={dl.status === 'cancelling'}
                             onClick={() => onCancelDownload(dl.filename)}
@@ -625,10 +641,10 @@ function OperationsOverlay({
               )}
 
               {items.length > 0 && (
-                <section aria-label="Transcriptions">
+                <section aria-label={t('layout:operations.transcriptionsHeading')}>
                   <h3 className="mb-1 flex items-center gap-1.5 px-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
                     <Sparkles className="h-3 w-3" />
-                    Transcriptions
+                    {t('layout:operations.transcriptionsHeading')}
                     <span className="rounded-full bg-slate-700 px-1.5 text-[10px] text-slate-300">{items.length}</span>
                   </h3>
                   <ul className="space-y-1">
@@ -658,7 +674,7 @@ function OperationsOverlay({
                       <div className="min-w-0 flex-1 text-left">
                         <div className="truncate text-sm text-slate-100 hover:text-sky-300">{title ?? displayName(item.filename)}</div>
                         <div className="truncate text-[11px] tabular-nums text-slate-400">
-                          {displayName(item.filename)} · {STATUS_LABEL[item.status]} · {attemptLabel(item)}
+                          {displayName(item.filename)} · {statusLabel(t, item.status)} · {attemptLabel(t, item)}
                           {eventTime ? ` · ${eventTime}` : ''}
                         </div>
                       </div>
@@ -672,15 +688,15 @@ function OperationsOverlay({
                             onClick={() => onGoTo(item)}
                           >
                             <CornerUpRight className="h-3.5 w-3.5" />
-                            View source
+                            {t('layout:operations.viewSource')}
                           </Button>
                         )}
                         {isPending && (
                           <>
-                            <IconBtn label="Prioritize" onClick={() => onPrioritize(item.id)}>
+                            <IconBtn label={t('layout:operations.prioritize')} onClick={() => onPrioritize(item.id)}>
                               <ArrowUp className="h-4 w-4" />
                             </IconBtn>
-                            <IconBtn label="Deprioritize" onClick={() => onDeprioritize(item.id)}>
+                            <IconBtn label={t('layout:operations.deprioritize')} onClick={() => onDeprioritize(item.id)}>
                               <ArrowDown className="h-4 w-4" />
                             </IconBtn>
                           </>
@@ -695,25 +711,25 @@ function OperationsOverlay({
                               onClick={() => void withBusy(
                                 item.id,
                                 () => onRetry(item.id),
-                                paused ? 'Retry queued — transcription queue is paused' : 'Retry queued'
+                                paused ? t('layout:operations.retryQueuedPaused') : t('layout:operations.retryQueued')
                               )}
                             >
                               <RotateCcw className={cn('h-3.5 w-3.5', isBusy && 'animate-spin')} />
-                              {isBusy ? 'Updating…' : 'Retry'}
+                              {isBusy ? t('layout:operations.updating') : t('layout:operations.retry')}
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-7 gap-1.5 px-2 text-xs text-slate-400 hover:text-red-300"
                               disabled={isBusy}
-                              onClick={() => void withBusy(item.id, () => onDismiss(item.id), 'Failure dismissed')}
+                              onClick={() => void withBusy(item.id, () => onDismiss(item.id), t('layout:operations.failureDismissed'))}
                             >
                               <X className="h-3.5 w-3.5" />
-                              Dismiss
+                              {t('layout:operations.dismiss')}
                             </Button>
                           </>
                         ) : (
-                          <IconBtn label="Cancel" danger onClick={() => onCancel(item.recordingId)}>
+                          <IconBtn label={t('layout:operations.cancel')} danger onClick={() => onCancel(item.recordingId)}>
                             <X className="h-4 w-4" />
                           </IconBtn>
                         )}
@@ -724,18 +740,18 @@ function OperationsOverlay({
                       <details className="group mt-2 ms-7 rounded-md bg-slate-950/70">
                         <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-red-200 outline-none hover:bg-slate-800/80 focus-visible:ring-1 focus-visible:ring-red-400 [&::-webkit-details-marker]:hidden">
                           <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
-                          <span>Failure details</span>
+                          <span>{t('layout:operations.failureDetails')}</span>
                           {failedAt && <span className="ms-auto tabular-nums font-normal text-slate-400">{failedAt}</span>}
                         </summary>
                         <div className="space-y-3 px-3 pb-3">
                           <dl className="grid grid-cols-1 gap-1 text-[11px] text-slate-400 sm:grid-cols-2">
-                            <div><dt className="inline text-slate-500">Attempts: </dt><dd className="inline text-slate-200">{item.attempts}</dd></div>
-                            <div><dt className="inline text-slate-500">Retries: </dt><dd className="inline text-slate-200">{item.retryCount}</dd></div>
-                            <div><dt className="inline text-slate-500">First queued: </dt><dd className="inline tabular-nums text-slate-200">{queuedAt ?? 'Unknown'}</dd></div>
-                            <div><dt className="inline text-slate-500">Last started: </dt><dd className="inline tabular-nums text-slate-200">{startedAt ?? 'Unknown'}</dd></div>
+                            <div><dt className="inline text-slate-500">{t('layout:operations.attemptsLabel')}</dt><dd className="inline text-slate-200">{item.attempts}</dd></div>
+                            <div><dt className="inline text-slate-500">{t('layout:operations.retriesLabel')}</dt><dd className="inline text-slate-200">{item.retryCount}</dd></div>
+                            <div><dt className="inline text-slate-500">{t('layout:operations.firstQueuedLabel')}</dt><dd className="inline tabular-nums text-slate-200">{queuedAt ?? t('layout:operations.unknown')}</dd></div>
+                            <div><dt className="inline text-slate-500">{t('layout:operations.lastStartedLabel')}</dt><dd className="inline tabular-nums text-slate-200">{startedAt ?? t('layout:operations.unknown')}</dd></div>
                           </dl>
                           <div className="rounded-md bg-red-950/30 px-3 py-2">
-                            <pre className="select-text whitespace-pre-wrap break-words font-sans text-xs leading-5 text-red-100">{item.error || 'No error details were recorded.'}</pre>
+                            <pre className="select-text whitespace-pre-wrap break-words font-sans text-xs leading-5 text-red-100">{item.error || t('layout:operations.noErrorDetails')}</pre>
                           </div>
                           {item.error && (
                             <Button
@@ -743,10 +759,10 @@ function OperationsOverlay({
                               size="sm"
                               className="h-7 gap-1.5 px-2 text-xs text-slate-300 hover:text-white"
                               onClick={() => void copyError(item)}
-                              aria-label={`Copy error for ${displayName(item.filename)}`}
+                              aria-label={t('layout:operations.copyErrorFor', { filename: displayName(item.filename) })}
                             >
                               {copiedErrorId === item.id ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                              {copiedErrorId === item.id ? 'Copied' : 'Copy error'}
+                              {copiedErrorId === item.id ? t('layout:operations.copied') : t('layout:operations.copyError')}
                             </Button>
                           )}
                         </div>

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import ForceGraph2D, { type ForceGraphMethods, type NodeObject } from 'react-force-graph-2d'
 import type { ContextGraphData, ContextGraphNode } from './types'
-import { colorForType } from './graph-theme'
+import { colorForType, nodeTypeLabel } from './graph-theme'
+import i18n from '@/i18n'
 
 type GNode = ContextGraphNode & NodeObject
 interface GLink {
@@ -166,7 +167,7 @@ export function ContextGraphCanvas({
         nodeRelSize={4}
         nodeCanvasObject={paintNode}
         nodePointerAreaPaint={paintPointerArea}
-        nodeLabel={(n: GNode) => `${n.label} · ${n.type}`}
+        nodeLabel={(n: GNode) => i18n.t('chat:graph.canvas.nodeTooltip', { label: n.label, type: nodeTypeLabel(n.type) })}
         linkColor={() => (isDark ? 'rgba(148,163,184,0.28)' : 'rgba(100,116,139,0.35)')}
         linkWidth={(l: GLink) => Math.min(0.5 + (l.weight || 1) * 0.25, 2.5)}
         linkDirectionalParticles={0}

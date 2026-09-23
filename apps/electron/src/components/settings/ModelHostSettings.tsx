@@ -9,6 +9,8 @@
  */
 
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +21,25 @@ type Health = NonNullable<
   Awaited<ReturnType<NonNullable<typeof window.electronAPI>['modelHost']['check']>>['health']
 >
 
+/**
+ * The host's run state as a label. The wire values are an enum, not copy —
+ * rendering one straight into the sentence left the state untranslatable.
+ */
+function stateLabel(t: TFunction, state: Health['state']): string {
+  switch (state) {
+    case 'stopped':
+      return t('settings:modelHost.stateStopped')
+    case 'ready':
+      return t('settings:modelHost.stateReady')
+    case 'paused':
+      return t('settings:modelHost.statePaused')
+    case 'busy':
+      return t('settings:modelHost.stateBusy')
+  }
+}
+
 export function ModelHostSettings(): React.ReactElement {
+  const { t } = useTranslation()
   const { config } = useConfigStore()
   const savedUrl = config?.transcription?.modelHostUrl ?? ''
   const paired = Boolean(config?.transcription?.modelHostToken)
@@ -35,7 +55,7 @@ export function ModelHostSettings(): React.ReactElement {
     try {
       const result = await window.electronAPI.modelHost.check({ url })
       if (!result.success || !result.health) {
-        toast.error('No host there', result.error)
+        toast.error(t('settings:modelHost.noHostTitle'), result.error)
         return
       }
       setHealth(result.health)
@@ -49,11 +69,14 @@ export function ModelHostSettings(): React.ReactElement {
     try {
       const result = await window.electronAPI.modelHost.pair({ url, code })
       if (!result.success) {
-        toast.error('Could not pair', result.error)
+        toast.error(t('settings:modelHost.pairFailedTitle'), result.error)
         return
       }
       setCode('')
-      toast.success('Paired', 'Recordings will diarize on that machine when it is running.')
+      toast.success(
+        t('settings:modelHost.pairedTitle'),
+        t('settings:modelHost.pairedDescription')
+      )
     } finally {
       setBusy(false)
     }
@@ -65,7 +88,10 @@ export function ModelHostSettings(): React.ReactElement {
       await window.electronAPI.modelHost.forget()
       setUrl('')
       setHealth(null)
-      toast.success('Forgotten', 'Diarization happens on this machine again.')
+      toast.success(
+        t('settings:modelHost.forgottenTitle'),
+        t('settings:modelHost.forgottenDescription')
+      )
     } finally {
       setBusy(false)
     }
@@ -74,50 +100,56 @@ export function ModelHostSettings(): React.ReactElement {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Model host</CardTitle>
-        <CardDescription>
-          Another computer on your network that runs the speaker models. Diarization goes there when
-          it is running, and happens here when it is not. Nothing fails because the host is off.
-        </CardDescription>
+        <CardTitle>{t('settings:modelHost.title')}</CardTitle>
+        <CardDescription>{t('settings:modelHost.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="model-host-url">
-            Host address
+            {t('settings:modelHost.urlLabel')}
           </label>
           <div className="flex gap-2">
             <Input
               id="model-host-url"
               value={url}
-              placeholder="gamestation:8765"
+              placeholder={t('settings:modelHost.urlPlaceholder')}
               disabled={busy}
               onChange={(event) => setUrl(event.target.value)}
             />
             <Button variant="outline" onClick={check} disabled={busy || !url.trim()}>
-              Check
+              {t('settings:modelHost.check')}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            The name or address of the machine, and the port shown on its control page.
-          </p>
+          <p className="text-xs text-muted-foreground">{t('settings:modelHost.urlHint')}</p>
         </div>
 
         {health && (
           <div className="rounded-md border border-border p-3 text-sm">
             <p>
-              Host {health.version}, {health.state}
-              {health.reason ? `. ${health.reason}` : ''}
+              {health.reason
+                ? t('settings:modelHost.healthLineWithReason', {
+                    version: health.version,
+                    state: stateLabel(t, health.state),
+                    reason: health.reason
+                  })
+                : t('settings:modelHost.healthLine', {
+                    version: health.version,
+                    state: stateLabel(t, health.state)
+                  })}
             </p>
             <p className="text-muted-foreground">
               {health.gpu === undefined
-                ? 'Pair with this host to see what hardware it has.'
+                ? t('settings:modelHost.gpuUnknown')
                 : health.gpu === null
-                  ? 'No NVIDIA driver answered there; work would run on its CPU.'
-                  : `${health.gpu.name}, driver ${health.gpu.driver}`}
+                  ? t('settings:modelHost.gpuNone')
+                  : t('settings:modelHost.gpuDetail', {
+                      name: health.gpu.name,
+                      driver: health.gpu.driver
+                    })}
             </p>
             {health.capabilities.length === 0 && (
               <p className="text-muted-foreground">
-                Setup has not finished on that machine, so it cannot diarize yet.
+                {t('settings:modelHost.setupIncomplete')}
               </p>
             )}
           </div>
@@ -125,34 +157,33 @@ export function ModelHostSettings(): React.ReactElement {
 
         <div className="space-y-2 border-t border-border pt-4">
           <label className="text-sm font-medium" htmlFor="model-host-code">
-            Pairing code
+            {t('settings:modelHost.codeLabel')}
           </label>
           <div className="flex gap-2">
             <Input
               id="model-host-code"
               value={code}
-              placeholder="12345678"
+              placeholder={t('settings:modelHost.codePlaceholder')}
               inputMode="numeric"
               disabled={busy}
               onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 12))}
             />
             <Button onClick={pair} disabled={busy || !url.trim() || code.length < 4}>
-              Pair
+              {t('settings:modelHost.pair')}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            On the host, open its control page and press &ldquo;Show a pairing code&rdquo;. The code
-            lasts five minutes.
-          </p>
+          <p className="text-xs text-muted-foreground">{t('settings:modelHost.codeHint')}</p>
         </div>
 
         {paired && (
           <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
             <p className="text-sm text-muted-foreground">
-              This computer is paired with {savedUrl || 'a model host'}.
+              {savedUrl
+                ? t('settings:modelHost.pairedWith', { url: savedUrl })
+                : t('settings:modelHost.pairedWithUnknownHost')}
             </p>
             <Button variant="outline" onClick={forget} disabled={busy}>
-              Forget this host
+              {t('settings:modelHost.forget')}
             </Button>
           </div>
         )}

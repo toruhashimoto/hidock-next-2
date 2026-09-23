@@ -1,5 +1,7 @@
 import { ReactNode, useEffect, useRef } from 'react'
 import { useLocation, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   FileText,
   Users,
@@ -35,56 +37,66 @@ import { OperationsPanel } from '@/components/layout/OperationsPanel'
 import { useUIStore } from '@/store/ui/useUIStore'
 import { useActionablesPendingCount, useActionablesStore } from '@/store'
 import { useFeatureStore, describeDisableReason, featureForPath } from '@/store/useFeatureStore'
+import i18n from '@/i18n'
 
 interface LayoutProps {
   children: ReactNode
 }
 
-// Navigation structure with sections
+// Navigation structure with sections. Labels are translation keys (not literal
+// English) so they can be resolved with t() at render time — this module-level
+// array is built before any component (and its useTranslation()) exists.
 type NavigationSection = {
-  title: string
-  items: Array<{ name: string; href: string; icon: LucideIcon }>
+  titleKey: string
+  items: Array<{ nameKey: string; href: string; icon: LucideIcon }>
 }
 
 const navigationSections: NavigationSection[] = [
   {
-    title: 'KNOWLEDGE',
+    titleKey: 'layout:sidebar.knowledge',
     items: [
-      { name: 'Today', href: '/today', icon: Sun },
-      { name: 'Library', href: '/library', icon: BookOpen },
-      { name: 'Notes', href: '/notes', icon: NotebookPen },
-      { name: 'Assistant', href: '/assistant', icon: Bot },
-      { name: 'Explore', href: '/explore', icon: Compass },
-      { name: 'Context Graph', href: '/context-graph', icon: Network }
+      { nameKey: 'layout:sidebar.today', href: '/today', icon: Sun },
+      { nameKey: 'layout:sidebar.library', href: '/library', icon: BookOpen },
+      { nameKey: 'layout:sidebar.notes', href: '/notes', icon: NotebookPen },
+      { nameKey: 'layout:sidebar.assistant', href: '/assistant', icon: Bot },
+      { nameKey: 'layout:sidebar.explore', href: '/explore', icon: Compass },
+      { nameKey: 'layout:sidebar.contextGraph', href: '/context-graph', icon: Network }
     ]
   },
   {
-    title: 'ORGANIZATION',
+    titleKey: 'layout:sidebar.organization',
     items: [
-      { name: 'People', href: '/people', icon: Users },
-      { name: 'Projects', href: '/projects', icon: Folder },
-      { name: 'Calendar', href: '/calendar', icon: Calendar }
+      { nameKey: 'layout:sidebar.people', href: '/people', icon: Users },
+      { nameKey: 'layout:sidebar.projects', href: '/projects', icon: Folder },
+      { nameKey: 'layout:sidebar.calendar', href: '/calendar', icon: Calendar }
     ]
   },
   {
-    title: 'ACTIONS',
+    titleKey: 'layout:sidebar.actions',
     items: [
-      { name: 'Actionables', href: '/actionables', icon: ListTodo }
+      { nameKey: 'layout:sidebar.actionables', href: '/actionables', icon: ListTodo }
     ]
   },
   {
-    title: 'DEVICE',
+    titleKey: 'layout:sidebar.device',
     items: [
-      { name: 'Sync', href: '/sync', icon: CloudDownload }
+      { nameKey: 'layout:sidebar.sync', href: '/sync', icon: CloudDownload }
     ]
   }
 ]
 
-// Accessible label templates for the nav count badges — states what the number means.
-const navCountAriaLabel: Record<string, (n: number) => string> = {
-  '/today': (n) => `${n} ${n === 1 ? 'event' : 'events'} today`,
-  '/actionables': (n) => `${n} pending actionable${n === 1 ? '' : 's'}`,
-  '/sync': (n) => `${n} file${n === 1 ? '' : 's'} to sync`
+/** Accessible label for a nav count badge — states what the number means. */
+function navCountAriaLabel(t: TFunction, href: string, count: number): string {
+  switch (href) {
+    case '/today':
+      return t('layout:sidebar.countToday', { count })
+    case '/actionables':
+      return t('layout:sidebar.countActionables', { count })
+    case '/sync':
+      return t('layout:sidebar.countSync', { count })
+    default:
+      return t('layout:sidebar.countGeneric', { count })
+  }
 }
 
 /**
@@ -93,8 +105,9 @@ const navCountAriaLabel: Record<string, (n: number) => string> = {
  * icon's top-right corner; when expanded it trails the label.
  */
 export function NavCountBadge({ href, count, collapsed, active }: { href: string; count: number; collapsed: boolean; active: boolean }) {
+  const { t } = useTranslation()
   if (count <= 0) return null
-  const label = (navCountAriaLabel[href] ?? ((n: number) => `${n} items`))(count)
+  const label = navCountAriaLabel(t, href, count)
   // Exact count (the badge is a rounded pill that widens for more digits); only
   // cap at an absurd width to avoid breaking the layout.
   const display = count > 9999 ? '9999+' : String(count)
@@ -129,6 +142,11 @@ export function NavCountBadge({ href, count, collapsed, active }: { href: string
  *                 "Requires X" hint, per the owner's "cascade must surface,
  *                 not silently remove" rule.
  *  - 'hidden'   — feature disabled directly (user flag or preset): removed.
+ *
+ * Hints are resolved via the i18n.t() singleton (like describeDisableReason
+ * below) rather than useTranslation()'s t — this is a plain function, called
+ * directly by FeatureEnforcement.test.tsx as well as from render, not a
+ * component with a hook available.
  */
 export type NavItemVisibility = 'visible' | 'grayed' | 'hidden'
 
@@ -146,7 +164,7 @@ export function navItemVisibility(
   // VISIBLE — hiding e.g. Sync here would orphan disconnect/cancel controls
   // while USB work may still be in flight.
   if (pendingRestart.includes(feature)) {
-    return { visibility: 'visible', hint: 'Off after restart' }
+    return { visibility: 'visible', hint: i18n.t('layout:navItem.offAfterRestartHint') }
   }
   if (state.reason?.startsWith('requires:')) {
     return { visibility: 'grayed', hint: describeDisableReason(state.reason) }
@@ -155,6 +173,7 @@ export function navItemVisibility(
 }
 
 export function Layout({ children }: LayoutProps) {
+  const { t } = useTranslation()
   const location = useLocation()
   // Track I: resolved feature state drives nav filtering/graying below.
   const resolvedFeatures = useFeatureStore((s) => s.resolved)
@@ -198,7 +217,7 @@ export function Layout({ children }: LayoutProps) {
   // 'grayed' (cascade) items with their "Requires X" hint, drop empty sections.
   const visibleSections = navigationSections
     .map((section) => ({
-      title: section.title,
+      titleKey: section.titleKey,
       items: section.items
         .map((item) => ({ ...item, ...navItemVisibility(resolvedFeatures, item.href, pendingRestart) }))
         .filter((item) => item.visibility !== 'hidden')
@@ -233,10 +252,10 @@ export function Layout({ children }: LayoutProps) {
     // Show toast on connection state change
     if (wasConnected !== isNowConnected) {
       if (isNowConnected) {
-        const modelName = deviceState.model?.replace('hidock-', '').toUpperCase() || 'Device'
+        const modelName = deviceState.model?.replace('hidock-', '').toUpperCase() || t('layout:toast.deviceConnectedFallbackModel')
         toast({
-          title: 'Device Connected',
-          description: `${modelName} is ready to use`,
+          title: t('layout:toast.deviceConnectedTitle'),
+          description: t('layout:toast.deviceConnectedDescription', { model: modelName }),
           variant: 'success'
         })
         hasShownInitialToast.current = true
@@ -244,8 +263,8 @@ export function Layout({ children }: LayoutProps) {
         // Only show disconnect toast if we had previously shown a connect toast
         if (hasShownInitialToast.current) {
           toast({
-            title: 'Device Disconnected',
-            description: 'HiDock has been disconnected',
+            title: t('layout:toast.deviceDisconnectedTitle'),
+            description: t('layout:toast.deviceDisconnectedDescription'),
             variant: 'default'
           })
         }
@@ -269,8 +288,8 @@ export function Layout({ children }: LayoutProps) {
     // Show toast on error state
     if (connectionStatus.step === 'error' && prevStep !== 'error') {
       toast({
-        title: 'Connection Error',
-        description: connectionStatus.message || 'Failed to connect to device',
+        title: t('layout:toast.connectionErrorTitle'),
+        description: connectionStatus.message || t('layout:toast.connectionErrorFallback'),
         variant: 'error'
       })
     }
@@ -336,9 +355,9 @@ export function Layout({ children }: LayoutProps) {
         <button
           type="button"
           onClick={toggleSidebar}
-          aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          aria-label={sidebarOpen ? t('layout:sidebar.collapse') : t('layout:sidebar.expand')}
           aria-pressed={sidebarOpen}
-          title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          title={sidebarOpen ? t('layout:sidebar.collapse') : t('layout:sidebar.expand')}
           className="absolute right-0 top-1/2 z-50 flex h-5 w-5 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-[3px] border border-slate-600 bg-slate-800 text-slate-300 shadow-sm transition-colors hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
         >
           {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
@@ -350,11 +369,11 @@ export function Layout({ children }: LayoutProps) {
               brand/content divider in the titlebar (see TitleBar), so the nav rail
               starts directly with the KNOWLEDGE section in both states. */}
           {visibleSections.map((section, sectionIdx) => (
-            <div key={section.title}>
+            <div key={section.titleKey}>
               {/* Section Header. */}
               {sidebarOpen && (
                 <div className="px-3 mb-2 text-[10px] font-semibold text-slate-500 tracking-wider">
-                  {section.title}
+                  {t(section.titleKey)}
                 </div>
               )}
               {/* Section Items */}
@@ -378,7 +397,7 @@ export function Layout({ children }: LayoutProps) {
                         <item.icon className="h-5 w-5 flex-shrink-0" />
                         {sidebarOpen && (
                           <span className="flex min-w-0 flex-col leading-tight">
-                            <span>{item.name}</span>
+                            <span>{t(item.nameKey)}</span>
                             {item.hint && (
                               <span className="truncate text-[10px] text-slate-600">{item.hint}</span>
                             )}
@@ -402,7 +421,7 @@ export function Layout({ children }: LayoutProps) {
                       aria-current={isActive ? 'page' : undefined}
                     >
                       <item.icon className="h-5 w-5 flex-shrink-0" />
-                      {sidebarOpen && <span>{item.name}</span>}
+                      {sidebarOpen && <span>{t(item.nameKey)}</span>}
                       <NavCountBadge
                         href={item.href}
                         count={navCounts[item.href] ?? 0}
@@ -434,7 +453,7 @@ export function Layout({ children }: LayoutProps) {
               aria-current={location.pathname.startsWith('/settings') ? 'page' : undefined}
             >
               <Settings className="h-5 w-5 flex-shrink-0" />
-              {sidebarOpen && <span>Settings</span>}
+              {sidebarOpen && <span>{t('layout:sidebar.settings')}</span>}
             </Link>
           </div>
         </nav>

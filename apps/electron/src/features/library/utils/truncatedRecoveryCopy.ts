@@ -2,7 +2,15 @@
  * Library copy for recordings whose file on disk is shorter than their
  * transcript. The counts come from the main process
  * (download-service:truncated-recovery-plan); this only turns them into words.
+ *
+ * i18n note: Library.tsx reads both exports as plain strings, so neither can
+ * call the `useTranslation()` hook. They resolve through the shared `i18n`
+ * singleton at CALL time instead (the approach deletionCopy.ts takes) — never
+ * at module scope, which would freeze the copy in whichever language happened
+ * to be active on import.
  */
+
+import i18n from '@/i18n'
 
 export interface TruncatedRecoveryCounts {
   truncated: number
@@ -13,40 +21,39 @@ export interface TruncatedRecoveryCounts {
   deviceListKnown?: boolean
 }
 
-function files(n: number): string {
-  return `${n} file${n === 1 ? '' : 's'}`
-}
-
-/** Toast body: what was found, what the device can give back, what is gone. */
+/**
+ * Toast body: what was found, what the device can give back, what is gone.
+ *
+ * Every line is a whole sentence of its own, chosen by a count or a flag —
+ * nothing is stitched together from fragments, so a locale is free to order
+ * each sentence however it reads best. The hand-rolled English plurals this
+ * used to carry (`file`/`files`, `hold`/`holds`, `is`/`are`, `match`/`matches`)
+ * are i18next `_one`/`_other` keys now, which is also why a count that only
+ * ever reads as one form passes its own named placeholder rather than `count`.
+ */
 export function describeTruncatedRecovery(counts: TruncatedRecoveryCounts | null, truncated: number): string {
-  const lines = [
-    `${files(truncated)} on disk hold${truncated === 1 ? 's' : ''} less audio than was transcribed from ${truncated === 1 ? 'it' : 'them'}.`,
-  ]
+  const lines = [i18n.t('library:truncatedRecovery.foundMessage', { count: truncated })]
   if (counts) {
     if (counts.recoverable > 0) {
-      lines.push(`The HiDock still has a complete copy of ${counts.recoverable}.`)
+      lines.push(i18n.t('library:truncatedRecovery.recoverableMessage', { recoverable: counts.recoverable }))
     }
     if (counts.deviceNotLarger > 0) {
-      lines.push(
-        `${counts.deviceNotLarger} match${counts.deviceNotLarger === 1 ? 'es' : ''} the HiDock's copy in size, so downloading again would not bring anything back.`
-      )
+      lines.push(i18n.t('library:truncatedRecovery.deviceNotLargerMessage', { count: counts.deviceNotLarger }))
     }
     if (counts.deviceListKnown === false) {
-      lines.push('Connect the HiDock to check which of them it still holds.')
+      lines.push(i18n.t('library:truncatedRecovery.deviceListUnknownMessage'))
     } else if (counts.notOnDevice > 0) {
-      lines.push(
-        `${counts.notOnDevice} ${counts.notOnDevice === 1 ? 'is' : 'are'} no longer on the HiDock, so the missing audio cannot be recovered.`
-      )
+      lines.push(i18n.t('library:truncatedRecovery.notOnDeviceMessage', { count: counts.notOnDevice }))
     }
     if (counts.heldBack > 0) {
-      lines.push(`${counts.heldBack} is being recorded right now and was left alone.`)
+      lines.push(i18n.t('library:truncatedRecovery.heldBackMessage', { heldBack: counts.heldBack }))
     }
   }
-  lines.push('Nothing was deleted and their stored length is unchanged.')
+  lines.push(i18n.t('library:truncatedRecovery.unchangedMessage'))
   return lines.join(' ')
 }
 
 /** Label for the toast action that queues the recovery. */
 export function recoverActionLabel(recoverable: number): string {
-  return `Recover ${recoverable} from the device`
+  return i18n.t('library:truncatedRecovery.recoverActionLabel', { recoverable })
 }

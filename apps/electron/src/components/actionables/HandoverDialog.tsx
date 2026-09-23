@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import {
   Terminal,
   FolderOpen,
@@ -29,6 +30,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from '@/components/ui/toaster'
 import { useAppStore } from '@/store'
+import i18n from '@/i18n'
 import type { BrainListItem, HandoverCreateBundleResult } from '../../../electron/preload/index'
 
 export interface HandoverOutput {
@@ -52,8 +54,12 @@ function isUsable(b: BrainListItem): boolean {
 
 /** Short reason a brain can't be picked (for the greyed-out row tooltip). */
 function unusableReason(b: BrainListItem): string {
-  if (!b.enabled) return 'Disabled — enable it in Settings → AI Brains'
-  if (!b.auth.configured) return b.auth.detail || 'Not authenticated'
+  if (!b.enabled) {
+    return i18n.t('projects:handoverDialog.disabledReasonMessage', {
+      defaultValue: 'Disabled — enable it in Settings → AI Brains'
+    })
+  }
+  if (!b.auth.configured) return b.auth.detail || i18n.t('projects:handoverDialog.notAuthenticatedFallback', { defaultValue: 'Not authenticated' })
   return ''
 }
 
@@ -64,6 +70,7 @@ function unusableReason(b: BrainListItem): string {
  * BrainRouter. Clipboard-copy and open-in-terminal remain as explicit fallbacks.
  */
 export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogProps) {
+  const { t } = useTranslation('projects')
   const [brains, setBrains] = useState<BrainListItem[]>([])
   const [brainId, setBrainId] = useState<string>('')
   const [targetDir, setTargetDir] = useState<string>('')
@@ -140,7 +147,7 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
     if (res.success && res.data?.needsFolder) {
       const pick = await window.electronAPI.storage.selectFolder?.()
       if (!pick?.success || !pick.data) {
-        toast.info('Cancelled', 'Pick a folder to write the handover bundle into.')
+        toast.info(t('handoverDialog.cancelledTitle'), t('handoverDialog.pickFolderMessage'))
         return null
       }
       setTargetDir(pick.data)
@@ -148,7 +155,7 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
     }
 
     if (!res.success) {
-      toast.error('Could not write bundle', res.error?.message || 'Unknown error')
+      toast.error(t('handoverDialog.couldNotWriteBundleTitle'), res.error?.message || t('common:errors.unknown'))
       return null
     }
     if (!res.data?.created || !res.data.bundleDir) {
@@ -156,7 +163,7 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
     }
     if (res.data.targetDir) setTargetDir(res.data.targetDir)
     return res.data
-  }, [output, agenticBrains, brainId, targetDir])
+  }, [output, agenticBrains, brainId, targetDir, t])
 
   const onWriteBundle = useCallback(async () => {
     setBusy('bundle')
@@ -164,9 +171,9 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
       const bundle = await createBundle()
       if (bundle?.bundleDir) {
         logActivity('success', 'Handover bundle written', bundle.bundleDir)
-        toast.success('Bundle written', bundle.bundleDir, {
+        toast.success(t('handoverDialog.bundleWrittenTitle'), bundle.bundleDir, {
           action: {
-            label: 'Show',
+            label: t('handoverDialog.showActionLabel'),
             onClick: () => window.electronAPI.outputs.openInFolder(bundle.handoverPath || bundle.bundleDir!),
           },
         })
@@ -174,7 +181,7 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
     } finally {
       setBusy(null)
     }
-  }, [createBundle, logActivity])
+  }, [createBundle, logActivity, t])
 
   const onWriteAndRun = useCallback(async () => {
     setBusy('run')
@@ -185,44 +192,44 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
       // Only the opaque bundleId is passed back — the main process refuses paths.
       if (!bundle?.bundleId) return
       logActivity('info', 'Handover agent started', `${brainId} · ${bundle.bundleDir ?? bundle.bundleId}`)
-      setRunLog('Running the agent… this can take a while.')
+      setRunLog(t('handoverDialog.runningAgentMessage'))
       const res = await window.electronAPI.handover.runAgent({
         bundleId: bundle.bundleId,
         brainId: brainId || undefined,
       })
       if (!res.success) {
         setRunOk(false)
-        setRunLog(res.error?.message || 'The run failed.')
+        setRunLog(res.error?.message || t('handoverDialog.runFailedMessage'))
         logActivity('error', 'Handover agent failed', res.error?.message)
-        toast.error('Handover run failed', res.error?.message || 'Unknown error')
+        toast.error(t('handoverDialog.handoverRunFailedTitle'), res.error?.message || t('common:errors.unknown'))
         return
       }
       const data = res.data
       setRunOk(data.ok)
-      setRunLog(data.ok ? data.finalResponse || 'Completed with no textual output.' : data.error || 'The agent returned no output.')
+      setRunLog(data.ok ? data.finalResponse || t('handoverDialog.completedNoOutputMessage') : data.error || t('handoverDialog.agentNoOutputMessage'))
       if (data.ok) {
         logActivity('success', `Handover completed via ${data.brainLabel ?? brainId}`, data.runLogPath)
-        toast.success('Handover complete', data.brainLabel ? `Ran via ${data.brainLabel}` : undefined)
+        toast.success(t('handoverDialog.handoverCompleteTitle'), data.brainLabel ? t('handoverDialog.ranViaMessage', { brainLabel: data.brainLabel }) : undefined)
       } else {
         logActivity('error', 'Handover agent returned no output', data.error)
-        toast.error('Handover run failed', data.error || 'The agent returned no output.')
+        toast.error(t('handoverDialog.handoverRunFailedTitle'), data.error || t('handoverDialog.agentNoOutputMessage'))
       }
     } finally {
       setBusy(null)
     }
-  }, [createBundle, brainId, logActivity])
+  }, [createBundle, brainId, logActivity, t])
 
   const onCopy = useCallback(async () => {
     if (!output?.content) return
     setBusy('copy')
     try {
       const res = await window.electronAPI.outputs.copyToClipboard(output.content)
-      if (res.success) toast.success('Copied', 'Handoff prompt copied to clipboard')
-      else toast.error('Copy failed', res.error?.message)
+      if (res.success) toast.success(t('handoverDialog.copiedTitle'), t('handoverDialog.handoffPromptCopiedMessage'))
+      else toast.error(t('handoverDialog.copyFailedTitle'), res.error?.message)
     } finally {
       setBusy(null)
     }
-  }, [output])
+  }, [output, t])
 
   // Fallback: open an external terminal at the bundle (writes it first if needed).
   const onOpenTerminal = useCallback(async () => {
@@ -238,16 +245,16 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
         cwd: bundle?.targetDir ?? targetDir ?? undefined,
       })
       if (res.success && res.data?.launched) {
-        toast.success('Opening terminal', res.data.cwd ? `Launched in ${res.data.cwd}` : 'Terminal opened.')
+        toast.success(t('handoverDialog.openingTerminalTitle'), res.data.cwd ? t('handoverDialog.launchedInMessage', { cwd: res.data.cwd }) : t('handoverDialog.terminalOpenedMessage'))
       } else if (res.success && res.data?.needsFolder) {
-        toast.info('Pick a folder', 'Choose a working directory above, then retry.')
+        toast.info(t('handoverDialog.pickAFolderTitle'), t('handoverDialog.chooseWorkingDirMessage'))
       } else if (!res.success) {
-        toast.error('Could not open terminal', res.error?.message || 'Unknown error')
+        toast.error(t('handoverDialog.couldNotOpenTerminalTitle'), res.error?.message || t('common:errors.unknown'))
       }
     } finally {
       setBusy(null)
     }
-  }, [output, createBundle, targetDir])
+  }, [output, createBundle, targetDir, t])
 
   const anyBusy = busy !== null
 
@@ -255,40 +262,42 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Hand off to a coding agent</DialogTitle>
+          <DialogTitle>{t('handoverDialog.title')}</DialogTitle>
           <DialogDescription>
-            Write a handover bundle into a repo and optionally run it in-app through an agentic AI brain.
+            {t('handoverDialog.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Target directory */}
           <div className="space-y-1.5">
-            <Label htmlFor="handover-target">Target directory</Label>
+            <Label htmlFor="handover-target">{t('handoverDialog.targetDirectoryLabel')}</Label>
             <div className="flex gap-2">
               <Input
                 id="handover-target"
                 value={targetDir}
                 onChange={(e) => setTargetDir(e.target.value)}
-                placeholder="Auto-resolved from the source project or your default handoff folder"
+                placeholder={t('handoverDialog.targetDirPlaceholder')}
                 spellCheck={false}
               />
               <Button type="button" variant="outline" onClick={browseFolder} disabled={anyBusy} className="flex-shrink-0">
                 <FolderOpen className="h-4 w-4" />
-                <span className="ml-2 hidden sm:inline">Browse</span>
+                <span className="ml-2 hidden sm:inline">{t('handoverDialog.browseButton')}</span>
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              The bundle is written to <code>handover/&lt;timestamp-slug&gt;/</code> inside this folder.
+              <Trans i18nKey="projects:handoverDialog.bundleLocationHint">
+                The bundle is written to <code>handover/&lt;timestamp-slug&gt;/</code> inside this folder.
+              </Trans>
             </p>
           </div>
 
           {/* Brain picker */}
           <div className="space-y-1.5">
-            <Label htmlFor="handover-brain">Agent brain</Label>
+            <Label htmlFor="handover-brain">{t('handoverDialog.agentBrainLabel')}</Label>
             <Select value={brainId} onValueChange={setBrainId} disabled={anyBusy || agenticBrains.length === 0}>
-              <SelectTrigger id="handover-brain" aria-label="Agent brain">
-                <SelectValue placeholder={agenticBrains.length ? 'Select an agent brain' : 'No agentic brains registered'} />
+              <SelectTrigger id="handover-brain" aria-label={t('handoverDialog.agentBrainLabel')}>
+                <SelectValue placeholder={agenticBrains.length ? t('handoverDialog.selectAgentBrainPlaceholder') : t('handoverDialog.noAgenticBrainsPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
                 {agenticBrains.map((b) => {
@@ -296,7 +305,7 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
                   return (
                     <SelectItem key={b.id} value={b.id} disabled={!usable} title={usable ? undefined : unusableReason(b)}>
                       {b.label}
-                      {!usable && <span className="ml-2 text-xs text-muted-foreground">· {unusableReason(b)}</span>}
+                      {!usable && <span className="ml-2 text-xs text-muted-foreground">{t('handoverDialog.unusableReasonPrefix', { reason: unusableReason(b) })}</span>}
                     </SelectItem>
                   )
                 })}
@@ -305,7 +314,7 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
             {usableBrains.length === 0 && (
               <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-500">
                 <AlertCircle className="h-3.5 w-3.5" />
-                No agentic brain is enabled and signed in. You can still write the bundle or copy the prompt.
+                {t('handoverDialog.noAgenticBrainMessage')}
               </p>
             )}
           </div>
@@ -316,7 +325,7 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
               <Label className="flex items-center gap-1.5">
                 {runOk === true && <CheckCircle2 className="h-4 w-4 text-green-500" />}
                 {runOk === false && <AlertCircle className="h-4 w-4 text-destructive" />}
-                Run log
+                {t('handoverDialog.runLogLabel')}
               </Label>
               <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-xs">
                 {runLog}
@@ -326,28 +335,28 @@ export function HandoverDialog({ open, onOpenChange, output }: HandoverDialogPro
         </div>
 
         <p className="text-xs text-muted-foreground">
-          &ldquo;Write + run agent&rdquo; lets an autonomous AI agent read and modify files in the chosen folder.
+          {t('handoverDialog.disclosureMessage')}
         </p>
 
         <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onCopy} disabled={anyBusy}>
               <Copy className="mr-2 h-4 w-4" />
-              Copy prompt
+              {t('handoverDialog.copyPromptButton')}
             </Button>
             <Button variant="ghost" onClick={onOpenTerminal} disabled={anyBusy}>
               {busy === 'terminal' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Terminal className="mr-2 h-4 w-4" />}
-              Open in terminal
+              {t('handoverDialog.openInTerminalButton')}
             </Button>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onWriteBundle} disabled={anyBusy}>
               {busy === 'bundle' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Package className="mr-2 h-4 w-4" />}
-              Write bundle
+              {t('handoverDialog.writeBundleButton')}
             </Button>
-            <Button onClick={onWriteAndRun} disabled={anyBusy || !canRun} title={canRun ? undefined : 'Enable and sign in to an agentic brain first'}>
+            <Button onClick={onWriteAndRun} disabled={anyBusy || !canRun} title={canRun ? undefined : t('handoverDialog.enableSignInFirstTitle')}>
               {busy === 'run' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-              Write + run agent
+              {t('handoverDialog.writeAndRunButton')}
             </Button>
           </div>
         </DialogFooter>

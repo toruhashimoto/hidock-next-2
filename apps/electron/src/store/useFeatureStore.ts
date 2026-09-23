@@ -25,6 +25,7 @@ import {
   type DisableReason,
 } from '@/shared/feature-registry'
 import { useConfigStore } from './domain/useConfigStore'
+import i18n from '@/i18n'
 
 interface FeatureStoreState {
   resolved: ResolvedFeatures
@@ -66,11 +67,11 @@ export const useFeatureStore = create<FeatureStoreState>((set, get) => ({
  */
 export function describeDisableReason(reason: DisableReason | undefined): string | null {
   if (!reason) return null
-  if (reason === 'user') return 'Turned off in Settings'
-  if (reason === 'preset') return 'Not included in the current preset'
+  if (reason === 'user') return i18n.t('common:features.disabledByUser')
+  if (reason === 'preset') return i18n.t('common:features.disabledByPreset')
   if (reason.startsWith('requires:')) {
     const depId = reason.slice('requires:'.length) as FeatureId
-    return `Requires ${FEATURES[depId]?.label ?? depId}`
+    return i18n.t('common:features.disabledRequires', { label: FEATURES[depId]?.label ?? depId })
   }
   return null
 }

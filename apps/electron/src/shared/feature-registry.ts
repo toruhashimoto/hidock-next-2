@@ -726,3 +726,87 @@ export function classifyChannel(channel: string): ChannelClass {
   }
   return { kind: 'unclassified' }
 }
+
+// ---------------------------------------------------------------------------
+// Renderer-only display-string translation (Task 16-B)
+// ---------------------------------------------------------------------------
+
+/**
+ * main has NO i18n (see the file header — this module stays PURE). main also
+ * reads `FEATURES[id].label` SYNCHRONOUSLY at IPC-gate time, not just at
+ * import time: `FeatureDisabledError` in electron/main/services/feature-gate.ts
+ * builds its message from `FEATURES[featureId]?.label` on every denied gated
+ * IPC call. Turning `label`/`description` into i18n-backed getters would
+ * therefore either throw in the main process (fatal — config.ts loads this
+ * module at startup) or require importing the renderer's i18n singleton at
+ * module scope, which runs i18next's own side effects at import time
+ * regardless of whether main ever calls the getter. Both are unacceptable.
+ *
+ * So FEATURES/PRESET_INFO above are untouched, and translation is pushed
+ * entirely to the caller: these two functions take the caller's own `t` as a
+ * parameter and are only ever invoked from the renderer (Settings' features
+ * card). main never imports or calls them, so the hazard never arises.
+ */
+
+/** Translation-key segment for each FeatureId. Kept ASCII/camelCase: i18next
+ *  treats `:` as the namespace separator, so a raw FeatureId like
+ *  'connector:m365' cannot be used directly as a key path segment. */
+const FEATURE_ID_KEY: Record<FeatureId, string> = {
+  'device-sync': 'deviceSync',
+  transcription: 'transcription',
+  calendar: 'calendar',
+  'meeting-intelligence': 'meetingIntelligence',
+  assistant: 'assistant',
+  'context-graph': 'contextGraph',
+  'people-projects': 'peopleProjects',
+  explore: 'explore',
+  today: 'today',
+  'clipboard-capture': 'clipboardCapture',
+  'connector:m365': 'connectorM365',
+  'connector:slack': 'connectorSlack',
+  'connector:github': 'connectorGithub',
+  'connector:ics': 'connectorIcs',
+}
+
+/** Translation-key segment for each PresetId. */
+const PRESET_ID_KEY: Record<PresetId, string> = {
+  'library-only': 'libraryOnly',
+  'library-transcription': 'libraryTranscription',
+  full: 'full',
+  custom: 'custom',
+}
+
+/** A minimal shape compatible with react-i18next's `t` — callers pass the
+ *  real thing from `useTranslation()`. This file imports nothing to get it. */
+type Translate = (key: string, defaultValue: string) => string
+
+/**
+ * Translated feature label/description for the Settings features card. The
+ * registry's English is the i18next default value (used only if the
+ * catalogue is missing the key — as of Task 16-B it always has it).
+ */
+export function translatedFeatureInfo(
+  t: Translate,
+  id: FeatureId
+): { label: string; description: string } {
+  const key = FEATURE_ID_KEY[id]
+  const def = FEATURES[id]
+  return {
+    label: t(`settings:features.items.${key}.label`, def.label),
+    description: t(`settings:features.items.${key}.description`, def.description),
+  }
+}
+
+/** Translated preset label/description for the Settings features card. */
+export function translatedPresetInfo(
+  t: Translate,
+  id: PresetId
+): { label: string; description: string } {
+  const key = PRESET_ID_KEY[id]
+  const def = PRESET_INFO[id]
+  return {
+    label: t(`settings:features.presets.${key}.label`, def.label),
+    description: t(`settings:features.presets.${key}.description`, def.description),
+  }
+}
+

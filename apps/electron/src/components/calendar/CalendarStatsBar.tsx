@@ -3,6 +3,7 @@
  */
 
 import { memo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Cloud, HardDrive, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CalendarLegend } from './CalendarLegend'
@@ -36,6 +37,7 @@ export const CalendarStatsBar = memo(function CalendarStatsBar({
   onLocationFilterChange,
   onSortChange,
 }: CalendarStatsBarProps) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center gap-2 px-6 py-2 bg-muted/30 text-xs border-b flex-shrink-0">
       {/* All recordings chip */}
@@ -48,7 +50,7 @@ export const CalendarStatsBar = memo(function CalendarStatsBar({
             : 'hover:bg-muted text-muted-foreground'
         )}
       >
-        {stats.total} recording{stats.total !== 1 ? 's' : ''}
+        {t('calendar:statsBar.recordingsCount', { count: stats.total })}
       </button>
 
       {/* Device-only chip */}
@@ -63,7 +65,7 @@ export const CalendarStatsBar = memo(function CalendarStatsBar({
           )}
         >
           <Cloud className="h-3 w-3" />
-          {stats.deviceOnly} on device
+          {t('calendar:statsBar.onDeviceCount', { count: stats.deviceOnly })}
         </button>
       )}
 
@@ -79,7 +81,7 @@ export const CalendarStatsBar = memo(function CalendarStatsBar({
           )}
         >
           <HardDrive className="h-3 w-3" />
-          {stats.localOnly} downloaded
+          {t('calendar:statsBar.downloadedCount', { count: stats.localOnly })}
         </button>
       )}
 
@@ -95,12 +97,12 @@ export const CalendarStatsBar = memo(function CalendarStatsBar({
           )}
         >
           <Check className="h-3 w-3" />
-          {stats.both} synced
+          {t('calendar:statsBar.syncedCount', { count: stats.both })}
         </button>
       )}
 
       {!deviceConnected && (
-        <span className="text-muted-foreground ml-2">(device not connected)</span>
+        <span className="text-muted-foreground ml-2">{t('calendar:statsBar.deviceNotConnected')}</span>
       )}
 
       {/* Spacer */}
@@ -112,17 +114,17 @@ export const CalendarStatsBar = memo(function CalendarStatsBar({
       {/* Sort dropdown - only in list view */}
       {showListView && (
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Sort:</span>
+          <span className="text-muted-foreground">{t('calendar:statsBar.sortLabel')}</span>
           <select
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value as SortOption)}
             className="bg-transparent border rounded px-2 py-1 text-xs"
           >
-            <option value="date-desc">Newest first</option>
-            <option value="date-asc">Oldest first</option>
-            <option value="name-asc">Name A-Z</option>
-            <option value="name-desc">Name Z-A</option>
-            <option value="size-desc">Largest first</option>
+            <option value="date-desc">{t('calendar:statsBar.sortNewestFirst')}</option>
+            <option value="date-asc">{t('calendar:statsBar.sortOldestFirst')}</option>
+            <option value="name-asc">{t('calendar:statsBar.sortNameAZ')}</option>
+            <option value="name-desc">{t('calendar:statsBar.sortNameZA')}</option>
+            <option value="size-desc">{t('calendar:statsBar.sortLargestFirst')}</option>
           </select>
         </div>
       )}

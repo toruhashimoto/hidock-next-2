@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CheckCircle2, Circle, AlertCircle, Clock } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
@@ -32,6 +33,7 @@ const PRIORITY_COLORS = {
 } as const
 
 export function MeetingActionables({ actionables }: MeetingActionablesProps) {
+  const { t } = useTranslation()
   // Group by status for better organization
   const groupedActionables = useMemo(() => {
     return {
@@ -48,11 +50,11 @@ export function MeetingActionables({ actionables }: MeetingActionablesProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Actionables</CardTitle>
+          <CardTitle>{t('layout:sidebar.actionables')}</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground text-center py-8">
-            No actionables found for this meeting.
+            {t('calendar:actionables.emptyState')}
           </p>
         </CardContent>
       </Card>
@@ -63,11 +65,11 @@ export function MeetingActionables({ actionables }: MeetingActionablesProps) {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Actionables</CardTitle>
+          <CardTitle>{t('layout:sidebar.actionables')}</CardTitle>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>{actionables.length} total</span>
+            <span>{t('calendar:actionables.totalCount', { count: actionables.length })}</span>
             {completedCount > 0 && (
-              <span>• {completedCount} completed</span>
+              <span>{t('calendar:actionables.completedCount', { count: completedCount })}</span>
             )}
           </div>
         </div>
@@ -102,11 +104,11 @@ export function MeetingActionables({ actionables }: MeetingActionablesProps) {
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="capitalize">{actionable.status.replace('_', ' ')}</span>
                   <span>•</span>
-                  <span>Created {formatDateTime(actionable.createdAt)}</span>
+                  <span>{t('calendar:actionables.createdOn', { date: formatDateTime(actionable.createdAt) })}</span>
                   {actionable.generatedAt && (
                     <>
                       <span>•</span>
-                      <span>Generated {formatDateTime(actionable.generatedAt)}</span>
+                      <span>{t('calendar:actionables.generatedOn', { date: formatDateTime(actionable.generatedAt) })}</span>
                     </>
                   )}
                 </div>

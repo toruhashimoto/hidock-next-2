@@ -1,4 +1,5 @@
 import { useState, useCallback, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { UserPlus, RefreshCw, ArrowRight } from 'lucide-react'
 import {
   Dialog,
@@ -39,6 +40,7 @@ interface AddPersonDialogProps {
  * offer to open the existing contact rather than silently minting a twin.
  */
 export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting }: AddPersonDialogProps) {
+  const { t } = useTranslation()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('')
@@ -77,12 +79,12 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
 
       const trimmedName = name.trim()
       if (!trimmedName) {
-        setNameError('Name is required.')
+        setNameError(t('people:addPersonDialog.nameRequiredError'))
         return
       }
       const trimmedEmail = email.trim()
       if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-        setEmailError('Please enter a valid email address.')
+        setEmailError(t('people:shared.invalidEmailError'))
         return
       }
 
@@ -95,7 +97,7 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
           type
         })
         if (result.success) {
-          toast.success('Contact created', `${result.data.name} was added.`)
+          toast.success(t('people:addPersonDialog.toast.createdTitle'), t('people:addPersonDialog.toast.createdMessage', { name: result.data.name }))
           const created = result.data
           reset()
           onOpenChange(false)
@@ -110,10 +112,10 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
             return
           }
         }
-        toast.error('Failed to add contact', (result as any).error?.message || 'Unknown error')
+        toast.error(t('people:addPersonDialog.toast.addFailedTitle'), (result as any).error?.message || t('common:errors.unknown'))
       } catch (error) {
         console.error('Failed to create contact:', error)
-        toast.error('Failed to add contact', error instanceof Error ? error.message : 'An unexpected error occurred')
+        toast.error(t('people:addPersonDialog.toast.addFailedTitle'), error instanceof Error ? error.message : t('people:errors.unexpectedErrorFallback'))
       } finally {
         setSubmitting(false)
       }
@@ -128,17 +130,17 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-4 w-4 text-primary" />
-              Add person
+              {t('people:addPersonDialog.title')}
             </DialogTitle>
             <DialogDescription>
-              Create a contact by hand. Only a name is required — email, role, and type are optional.
+              {t('people:addPersonDialog.description')}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label htmlFor="add-person-name">
-                Name <span className="text-destructive">*</span>
+                {t('people:addPersonDialog.nameLabel')} <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="add-person-name"
@@ -149,7 +151,7 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
                   if (nameError) setNameError(null)
                   if (duplicate) setDuplicate(null)
                 }}
-                placeholder="Jane Doe"
+                placeholder={t('people:addPersonDialog.namePlaceholder')}
                 aria-invalid={!!nameError}
                 aria-describedby={nameError ? 'add-person-name-error' : undefined}
               />
@@ -161,7 +163,7 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="add-person-email">Email</Label>
+              <Label htmlFor="add-person-email">{t('people:shared.emailLabel')}</Label>
               <Input
                 id="add-person-email"
                 type="email"
@@ -170,7 +172,7 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
                   setEmail(e.target.value)
                   if (emailError) setEmailError(null)
                 }}
-                placeholder="jane@example.com"
+                placeholder={t('people:addPersonDialog.emailPlaceholder')}
                 aria-invalid={!!emailError}
                 aria-describedby={emailError ? 'add-person-email-error' : undefined}
               />
@@ -183,24 +185,24 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="add-person-role">Role</Label>
+                <Label htmlFor="add-person-role">{t('people:shared.roleLabel')}</Label>
                 <Input
                   id="add-person-role"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  placeholder="Engineer"
+                  placeholder={t('people:addPersonDialog.rolePlaceholder')}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="add-person-type">Type</Label>
+                <Label htmlFor="add-person-type">{t('people:addPersonDialog.typeLabel')}</Label>
                 <Select value={type} onValueChange={(v) => setType(v as PersonType)}>
-                  <SelectTrigger id="add-person-type" aria-label="Person type">
+                  <SelectTrigger id="add-person-type" aria-label={t('people:shared.personTypeAriaLabel')}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PERSON_TYPES.map((t) => (
-                      <SelectItem key={t} value={t} className="capitalize">
-                        {t}
+                    {PERSON_TYPES.map((pt) => (
+                      <SelectItem key={pt} value={pt}>
+                        {t(`people:personTypeOption.${pt}`)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -211,7 +213,7 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
             {duplicate && (
               <div className="rounded-lg border border-amber-500/40 bg-amber-500/[0.06] px-3 py-2.5 text-xs">
                 <p className="font-medium text-amber-700 dark:text-amber-400">
-                  A contact named {duplicate.name} already exists.
+                  {t('people:addPersonDialog.duplicateWarning', { name: duplicate.name })}
                 </p>
                 <Button
                   type="button"
@@ -225,7 +227,7 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
                     onOpenExisting(id)
                   }}
                 >
-                  Open it instead
+                  {t('people:addPersonDialog.openExistingButton')}
                   <ArrowRight className="ml-1 h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -234,7 +236,7 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>
-              Cancel
+              {t('people:shared.cancelButton')}
             </Button>
             <Button type="submit" disabled={submitting || !name.trim()}>
               {submitting ? (
@@ -242,7 +244,7 @@ export function AddPersonDialog({ open, onOpenChange, onCreated, onOpenExisting 
               ) : (
                 <UserPlus className="mr-2 h-4 w-4" />
               )}
-              Add person
+              {t('people:addPersonDialog.submitButton')}
             </Button>
           </DialogFooter>
         </form>

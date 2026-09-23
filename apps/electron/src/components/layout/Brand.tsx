@@ -18,6 +18,7 @@
  * perfectly aligned vertical line.
  */
 
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 /**
@@ -63,6 +64,7 @@ interface BrandProps {
 }
 
 export function Brand({ placement = 'titlebar', collapsed = false, onHome, className }: BrandProps) {
+  const { t } = useTranslation()
   const inner = (
     <>
       {/* Icon slot — 64px wide so the (larger) mark's CENTRE lands on the 32px
@@ -78,10 +80,10 @@ export function Brand({ placement = 'titlebar', collapsed = false, onHome, class
       {!collapsed && (
         <div className="flex min-w-0 flex-col justify-center pr-2 leading-none">
           <span className="truncate text-[13px] font-semibold leading-[1.15] tracking-tight text-white">
-            HiDock
+            {t('layout:brand.hidock')}
           </span>
           <span className="truncate text-[13px] font-semibold leading-[1.15] tracking-tight text-white">
-            Next
+            {t('layout:brand.next')}
           </span>
         </div>
       )}
@@ -96,8 +98,8 @@ export function Brand({ placement = 'titlebar', collapsed = false, onHome, class
       <button
         type="button"
         onClick={onHome}
-        aria-label="Go to home"
-        title="HiDock Next — go to home"
+        aria-label={t('layout:brand.goHome')}
+        title={t('layout:brand.goHomeTitle')}
         data-placement={placement}
         data-testid="app-brand"
         className={cn(

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { UnifiedRecording } from '@/types/unified-recording'
 import { formatBytes, formatDuration } from '@/lib/utils'
 
@@ -8,12 +9,8 @@ interface MultiSelectionSummaryProps {
 
 const PREVIEW_LIMIT = 20
 
-const ACTIONS = {
-  library: ['Download', 'Transcribe', 'Mark personal', 'Move to Trash', 'Delete permanently'],
-  trash: ['Restore', 'Delete permanently']
-} as const
-
 export function MultiSelectionSummary({ recordings, mode }: MultiSelectionSummaryProps) {
+  const { t } = useTranslation('library')
   const totalBytes = recordings.reduce((total, recording) => total + Math.max(0, recording.size || 0), 0)
   const totalDuration = recordings.reduce((total, recording) => total + Math.max(0, recording.duration || 0), 0)
   const remainingCount = Math.max(0, recordings.length - PREVIEW_LIMIT)
@@ -26,22 +23,28 @@ export function MultiSelectionSummary({ recordings, mode }: MultiSelectionSummar
     >
       <div>
         <h2 id="multi-selection-heading" className="text-xl font-semibold">
-          {recordings.length} sources selected
+          {t('multiSelectionSummary.sourcesSelectedHeading', { count: recordings.length })}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          {recordings.length} items · {formatBytes(totalBytes)} · {formatDuration(totalDuration)} total
+          {t('multiSelectionSummary.totalsSummary', {
+            count: recordings.length,
+            size: formatBytes(totalBytes),
+            duration: formatDuration(totalDuration)
+          })}
         </p>
       </div>
 
       <div>
-        <h3 className="text-sm font-medium">Available bulk actions</h3>
+        <h3 className="text-sm font-medium">{t('multiSelectionSummary.availableActionsHeading')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Use the bulk action bar above to {ACTIONS[mode].join(', ')}.
+          {mode === 'library'
+            ? t('multiSelectionSummary.bulkActionsHintLibrary')
+            : t('multiSelectionSummary.bulkActionsHintTrash')}
         </p>
       </div>
 
       <div>
-        <h3 className="text-sm font-medium">Selected sources</h3>
+        <h3 className="text-sm font-medium">{t('multiSelectionSummary.selectedSourcesHeading')}</h3>
         <ul className="mt-2 space-y-1.5 text-sm">
           {recordings.slice(0, PREVIEW_LIMIT).map((recording) => (
             <li key={recording.id} className="truncate" title={recording.title || recording.filename}>
@@ -49,7 +52,7 @@ export function MultiSelectionSummary({ recordings, mode }: MultiSelectionSummar
             </li>
           ))}
           {remainingCount > 0 && (
-            <li className="text-muted-foreground">+ {remainingCount} more…</li>
+            <li className="text-muted-foreground">{t('multiSelectionSummary.moreItemsLabel', { count: remainingCount })}</li>
           )}
         </ul>
       </div>

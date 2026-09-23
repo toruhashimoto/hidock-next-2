@@ -10,9 +10,10 @@
 
 import { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Lock, Settings as SettingsIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { FEATURES, type FeatureId } from '@/shared/feature-registry'
+import { translatedFeatureInfo, type FeatureId } from '@/shared/feature-registry'
 import {
   useFeatureResolved,
   useFeaturePendingDisable,
@@ -20,10 +21,11 @@ import {
 } from '@/store/useFeatureStore'
 
 export function FeatureDisabledPage({ feature }: { feature: FeatureId }): React.ReactElement {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const resolved = useFeatureResolved(feature)
-  const def = FEATURES[feature]
-  const why = describeDisableReason(resolved?.reason) ?? 'This feature is turned off.'
+  const { label, description } = translatedFeatureInfo(t, feature)
+  const why = describeDisableReason(resolved?.reason) ?? t('common:featureDisabledPage.defaultReason')
   const needsRestart = resolved && !resolved.runtimeToggleable
 
   return (
@@ -32,18 +34,18 @@ export function FeatureDisabledPage({ feature }: { feature: FeatureId }): React.
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
           <Lock className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
         </div>
-        <h1 className="text-xl font-semibold">{def.label} is turned off</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{def.description}</p>
+        <h1 className="text-xl font-semibold">{t('common:featureDisabledPage.title', { label })}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{description}</p>
         <p className="mt-4 text-sm font-medium text-foreground">{why}</p>
         <div className="mt-6 flex items-center justify-center gap-2">
           <Button onClick={() => navigate('/settings#features')} className="gap-2">
             <SettingsIcon className="h-4 w-4" />
-            Enable in Settings
+            {t('common:featureDisabledPage.enableButton')}
           </Button>
         </div>
         {needsRestart && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Enabling {def.label} takes effect after a restart.
+            {t('common:featureDisabledPage.restartHint', { label })}
           </p>
         )}
       </div>

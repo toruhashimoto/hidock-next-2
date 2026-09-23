@@ -8,6 +8,8 @@
  * that the meeting still ends after it starts.
  */
 
+import i18n from '@/i18n'
+
 function pad(n: number): string {
   return String(n).padStart(2, '0')
 }
@@ -74,7 +76,7 @@ export function diffMeetingTimes(original: MeetingTimes, edited: MeetingTimes): 
     const s = new Date(edited.start_time).getTime()
     const e = new Date(edited.end_time).getTime()
     if (Number.isFinite(s) && Number.isFinite(e) && e <= s) {
-      return { ok: false, error: 'End time must be after start time.' }
+      return { ok: false, error: i18n.t('calendar:meetingDetail.endBeforeStartError') }
     }
   }
 

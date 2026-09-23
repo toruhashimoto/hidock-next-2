@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { Calendar } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { formatDateTime, formatDuration, formatBytes } from '@/lib/utils'
 import { Transcript, Meeting } from '@/types'
 import { UnifiedRecording, isDeviceOnly } from '@/types/unified-recording'
@@ -17,56 +18,57 @@ export const SourceRowExpanded = memo(function SourceRowExpanded({
   meeting,
   onNavigateToMeeting
 }: SourceRowExpandedProps) {
+  const { t } = useTranslation('library')
   return (
     <div
       id={`expanded-${recording.id}`}
       role="region"
-      aria-label={`Details for ${recording.filename}`}
+      aria-label={t('sourceRowExpanded.detailsForAriaLabel', { filename: recording.filename })}
       className="mx-3 mb-3 p-4 rounded-lg border border-border bg-muted shadow-md space-y-3"
     >
       {/* Metadata Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">Date Recorded</p>
+          <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceRowExpanded.dateRecordedLabel')}</p>
           <p>{(() => {
             const date = new Date(recording.dateRecorded)
-            return !isNaN(date.getTime()) ? formatDateTime(date.toISOString()) : 'Unknown'
+            return !isNaN(date.getTime()) ? formatDateTime(date.toISOString()) : t('sourceRowExpanded.unknownFallback')
           })()}</p>
         </div>
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">Duration</p>
-          <p>{recording.duration ? formatDuration(recording.duration) : 'Unknown'}</p>
+          <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceRowExpanded.durationLabel')}</p>
+          <p>{recording.duration ? formatDuration(recording.duration) : t('sourceRowExpanded.unknownFallback')}</p>
         </div>
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">Size</p>
-          <p>{recording.size ? formatBytes(recording.size) : 'Unknown'}</p>
+          <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceRowExpanded.sizeLabel')}</p>
+          <p>{recording.size ? formatBytes(recording.size) : t('sourceRowExpanded.unknownFallback')}</p>
         </div>
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">Quality</p>
-          <p className="capitalize">{recording.quality || 'Standard'}</p>
+          <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceRowExpanded.qualityLabel')}</p>
+          <p className="capitalize">{recording.quality || t('sourceRowExpanded.qualityStandardFallback')}</p>
         </div>
         {recording.category && (
           <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Category</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceRowExpanded.categoryLabel')}</p>
             <p className="capitalize">{recording.category}</p>
           </div>
         )}
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">Location</p>
+          <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceRowExpanded.locationLabel')}</p>
           <p className="capitalize">{recording.location.replace('-', ' ')}</p>
         </div>
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">Transcription</p>
+          <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceRowExpanded.transcriptionLabel')}</p>
           <p className="capitalize">{recording.transcriptionStatus}</p>
         </div>
         {recording.title && (
           <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Title</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceRowExpanded.titleLabel')}</p>
             <p>{recording.title}</p>
           </div>
         )}
         <div className="col-span-2">
-          <p className="text-xs font-medium text-muted-foreground mb-1">File</p>
+          <p className="text-xs font-medium text-muted-foreground mb-1">{t('sourceRowExpanded.fileLabel')}</p>
           <p className="truncate font-mono text-xs" title={recording.filename}>{recording.filename}</p>
         </div>
       </div>
@@ -88,7 +90,7 @@ export const SourceRowExpanded = memo(function SourceRowExpanded({
       {/* Transcript Summary */}
       {transcript?.summary && (
         <div className="p-3 bg-background border rounded-lg">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Summary</p>
+          <p className="text-xs font-medium text-muted-foreground mb-2">{t('sourceRowExpanded.summaryLabel')}</p>
           <p className="text-sm leading-relaxed">{transcript.summary}</p>
         </div>
       )}
@@ -96,7 +98,7 @@ export const SourceRowExpanded = memo(function SourceRowExpanded({
       {/* Device-only notice */}
       {isDeviceOnly(recording) && (
         <p className="text-xs text-muted-foreground italic">
-          Download this capture to play it and generate a transcript.
+          {t('sourceRowExpanded.downloadToGenerateTranscriptMessage')}
         </p>
       )}
     </div>

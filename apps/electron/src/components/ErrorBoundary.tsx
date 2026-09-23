@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import i18n from '@/i18n'
 
 interface Props {
   children: ReactNode
@@ -36,15 +37,15 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center max-w-md">
             <AlertCircle className="h-12 w-12 mx-auto mb-4 text-destructive" />
-            <h2 className="text-lg font-semibold mb-2">Something went wrong</h2>
+            <h2 className="text-lg font-semibold mb-2">{i18n.t('common:errorBoundary.title')}</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              {this.state.error?.message || 'An unexpected error occurred'}
+              {this.state.error?.message || i18n.t('common:errorBoundary.fallbackMessage')}
             </p>
             <Button
               variant="outline"
               onClick={() => this.setState({ hasError: false, error: null })}
             >
-              Try again
+              {i18n.t('common:errorBoundary.retry')}
             </Button>
           </div>
         </div>

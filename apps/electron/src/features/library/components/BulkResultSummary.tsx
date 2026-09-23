@@ -6,6 +6,8 @@
  */
 
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   Dialog,
   DialogContent,
@@ -28,29 +30,45 @@ export interface BulkResultSummaryProps {
 }
 
 /**
- * Determine dialog title based on operation result
+ * Determine dialog title based on operation result.
+ *
+ * `operation` is a fixed 3-value union ('Download' | 'Transcribe' | 'Delete')
+ * supplied by the (out-of-scope) caller, so it is resolved to its own
+ * translated word via OPERATION_KEYS and interpolated into one of 3 complete
+ * per-outcome templates — not concatenated from separately-translated
+ * fragments (rule 1): each of the 9 reachable (operation × outcome)
+ * combinations reads as one whole sentence to the Task 14/15 translator.
  */
-function getTitle(result: BulkOperationResult, operation: string): string {
+const OPERATION_KEYS: Record<BulkResultSummaryProps['operation'], string> = {
+  Download: 'bulkResultSummary.operationDownload',
+  Transcribe: 'bulkResultSummary.operationTranscribe',
+  Delete: 'bulkResultSummary.operationDelete'
+}
+
+function getTitle(t: TFunction, result: BulkOperationResult, operation: BulkResultSummaryProps['operation']): string {
+  const op = t(OPERATION_KEYS[operation])
   if (result.wasAborted) {
-    return `${operation} Cancelled`
+    return t('bulkResultSummary.titleCancelled', { operation: op })
   }
   if (result.failed.length === 0) {
-    return `${operation} Complete`
+    return t('bulkResultSummary.titleComplete', { operation: op })
   }
-  return `${operation} Completed with Errors`
+  return t('bulkResultSummary.titleCompletedWithErrors', { operation: op })
 }
 
 /**
  * Get icon for error item based on retryability
  */
 function ErrorIcon({ error }: { error: LibraryError }) {
+  const { t } = useTranslation('library')
   if (error.retryable) {
-    return <AlertCircle className="h-4 w-4 text-yellow-500 flex-shrink-0" aria-label="Retryable error" />
+    return <AlertCircle className="h-4 w-4 text-yellow-500 flex-shrink-0" aria-label={t('bulkResultSummary.retryableErrorLabel')} />
   }
-  return <XCircle className="h-4 w-4 text-destructive flex-shrink-0" aria-label="Permanent error" />
+  return <XCircle className="h-4 w-4 text-destructive flex-shrink-0" aria-label={t('bulkResultSummary.permanentErrorLabel')} />
 }
 
 export function BulkResultSummary({ isOpen, onClose, operation, result, onRetryFailed }: BulkResultSummaryProps) {
+  const { t } = useTranslation('library')
   // Filter retryable failed items
   const retryableItems = useMemo(() => result.failed.filter((f) => f.error.retryable), [result.failed])
 
@@ -65,9 +83,9 @@ export function BulkResultSummary({ isOpen, onClose, operation, result, onRetryF
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col" aria-describedby="bulk-result-description">
         <DialogHeader>
-          <DialogTitle>{getTitle(result, operation)}</DialogTitle>
+          <DialogTitle>{getTitle(t, result, operation)}</DialogTitle>
           <DialogDescription id="bulk-result-description">
-            Summary of the bulk {operation.toLowerCase()} operation
+            {t('bulkResultSummary.summaryDescription', { operation: t(OPERATION_KEYS[operation]).toLowerCase() })}
           </DialogDescription>
         </DialogHeader>
 
@@ -76,42 +94,42 @@ export function BulkResultSummary({ isOpen, onClose, operation, result, onRetryF
           {/* Succeeded */}
           <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-green-50 dark:bg-green-950/20">
             <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400 mb-2" aria-hidden="true" />
-            <div className="text-2xl font-bold text-green-700 dark:text-green-300" aria-label="Succeeded count">
+            <div className="text-2xl font-bold text-green-700 dark:text-green-300" aria-label={t('bulkResultSummary.succeededCountAriaLabel')}>
               {result.succeeded.length}
             </div>
-            <div className="text-sm text-green-600 dark:text-green-400">Succeeded</div>
+            <div className="text-sm text-green-600 dark:text-green-400">{t('bulkResultSummary.succeededLabel')}</div>
           </div>
 
           {/* Failed */}
           <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-red-50 dark:bg-red-950/20">
             <XCircle className="h-8 w-8 text-red-600 dark:text-red-400 mb-2" aria-hidden="true" />
-            <div className="text-2xl font-bold text-red-700 dark:text-red-300" aria-label="Failed count">
+            <div className="text-2xl font-bold text-red-700 dark:text-red-300" aria-label={t('bulkResultSummary.failedCountAriaLabel')}>
               {result.failed.length}
             </div>
-            <div className="text-sm text-red-600 dark:text-red-400">Failed</div>
+            <div className="text-sm text-red-600 dark:text-red-400">{t('bulkResultSummary.failedLabel')}</div>
           </div>
 
           {/* Cancelled */}
           <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-gray-50 dark:bg-gray-950/20">
             <AlertCircle className="h-8 w-8 text-gray-600 dark:text-gray-400 mb-2" aria-hidden="true" />
-            <div className="text-2xl font-bold text-gray-700 dark:text-gray-300" aria-label="Cancelled count">
+            <div className="text-2xl font-bold text-gray-700 dark:text-gray-300" aria-label={t('bulkResultSummary.cancelledCountAriaLabel')}>
               {result.cancelled.length}
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Cancelled</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">{t('bulkResultSummary.cancelledLabel')}</div>
           </div>
         </div>
 
         {/* Failed Items List */}
         {result.failed.length > 0 && (
           <div className="flex-1 overflow-y-auto">
-            <h3 className="text-sm font-semibold mb-2">Failed Items</h3>
-            <dl className="space-y-3" aria-label="Failed items list">
+            <h3 className="text-sm font-semibold mb-2">{t('bulkResultSummary.failedItemsHeading')}</h3>
+            <dl className="space-y-3" aria-label={t('bulkResultSummary.failedItemsListAriaLabel')}>
               {result.failed.map((item) => (
                 <div
                   key={item.id}
                   className="flex gap-3 p-3 rounded-lg border bg-card text-card-foreground"
                   role="group"
-                  aria-label={`Failed item ${item.id}`}
+                  aria-label={t('bulkResultSummary.failedItemAriaLabel', { id: item.id })}
                 >
                   <ErrorIcon error={item.error} />
                   <div className="flex-1 min-w-0">
@@ -123,7 +141,7 @@ export function BulkResultSummary({ isOpen, onClose, operation, result, onRetryF
                       <dd className="text-xs text-muted-foreground mt-1 italic">{item.error.details}</dd>
                     )}
                     {item.error.retryable && (
-                      <dd className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">Can be retried</dd>
+                      <dd className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">{t('bulkResultSummary.canBeRetriedLabel')}</dd>
                     )}
                   </div>
                 </div>
@@ -135,11 +153,11 @@ export function BulkResultSummary({ isOpen, onClose, operation, result, onRetryF
         {/* Footer Actions */}
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Dismiss
+            {t('bulkResultSummary.dismissButton')}
           </Button>
           {hasRetryableErrors && (
-            <Button onClick={handleRetry} aria-label={`Retry ${retryableItems.length} failed items`}>
-              Retry Failed ({retryableItems.length})
+            <Button onClick={handleRetry} aria-label={t('bulkResultSummary.retryAriaLabel', { count: retryableItems.length })}>
+              {t('bulkResultSummary.retryFailedButton', { count: retryableItems.length })}
             </Button>
           )}
         </DialogFooter>

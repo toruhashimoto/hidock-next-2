@@ -11,6 +11,7 @@ import {
   Trash2,
   Zap
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -78,28 +79,40 @@ export function LibraryHeader({
   trashCount,
   onToggleTrash
 }: LibraryHeaderProps) {
+  const { t } = useTranslation('library')
   const queuedDownloadCount = pendingDownloadCount + activeDownloadCount
   const downloadActionLabel = activeDownloadCount > 0
-    ? 'Downloading'
+    ? t('libraryHeader.downloadActionDownloading')
     : pendingDownloadCount > 0
-      ? 'Start download'
-      : 'Download'
+      ? t('libraryHeader.downloadActionStart')
+      : t('libraryHeader.downloadActionDefault')
+  // aria-label/title key bases mirror downloadActionLabel's own ternary so the
+  // pluralized aria-label stays a complete key per rule 1 (never concatenated
+  // with the plain downloadActionLabel string).
+  const bulkDownloadAriaLabelBase = activeDownloadCount > 0
+    ? 'libraryHeader.bulkDownloadAriaLabelDownloading'
+    : pendingDownloadCount > 0
+      ? 'libraryHeader.bulkDownloadAriaLabelStart'
+      : 'libraryHeader.bulkDownloadAriaLabelDefault'
+  const bulkProcessAriaLabelBase = bulkProcessing
+    ? 'libraryHeader.bulkProcessAriaLabelProcessing'
+    : 'libraryHeader.bulkProcessAriaLabelProcess'
 
   return (
     <header className="border-b px-4 py-3 lg:px-6">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="min-w-0 shrink-0">
-          <h1 className="whitespace-nowrap text-xl font-bold tracking-tight sm:text-2xl">Knowledge Library</h1>
+          <h1 className="whitespace-nowrap text-xl font-bold tracking-tight sm:text-2xl">{t('libraryHeader.title')}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span className="tabular-nums">
-              {stats.total.toLocaleString()} source{stats.total !== 1 ? 's' : ''}
+              {t('libraryHeader.sourceCount', { count: stats.total, formattedCount: stats.total.toLocaleString() })}
             </span>
             {stats.deviceOnly > 0 && (
               <button
                 type="button"
                 onClick={onShowDeviceOnly}
                 aria-pressed={deviceOnlyActive}
-                aria-label={`Show ${stats.deviceOnly} source${stats.deviceOnly === 1 ? '' : 's'} that need download`}
+                aria-label={t('libraryHeader.showNeedsDownloadAriaLabel', { count: stats.deviceOnly })}
                 className={cn(
                   'inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
@@ -107,11 +120,11 @@ export function LibraryHeader({
                     ? 'border-orange-400/60 bg-orange-500/15 text-orange-700 dark:text-orange-300'
                     : 'border-orange-400/30 bg-orange-500/5 text-orange-700 hover:border-orange-400/60 hover:bg-orange-500/10 dark:text-orange-300'
                 )}
-                title="Show audio stored only on the HiDock"
+                title={t('libraryHeader.showDeviceOnlyTitle')}
               >
                 <CloudDownload className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="tabular-nums">{stats.deviceOnly}</span>
-                <span>needs download</span>
+                <span>{t('libraryHeader.needsDownloadLabel')}</span>
               </button>
             )}
           </div>
@@ -120,26 +133,26 @@ export function LibraryHeader({
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="default" size="sm" title="Add a source to the Library">
+              <Button variant="default" size="sm" title={t('libraryHeader.addSourceTitle')}>
                 <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-                Add source
+                {t('libraryHeader.addSourceButton')}
                 <ChevronDown className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Add to Library</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('libraryHeader.addToLibraryLabel')}</DropdownMenuLabel>
               <DropdownMenuItem onSelect={onAddRecording}>
                 <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-                Import audio capture
+                {t('libraryHeader.importAudioCaptureMenuItem')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={onImportFile}>
                 <FileUp className="mr-2 h-4 w-4" aria-hidden="true" />
-                Import document or image
+                {t('libraryHeader.importDocumentMenuItem')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={onOpenFolder}>
                 <FolderOpen className="mr-2 h-4 w-4" aria-hidden="true" />
-                Open Library folder
+                {t('libraryHeader.openLibraryFolderMenuItem')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -150,8 +163,8 @@ export function LibraryHeader({
               size="sm"
               onClick={onBulkDownload}
               disabled={activeDownloadCount > 0 || !deviceConnected}
-              aria-label={`${downloadActionLabel} ${bulkCounts.deviceOnly} source${bulkCounts.deviceOnly === 1 ? '' : 's'}`}
-              title={`Download ${bulkCounts.deviceOnly} source${bulkCounts.deviceOnly === 1 ? '' : 's'} from the device`}
+              aria-label={t(bulkDownloadAriaLabelBase, { count: bulkCounts.deviceOnly })}
+              title={t('libraryHeader.bulkDownloadTitle', { count: bulkCounts.deviceOnly })}
             >
               {activeDownloadCount > 0 ? (
                 <RefreshCw className="h-4 w-4 animate-spin xl:mr-2" aria-hidden="true" />
@@ -171,17 +184,17 @@ export function LibraryHeader({
               size="sm"
               onClick={onBulkProcess}
               disabled={bulkProcessing}
-              aria-label={`${bulkProcessing ? 'Processing' : 'Process'} ${bulkCounts.needsTranscription} audio source${bulkCounts.needsTranscription === 1 ? '' : 's'}`}
-              title={`Queue ${bulkCounts.needsTranscription} audio source${bulkCounts.needsTranscription === 1 ? '' : 's'} for transcription`}
+              aria-label={t(bulkProcessAriaLabelBase, { count: bulkCounts.needsTranscription })}
+              title={t('libraryHeader.bulkProcessTitle', { count: bulkCounts.needsTranscription })}
             >
               {bulkProcessing ? (
                 <RefreshCw className="h-4 w-4 animate-spin xl:mr-2" aria-hidden="true" />
               ) : (
                 <Zap className="h-4 w-4 xl:mr-2" aria-hidden="true" />
               )}
-              <span className="hidden xl:inline">{bulkProcessing ? 'Processing' : 'Process'}</span>
+              <span className="hidden xl:inline">{bulkProcessing ? t('libraryHeader.bulkProcessingLabel') : t('libraryHeader.bulkProcessStateLabel')}</span>
               <span className="ml-1 tabular-nums">
-                {bulkProcessing ? `${bulkProgress.current}/${bulkProgress.total}` : bulkCounts.needsTranscription}
+                {bulkProcessing ? t('libraryHeader.bulkProgressCounter', { current: bulkProgress.current, total: bulkProgress.total }) : bulkCounts.needsTranscription}
               </span>
             </Button>
           )}
@@ -193,8 +206,8 @@ export function LibraryHeader({
             size="icon-sm"
             onClick={onRefresh}
             disabled={loading}
-            title="Refresh Library"
-            aria-label="Refresh Library"
+            title={t('libraryHeader.refreshLibraryLabel')}
+            aria-label={t('libraryHeader.refreshLibraryLabel')}
           >
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} aria-hidden="true" />
           </Button>
@@ -205,12 +218,12 @@ export function LibraryHeader({
             size="sm"
             onClick={onToggleTrash}
             aria-pressed={showTrash}
-            aria-label={showTrash ? 'Exit Trash' : `View Trash${trashCount > 0 ? `, ${trashCount} items` : ''}`}
-            title={showTrash ? 'Exit Trash' : 'View Trash'}
+            aria-label={showTrash ? t('libraryHeader.exitTrashLabel') : (trashCount > 0 ? t('libraryHeader.viewTrashWithCountAriaLabel', { count: trashCount }) : t('libraryHeader.viewTrashLabel'))}
+            title={showTrash ? t('libraryHeader.exitTrashLabel') : t('libraryHeader.viewTrashLabel')}
             className="px-2"
           >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
-            <span className="sr-only">{showTrash ? 'Exit Trash' : 'View Trash'}</span>
+            <span className="sr-only">{showTrash ? t('libraryHeader.exitTrashLabel') : t('libraryHeader.viewTrashLabel')}</span>
             {trashCount > 0 && (
               <span className="ml-1.5 min-w-4 rounded-full bg-muted px-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
                 {trashCount}
@@ -222,7 +235,7 @@ export function LibraryHeader({
             <div
               className="flex items-center overflow-hidden rounded-md border bg-background"
               role="group"
-              aria-label="View layout"
+              aria-label={t('libraryHeader.viewLayoutAriaLabel')}
               data-testid="grid-view-toggle"
             >
               <Button
@@ -230,8 +243,8 @@ export function LibraryHeader({
                 size="icon-sm"
                 onClick={() => onSetCompactView(false)}
                 className="rounded-none border-0"
-                title="Card view"
-                aria-label="Card view"
+                title={t('libraryHeader.cardViewLabel')}
+                aria-label={t('libraryHeader.cardViewLabel')}
                 aria-pressed={!compactView}
               >
                 <LayoutGrid className="h-4 w-4" aria-hidden="true" />
@@ -241,8 +254,8 @@ export function LibraryHeader({
                 size="icon-sm"
                 onClick={() => onSetCompactView(true)}
                 className="rounded-none border-0 border-l"
-                title="List view"
-                aria-label="List view"
+                title={t('libraryHeader.listViewLabel')}
+                aria-label={t('libraryHeader.listViewLabel')}
                 aria-pressed={compactView}
               >
                 <List className="h-4 w-4" aria-hidden="true" />

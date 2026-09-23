@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Play, Pause, Square, X, SkipBack, SkipForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,6 +41,7 @@ interface AudioPlayerProps {
  * This component displays the playback state, waveform, and controls.
  */
 export function AudioPlayer({ filename, recordingId, filePath, onClose }: AudioPlayerProps) {
+  const { t } = useTranslation()
   // Read playback state from UIStore
   const isPlaying = useUIStore((state) => state.isPlaying)
   const currentlyPlayingId = useUIStore((state) => state.currentlyPlayingId)
@@ -139,7 +141,7 @@ export function AudioPlayer({ filename, recordingId, filePath, onClose }: AudioP
         />
       ) : waveformLoadingError ? (
         <div className="h-20 bg-destructive/10 rounded flex flex-col items-center justify-center gap-1 text-sm">
-          <p className="text-destructive">Failed to load waveform</p>
+          <p className="text-destructive">{t('library:audioPlayer.loadWaveformFailed')}</p>
           <p className="text-xs text-muted-foreground">{waveformLoadingError}</p>
         </div>
       ) : isLoadingThis ? (
@@ -159,7 +161,7 @@ export function AudioPlayer({ filename, recordingId, filePath, onClose }: AudioP
         </div>
       ) : (
         <div className="h-20 bg-background rounded flex items-center justify-center text-sm text-muted-foreground">
-          {filename ? 'Press Play to load the waveform' : 'Select a recording to view waveform'}
+          {filename ? t('library:audioPlayer.pressPlayHint') : t('library:audioPlayer.selectRecordingHint')}
         </div>
       )}
 
@@ -186,7 +188,7 @@ export function AudioPlayer({ filename, recordingId, filePath, onClose }: AudioP
             size="icon"
             onClick={togglePlay}
             disabled={!canPlayThis}
-            title={canPlayThis ? undefined : 'Download to play'}
+            title={canPlayThis ? undefined : t('library:audioPlayer.downloadToPlayTitle')}
             className="h-10 w-10"
           >
             {isPlaying ? (
@@ -225,7 +227,7 @@ export function AudioPlayer({ filename, recordingId, filePath, onClose }: AudioP
           {onClose && (
             <Button variant="ghost" size="sm" onClick={onClose}>
               <X className="h-4 w-4 mr-1" />
-              Close
+              {t('library:audioPlayer.close')}
             </Button>
           )}
         </div>

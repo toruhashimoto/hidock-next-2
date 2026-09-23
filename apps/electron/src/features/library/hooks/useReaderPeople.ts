@@ -24,6 +24,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { StoredSegment } from '../components/TranscriptViewer'
 import type { AssignScope } from '../components/SpeakerAssignPopover'
 import {
@@ -98,6 +99,10 @@ interface ReaderPeople {
 const emptyMap = <K, V>() => new Map<K, V>()
 
 export function useReaderPeople({ meetingId, attendees, recordingId, segments }: UseReaderPeopleArgs): ReaderPeople {
+  // i18n note (Task 11c): a genuine React hook (called from SourceReader's
+  // render), so — unlike the utils/ modules in this feature — it can call
+  // `useTranslation()` directly (same precedent as useValueSuggestionToasts.ts).
+  const { t } = useTranslation('library')
   const [contacts, setContacts] = useState<Contact[]>([])
   const [speakerMap, setSpeakerMap] = useState<Map<string, SpeakerAssignment>>(emptyMap())
   const [turnOverrides, setTurnOverrides] = useState<Map<number, SpeakerAssignment>>(emptyMap())
@@ -355,23 +360,23 @@ export function useReaderPeople({ meetingId, attendees, recordingId, segments }:
       try {
         if (scope === 'turn') {
           const res = await window.electronAPI.turnSpeakers?.setOverride?.({ recordingId, turnIndex, ...payload })
-          if (!res?.success) return toast.error('Failed to assign speaker')
-          toast.success('Turn assigned', `This turn is now ${res.data.name}.`)
+          if (!res?.success) return toast.error(t('useReaderPeople.failedToAssignSpeaker'))
+          toast.success(t('useReaderPeople.turnAssignedTitle'), t('useReaderPeople.turnAssignedMessage', { name: res.data.name }))
         } else {
           // 'everywhere' (and 'fromHere', which the participant chip never offers)
           // both bind the whole label from the Participants view.
           const res = await window.electronAPI.transcripts?.assignSpeaker?.({ recordingId, speakerLabel: effectiveLabel, ...payload })
-          if (!res?.success) return toast.error('Failed to assign speaker')
-          toast.success('Speaker assigned', `${effectiveLabel} is now ${res.data.name}.`)
+          if (!res?.success) return toast.error(t('useReaderPeople.failedToAssignSpeaker'))
+          toast.success(t('useReaderPeople.speakerAssignedTitle'), t('useReaderPeople.speakerAssignedMessage', { label: effectiveLabel, name: res.data.name }))
         }
         setAllContactsLoaded(false)
         await reloadSpeakerData()
         emitSpeakerChange(recordingId)
       } catch (err) {
-        toast.error('Failed to assign speaker', err instanceof Error ? err.message : undefined)
+        toast.error(t('useReaderPeople.failedToAssignSpeaker'), err instanceof Error ? err.message : undefined)
       }
     },
-    [recordingId, reloadSpeakerData]
+    [recordingId, reloadSpeakerData, t]
   )
 
   const unassignSpeaker = useCallback(
@@ -379,15 +384,15 @@ export function useReaderPeople({ meetingId, attendees, recordingId, segments }:
       if (!recordingId) return
       try {
         const res = await window.electronAPI.transcripts?.unassignSpeaker?.({ recordingId, speakerLabel: effectiveLabel })
-        if (!res?.success) return toast.error('Failed to unassign speaker')
-        toast.success('Speaker unassigned')
+        if (!res?.success) return toast.error(t('useReaderPeople.failedToUnassignSpeaker'))
+        toast.success(t('useReaderPeople.speakerUnassignedTitle'))
         await reloadSpeakerData()
         emitSpeakerChange(recordingId)
       } catch (err) {
-        toast.error('Failed to unassign speaker', err instanceof Error ? err.message : undefined)
+        toast.error(t('useReaderPeople.failedToUnassignSpeaker'), err instanceof Error ? err.message : undefined)
       }
     },
-    [recordingId, reloadSpeakerData]
+    [recordingId, reloadSpeakerData, t]
   )
 
   const invited = useMemo(() => parseAttendees(attendees), [attendees])

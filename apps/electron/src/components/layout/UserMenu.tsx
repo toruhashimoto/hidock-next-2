@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from 'react'
 import { User, Check, Sun, Moon, Monitor, Bug, Info } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { useUIStore } from '@/store/ui/useUIStore'
@@ -30,10 +31,10 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { AppMark } from '@/components/layout/Brand'
 
-const THEME_OPTIONS: Array<{ value: ThemePreference; label: string; icon: typeof Sun }> = [
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'system', label: 'System', icon: Monitor }
+const THEME_OPTIONS: Array<{ value: ThemePreference; labelKey: string; icon: typeof Sun }> = [
+  { value: 'light', labelKey: 'layout:userMenu.themeLight', icon: Sun },
+  { value: 'dark', labelKey: 'layout:userMenu.themeDark', icon: Moon },
+  { value: 'system', labelKey: 'layout:userMenu.themeSystem', icon: Monitor }
 ]
 
 const REPO_URL = 'https://github.com/sgeraldes/hidock-next'
@@ -46,6 +47,7 @@ interface AppInfo {
 }
 
 export function UserMenu() {
+  const { t } = useTranslation()
   const { theme, setTheme } = useTheme()
   const qaLogsEnabled = useUIStore((s) => s.qaLogsEnabled)
   const setQaLogsEnabled = useUIStore((s) => s.setQaLogsEnabled)
@@ -73,8 +75,8 @@ export function UserMenu() {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label="App menu"
-            title="App menu"
+            aria-label={t('layout:userMenu.appMenu')}
+            title={t('layout:userMenu.appMenu')}
             className="titlebar-no-drag flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-700 text-slate-100 ring-1 ring-slate-500/50 transition-colors hover:from-slate-500 hover:to-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 data-[state=open]:ring-sky-400"
           >
             <User className="h-4 w-4" />
@@ -83,7 +85,7 @@ export function UserMenu() {
 
         <DropdownMenuContent align="end" className="titlebar-no-drag w-52">
           <DropdownMenuLabel className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Appearance
+            {t('layout:userMenu.appearance')}
           </DropdownMenuLabel>
           {THEME_OPTIONS.map((opt) => {
             const active = theme === opt.value
@@ -95,7 +97,7 @@ export function UserMenu() {
                 role="menuitemradio"
               >
                 <opt.icon className="mr-2 h-4 w-4" />
-                {opt.label}
+                {t(opt.labelKey)}
                 {active && <Check className="ml-auto h-4 w-4 text-sky-500" />}
               </DropdownMenuItem>
             )
@@ -104,7 +106,7 @@ export function UserMenu() {
           <DropdownMenuSeparator />
 
           <DropdownMenuLabel className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Developer
+            {t('layout:userMenu.developer')}
           </DropdownMenuLabel>
           <DropdownMenuItem
             onSelect={(e) => {
@@ -116,14 +118,14 @@ export function UserMenu() {
             role="menuitemcheckbox"
           >
             <Bug className="mr-2 h-4 w-4" />
-            QA logs
+            {t('layout:userMenu.qaLogs')}
             <span
               className={cn(
                 'ml-auto rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
                 qaLogsEnabled ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-muted text-muted-foreground'
               )}
             >
-              {qaLogsEnabled ? 'On' : 'Off'}
+              {qaLogsEnabled ? t('layout:userMenu.on') : t('layout:userMenu.off')}
             </span>
           </DropdownMenuItem>
 
@@ -134,8 +136,8 @@ export function UserMenu() {
               so it lives outside the menu — same pattern as the device Restart). */}
           <DropdownMenuItem onSelect={() => setAboutOpen(true)}>
             <Info className="mr-2 h-4 w-4" />
-            About
-            {version && <span className="ml-auto text-[10px] text-muted-foreground">v{version}</span>}
+            {t('layout:userMenu.about')}
+            {version && <span className="ml-auto text-[10px] text-muted-foreground">{t('layout:userMenu.versionValue', { version })}</span>}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -146,25 +148,25 @@ export function UserMenu() {
             <div className="flex items-center gap-3">
               <AppMark />
               <div className="flex flex-col">
-                <DialogTitle>HiDock Next</DialogTitle>
-                <DialogDescription>Your universal knowledge hub</DialogDescription>
+                <DialogTitle>{t('layout:userMenu.aboutTitle')}</DialogTitle>
+                <DialogDescription>{t('layout:userMenu.aboutTagline')}</DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
           <dl className="space-y-2 text-sm">
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted-foreground">Version</dt>
-              <dd className="font-medium tabular-nums">{version ? `v${version}` : 'Unknown'}</dd>
+              <dt className="text-muted-foreground">{t('layout:userMenu.version')}</dt>
+              <dd className="font-medium tabular-nums">{version ? t('layout:userMenu.versionValue', { version }) : t('layout:userMenu.versionUnknown')}</dd>
             </div>
             {info?.platform && (
               <div className="flex items-center justify-between gap-4">
-                <dt className="text-muted-foreground">Platform</dt>
+                <dt className="text-muted-foreground">{t('layout:userMenu.platform')}</dt>
                 <dd className="font-medium">{info.platform}</dd>
               </div>
             )}
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted-foreground">Repository</dt>
+              <dt className="text-muted-foreground">{t('layout:userMenu.repository')}</dt>
               <dd className="min-w-0">
                 <a
                   href={REPO_URL}

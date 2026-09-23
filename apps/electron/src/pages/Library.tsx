@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useDeferredValue } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { RefreshCw, AlertCircle, EyeOff, Trash2 } from 'lucide-react'
 import { toast } from '@/components/ui/toaster'
@@ -87,6 +88,7 @@ function purgeFilenameBase(filename?: string | null): string | null {
 }
 
 export function Library() {
+  const { t } = useTranslation('library')
   const navigate = useNavigate()
   const location = useLocation()
   const {
@@ -287,7 +289,7 @@ export function Library() {
     })
 
     if (audioFiles.length === 0) {
-      toast.warning('No Audio Files', 'Only audio files can be imported (.mp3, .wav, .m4a, .ogg, .flac, .webm, .hda)')
+      toast.warning(t('toast.noAudioFilesTitle'), t('toast.noAudioFilesMessage'))
       return
     }
 
@@ -317,13 +319,13 @@ export function Library() {
     if (imported > 0) {
       await refresh(false)
       const msg = failed > 0
-        ? `Imported ${imported} file${imported !== 1 ? 's' : ''}, ${failed} failed.`
-        : `Imported ${imported} file${imported !== 1 ? 's' : ''}.`
-      toast.success('Files Imported', msg)
+        ? t('toast.importedFilesWithFailuresMessage', { count: imported, failed })
+        : t('toast.importedFilesMessage', { count: imported })
+      toast.success(t('toast.filesImportedTitle'), msg)
     } else if (failed > 0) {
-      toast.error('Import Failed', `Failed to import ${failed} file${failed !== 1 ? 's' : ''}.`)
+      toast.error(t('toast.importFailedTitle'), t('toast.importFailedMessage', { count: failed }))
     }
-  }, [refresh])
+  }, [refresh, t])
 
   // View mode persisted in library store (single source of truth for library view mode)
   const viewMode = useLibraryStore((state) => state.viewMode)
@@ -349,7 +351,7 @@ export function Library() {
     actionLabel: string
     onConfirm: () => void
     children?: React.ReactNode
-  }>({ open: false, title: '', description: '', actionLabel: 'Delete', onConfirm: () => {} })
+  }>({ open: false, title: '', description: '', actionLabel: t('confirm.defaultActionLabel'), onConfirm: () => {} })
 
   // Bulk permanent-delete flow: the checkbox is rendered inside confirmDialog.children,
   // which is a stored React element. Keep its mutable value in a ref so the stored
@@ -883,9 +885,9 @@ export function Library() {
   useEffect(() => {
     if (loading) return
     announce(filteredRecordings.length === recordings.length
-      ? `Showing all ${recordings.length} sources`
-      : `Showing ${filteredRecordings.length} of ${recordings.length} sources`)
-  }, [filteredRecordings.length, recordings.length, loading, announce])
+      ? t('announce.showingAllMessage', { count: recordings.length })
+      : t('announce.showingFilteredMessage', { shown: filteredRecordings.length, total: recordings.length }))
+  }, [filteredRecordings.length, recordings.length, loading, announce, t])
 
   // Memoize the list of IDs for keyboard navigation
   const itemIds = useMemo(() => displayedRecordings.map((r) => r.id), [displayedRecordings])
@@ -1127,14 +1129,14 @@ export function Library() {
       // Step 4: Show summary to user via toast if errors
       if (errors.length > 0) {
         import('@/components/ui/toaster').then(({ toast }) => {
-          toast.warning(PARTIAL_DELETE_TITLE, `Deleted ${successCount} of ${selectedRecordings.length} items. ${errors.length} failed.`)
+          toast.warning(PARTIAL_DELETE_TITLE, t('toast.softDeletePartialMessage', { success: successCount, total: selectedRecordings.length, failed: errors.length }))
         })
       }
     } finally {
       setBulkProcessing(false)
       setBulkProgress({ current: 0, total: 0 })
     }
-  }, [refresh, loadTrash, clearSelection, currentlyPlayingId, audioControls, selectedSourceId, setSelectedSourceId])
+  }, [refresh, loadTrash, clearSelection, currentlyPlayingId, audioControls, selectedSourceId, setSelectedSourceId, t])
 
   // PESSIMISTIC UPDATE: Server-first bulk delete with confirmation dialog
   const handleSelectedDelete = useCallback(async () => {
@@ -1147,22 +1149,27 @@ export function Library() {
     // SOFT delete = Move to Trash: hidden + excluded from AI, RESTORABLE.
     // Nothing is erased from disk and device copies stay (device-only rows
     // are the exception — those are deleted from the hardware since the row
-    // has no local existence at all).
-    let description = `Move ${selectedRecordings.length} selected item${selectedRecordings.length > 1 ? 's' : ''} to Trash?`
-    if (hasLocalFiles && hasDeviceFiles) {
-      description += ' They will be hidden and restorable — except the device-only ones, which are erased from the device hardware.'
-    } else {
-      description += ' They will be hidden and excluded from AI, and you can restore them from Trash anytime. Nothing is erased from disk.'
-    }
+    // has no local existence at all). Fix round 1: the base sentence and its
+    // suffix used to be two separately-selected t() calls spliced together
+    // (`${t(base)}${t(suffix)}`) — a rule-1 violation even though each half
+    // was already "complete," because Japanese can't reorder the halves
+    // relative to each other. Merged into one complete key per branch so a
+    // translator sees and controls the whole sentence.
+    const description = t(
+      hasLocalFiles && hasDeviceFiles
+        ? 'confirm.moveToTrashDescriptionBothFiles'
+        : 'confirm.moveToTrashDescriptionDefault',
+      { count: selectedRecordings.length }
+    )
 
     setConfirmDialog({
       open: true,
-      title: 'Move to Trash',
+      title: t('confirm.moveToTrashTitle'),
       description,
-      actionLabel: 'Move to Trash',
+      actionLabel: t('confirm.moveToTrashTitle'),
       onConfirm: () => executeBulkDelete(selectedRecordings)
     })
-  }, [filteredRecordings, selectedIds, executeBulkDelete])
+  }, [filteredRecordings, selectedIds, executeBulkDelete, t])
 
   // (b) Bulk HARD purge — the same cascade the single-row "Delete permanently"
   // flow runs (tombstones + vector-cache invalidation + file unlink + retries),
@@ -1219,13 +1226,17 @@ export function Library() {
       }),
       { transcripts: 0, actionItems: 0, embeddings: 0, captures: 0, artifacts: 0 }
     )
+    // Each entry is a complete, independently-pluralized clause; the join glue
+    // itself is a locale-sensitive separator (rule 5: a Japanese list uses "、"
+    // not ", "), so it is catalogued too (fix round 1) even though the array
+    // items it joins are independent facts, not fragments of one sentence.
     const impactSummary = [
-      impactTotals.transcripts > 0 ? `${impactTotals.transcripts} transcript${impactTotals.transcripts === 1 ? '' : 's'}` : '',
-      impactTotals.actionItems > 0 ? `${impactTotals.actionItems} action item${impactTotals.actionItems === 1 ? '' : 's'}` : '',
-      impactTotals.embeddings > 0 ? `${impactTotals.embeddings} embedding${impactTotals.embeddings === 1 ? '' : 's'}` : '',
-      impactTotals.captures > 0 ? `${impactTotals.captures} capture${impactTotals.captures === 1 ? '' : 's'}` : '',
-      impactTotals.artifacts > 0 ? `${impactTotals.artifacts} artifact${impactTotals.artifacts === 1 ? '' : 's'}` : '',
-    ].filter(Boolean).join(', ')
+      impactTotals.transcripts > 0 ? t('toast.impactTranscripts', { count: impactTotals.transcripts }) : '',
+      impactTotals.actionItems > 0 ? t('toast.impactActionItems', { count: impactTotals.actionItems }) : '',
+      impactTotals.embeddings > 0 ? t('toast.impactEmbeddings', { count: impactTotals.embeddings }) : '',
+      impactTotals.captures > 0 ? t('toast.impactCaptures', { count: impactTotals.captures }) : '',
+      impactTotals.artifacts > 0 ? t('toast.impactArtifacts', { count: impactTotals.artifacts }) : '',
+    ].filter(Boolean).join(t('page.impactSeparator'))
 
     const execute = async (alsoDeleteFromDevice: boolean) => {
       setBulkProcessing(true)
@@ -1248,20 +1259,20 @@ export function Library() {
           setPermanentDeleteProgress({ recordingId: recording.id, filename: recording.filename, stage: initialStage })
           announce(
             initialStage === 'erasing-device'
-              ? `Erasing device copy ${i + 1} of ${selectedRecordings.length}`
-              : `Removing local data ${i + 1} of ${selectedRecordings.length}`
+              ? t('announce.erasingDeviceCopyProgress', { current: i + 1, total: selectedRecordings.length })
+              : t('announce.removingLocalDataProgress', { current: i + 1, total: selectedRecordings.length })
           )
           try {
             if (isDeviceOnly(recording)) {
               // Device-only rows have no local data to purge. Permanent deletion
               // therefore requires deleting their sole copy from the hardware.
               if (!alsoDeleteFromDevice) {
-                failures.push(`${recording.filename}: device copy was kept`)
+                failures.push(t('toast.deviceCopyKeptFailure', { filename: recording.filename }))
                 continue
               }
               const ok = await deviceService.deleteRecording(recording.deviceFilename)
               if (!ok) {
-                throw new Error(deviceService.getLastDeleteError?.() ?? 'The HiDock did not confirm the erase.')
+                throw new Error(deviceService.getLastDeleteError?.() ?? t('toast.hidockDidNotConfirmEraseFallback'))
               }
               suppressPurgedFilenames(recording.deviceFilename)
               const reconciled = await window.electronAPI.recordings.markNotOnDevice?.(
@@ -1277,7 +1288,7 @@ export function Library() {
 
             // Hard purge (v51 tombstones + binary-cache invalidation included).
             const res = await window.electronAPI.recordings.deleteCascade(recording.id, true)
-            if (!res?.success) throw new Error(res?.error || 'Purge failed')
+            if (!res?.success) throw new Error(res?.error || t('toast.purgeFailedFallback'))
             suppressPurgedFilenames(
               recording.filename,
               impact?.deviceFilename,
@@ -1304,7 +1315,7 @@ export function Library() {
                   filename: targetDeviceFilename,
                   stage: 'erasing-device'
                 })
-                announce(`Removed from Library. Erasing device copy ${i + 1} of ${selectedRecordings.length}`)
+                announce(t('announce.removedLibraryErasingProgress', { current: i + 1, total: selectedRecordings.length }))
                 // Use the durable main-process path for connected and
                 // disconnected states alike. It attempts exactly once now and,
                 // on any USB failure, journals the device filename against this
@@ -1350,23 +1361,25 @@ export function Library() {
         clearSelection()
 
         const removed = localPurged + deviceOnlyDeleted
+        // As with impactSummary above: each entry is a complete, independent
+        // clause (own pluralization); the '; ' join glue is catalogued (fix
+        // round 1) since a locale can change a list separator.
         const issues = [
           failures.length > 0
-            ? `${failures.length} failed: ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ''}`
+            ? (failures.length > 1
+                ? t('toast.bulkPurgeFailuresSummaryWithMore', { count: failures.length, firstFailure: failures[0], more: failures.length - 1 })
+                : t('toast.bulkPurgeFailuresSummary', { count: failures.length, firstFailure: failures[0] }))
             : '',
           cleanupWarnings > 0
-            ? `${cleanupWarnings} item${cleanupWarnings === 1 ? '' : 's'} still has pending local cleanup`
+            ? t('toast.cleanupWarningsMessage', { count: cleanupWarnings })
             : '',
           deviceQueued > 0
-            ? `${deviceQueued} device cop${deviceQueued === 1 ? 'y is' : 'ies are'} queued for erase on reconnect`
+            ? t('toast.deviceQueuedMessage', { count: deviceQueued })
             : '',
           deviceRemains > 0
-            ? `${deviceRemains} device cop${deviceRemains === 1 ? 'y remains' : 'ies remain'}`
+            ? t('toast.deviceRemainsMessage', { count: deviceRemains })
             : '',
         ].filter(Boolean)
-        const deviceNote = deviceDeleted > 0
-          ? ` ${deviceDeleted} device cop${deviceDeleted === 1 ? 'y was' : 'ies were'} erased.`
-          : ''
 
         if (issues.length > 0) {
           const oneFailedDeviceOnly =
@@ -1380,20 +1393,34 @@ export function Library() {
               ? failures[0].slice(failurePrefix.length)
               : failures[0]
             toast.warning(
-              'Device copy remains',
-              `${failureReason} ${selectedRecordings[0].filename} is still on the device.`,
-              { action: { label: 'Retry', onClick: () => { void execute(true) } } }
+              t('toast.deviceCopyRemainsTitle'),
+              t('toast.deviceCopyRemainsMessage', { reason: failureReason, filename: selectedRecordings[0].filename }),
+              { action: { label: t('toast.retryActionLabel'), onClick: () => { void execute(true) } } }
             )
           } else {
+            // Fix round 1: previously `${t(itemsMsg)} ${issues.join('; ')}.${deviceNote}`
+            // spliced three independently-selected t() results end to end. The
+            // issues list itself stays a structural join (issueSeparator,
+            // catalogued above), but its joined text is now passed as an
+            // opaque {{issuesText}} value into ONE of three complete keys —
+            // the item count drives the standard _one/_other split, and the
+            // device-copy count's own singular/plural (a second, independent
+            // axis) is picked by key name, same technique as the permanent-
+            // delete dialog description above.
+            const issuesText = issues.join(t('page.issueSeparator'))
             toast.warning(
-              'Permanent deletion completed with issues',
-              `${removed} of ${selectedRecordings.length} item${selectedRecordings.length === 1 ? '' : 's'} permanently deleted. ${issues.join('; ')}.${deviceNote}`
+              t('toast.permanentDeletionCompletedWithIssuesTitle'),
+              deviceDeleted > 0
+                ? t(`toast.itemsPermanentlyDeletedMessageWithDeviceNote${deviceDeleted === 1 ? 'Singular' : 'Plural'}`, { removed, count: selectedRecordings.length, issuesText, deviceCount: deviceDeleted })
+                : t('toast.itemsPermanentlyDeletedMessageWithIssues', { removed, count: selectedRecordings.length, issuesText })
             )
           }
         } else {
           toast.success(
-            `Permanently deleted ${removed} item${removed === 1 ? '' : 's'}`,
-            `All associated local data was erased.${deviceNote}`
+            t('toast.permanentlyDeletedTitle', { count: removed }),
+            deviceDeleted > 0
+              ? t('toast.allLocalDataErasedWithDeviceNote', { count: deviceDeleted })
+              : t('toast.allLocalDataErasedMessage')
           )
         }
       } finally {
@@ -1404,16 +1431,31 @@ export function Library() {
     }
 
     bulkPurgeFromDeviceRef.current = true
+    // Fix round 1: this used to splice a separately-selected device-copy
+    // suffix onto the impact-based sentence (`${A}${cond ? t(suffix) : ''}`).
+    // When deviceCopyCount is 0 there is nothing to splice — the impact-only
+    // key already IS the complete sentence, so that branch calls it directly.
+    // When deviceCopyCount > 0, the two independent plural axes (item count,
+    // device-copy count) are merged into one of 8 complete keys: i18next's
+    // `count` option drives the standard _one/_other split for the item
+    // count, while the device-copy count's own singular/plural is picked by
+    // key name (mirrors Task 11a's labelKey pattern) since one t() call can
+    // only auto-pluralize on a single `count`.
+    const permanentDeleteDescription = allDeviceOnly
+      ? t('confirm.erasePermanentDialogDescriptionDeviceOnly', { count: selectedRecordings.length })
+      : deviceCopyCount > 0
+        ? t(
+            `confirm.deletePermanentDialogDescription${impactSummary ? 'WithImpact' : 'NoImpact'}DeviceCopy${deviceCopyCount === 1 ? 'Singular' : 'Plural'}`,
+            { count: selectedRecordings.length, impact: impactSummary, devCount: deviceCopyCount }
+          )
+        : impactSummary
+          ? t('confirm.deletePermanentDialogDescriptionWithImpact', { count: selectedRecordings.length, impact: impactSummary })
+          : t('confirm.deletePermanentDialogDescriptionNoImpact', { count: selectedRecordings.length })
     setConfirmDialog({
       open: true,
-      title: allDeviceOnly ? 'Erase from device' : 'Delete permanently',
-      description: allDeviceOnly
-        ? `Permanently erase ${selectedRecordings.length} selected recording${selectedRecordings.length === 1 ? '' : 's'} from the HiDock? ` +
-          `No local cop${selectedRecordings.length === 1 ? 'y exists' : 'ies exist'}. This cannot be undone.`
-        : `Permanently delete ${selectedRecordings.length} selected item${selectedRecordings.length > 1 ? 's' : ''}? ` +
-          `This erases the recordings and all associated local data${impactSummary ? ` (${impactSummary})` : ''}. This cannot be undone.` +
-          (deviceCopyCount > 0 ? ` ${deviceCopyCount} ${deviceCopyCount === 1 ? 'copy also exists' : 'copies also exist'} on the device.` : ''),
-      actionLabel: allDeviceOnly ? 'Erase from device' : 'Delete permanently',
+      title: allDeviceOnly ? t('confirm.eraseFromDeviceTitle') : t('confirm.deletePermanentlyTitle'),
+      description: permanentDeleteDescription,
+      actionLabel: allDeviceOnly ? t('confirm.eraseFromDeviceTitle') : t('confirm.deletePermanentlyTitle'),
       children: deviceCopyCount > 0 && !allDeviceOnly ? (
         <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
           <input
@@ -1422,12 +1464,13 @@ export function Library() {
             onChange={(event) => { bulkPurgeFromDeviceRef.current = event.target.checked }}
             className="h-4 w-4 rounded border-border"
           />
-          Also delete {deviceCopyCount === 1 ? 'the device copy' : `${deviceCopyCount} device copies`}
+          {deviceCopyCount === 1 ? t('confirm.alsoDeleteDeviceCopyLabel') : t('confirm.alsoDeleteDeviceCopiesLabel', { count: deviceCopyCount })}
         </label>
       ) : undefined,
       onConfirm: () => execute(allDeviceOnly ? true : bulkPurgeFromDeviceRef.current)
     })
   }, [
+    t,
     displayedRecordings,
     selectedIds,
     refresh,
@@ -1459,9 +1502,17 @@ export function Library() {
     if (ok > 0) await refresh(false)
     clearSelection()
     import('@/components/ui/toaster').then(({ toast }) => {
-      toast.success('Marked personal', `${ok} recording${ok > 1 ? 's' : ''} excluded from AI processing and default views.`)
+      // ok can be 0 (every markPersonal call failed) — the original ternary
+      // singularizes at BOTH 0 and 1 (`ok > 1`), which is not what i18next's
+      // standard count-based _one/_other would do at n=0 (English CLDR treats
+      // 0 as "other"/plural). Select the complete key explicitly instead of
+      // relying on the `count` option, so n=0 stays verbatim "0 recording…".
+      toast.success(
+        t('toast.markedPersonalTitle'),
+        t(ok > 1 ? 'toast.markedPersonalBulkMessagePlural' : 'toast.markedPersonalBulkMessage', { count: ok })
+      )
     })
-  }, [filteredRecordings, selectedIds, refresh, clearSelection])
+  }, [filteredRecordings, selectedIds, refresh, clearSelection, t])
 
   // B-LIB-006: Extracted device delete execution.
   // Deletes over USB by device filename — recordings.delete() only removes the
@@ -1471,11 +1522,11 @@ export function Library() {
     if (!('deviceFilename' in recording)) return
     setDeleting(recording.id)
     setPermanentDeleteProgress({ recordingId: recording.id, filename: recording.deviceFilename, stage: 'erasing-device' })
-    announce(`Erasing the device copy for ${recording.filename}`)
+    announce(t('announce.erasingDeviceCopyForFilename', { filename: recording.filename }))
     try {
       const deviceService = getHiDockDeviceService()
       const ok = await deviceService.deleteRecording(recording.deviceFilename)
-      if (!ok) throw new Error(deviceService.getLastDeleteError?.() ?? 'The HiDock did not confirm the erase.')
+      if (!ok) throw new Error(deviceService.getLastDeleteError?.() ?? t('toast.hidockDidNotConfirmEraseFallback'))
       // `success` and idempotent `not-exists` both mean the hardware end state
       // is satisfied. Reconcile both caches immediately; waiting for the next
       // device scan leaves an already-absent file visible as device-only.
@@ -1490,24 +1541,24 @@ export function Library() {
       import('@/components/ui/toaster').then(({ toast }) => {
         if (viewMayBeStale) {
           toast.warning(
-            'Device file is absent — view may be stale',
-            `The HiDock no longer has "${recording.filename}", but the Library could not fully refresh. Use Refresh to reconcile the view.`
+            t('toast.deviceFileAbsentTitle'),
+            t('toast.deviceFileAbsentMessage', { filename: recording.filename })
           )
         } else {
-          toast.success(SUCCESS_REMOVED_FROM_DEVICE_TITLE, `"${recording.filename}" was erased from the HiDock.`)
+          toast.success(SUCCESS_REMOVED_FROM_DEVICE_TITLE, t('toast.erasedFromHidockMessage', { filename: recording.filename }))
         }
       })
     } catch (e) {
       console.error('Failed to delete from device:', e)
       import('@/components/ui/toaster').then(({ toast }) => {
         const reason = e instanceof Error ? e.message : String(e)
-        toast.error('Device copy remains', `${reason} ${recording.filename} is still on the device.`)
+        toast.error(t('toast.deviceCopyRemainsTitle'), t('toast.deviceCopyRemainsMessage', { reason, filename: recording.filename }))
       })
     } finally {
       setDeleting(null)
       setPermanentDeleteProgress(null)
     }
-  }, [refreshLocal, announce])
+  }, [refreshLocal, announce, t])
 
   // PESSIMISTIC UPDATE: Server-first delete with confirmation dialog
   const handleDeleteFromDevice = useCallback(async (recording: UnifiedRecording) => {
@@ -1539,10 +1590,10 @@ export function Library() {
       if (currentlyPlayingId === recording.id) audioControls.stop()
       if (selectedSourceId === recording.id) setSelectedSourceId(null)
       import('@/components/ui/toaster').then(({ toast }) => {
-        toast.success(SUCCESS_MOVED_TO_TRASH_TITLE, `"${recording.filename}" is hidden and excluded from processing.`, {
+        toast.success(SUCCESS_MOVED_TO_TRASH_TITLE, t('toast.movedToTrashMessage', { filename: recording.filename }), {
           duration: 8000,
           action: {
-            label: 'Undo',
+            label: t('toast.undoActionLabel'),
             onClick: async () => {
               await window.electronAPI.recordings.restore(recording.id)
               await refresh(false)
@@ -1554,12 +1605,12 @@ export function Library() {
     } catch (e) {
       console.error('Failed to delete local file:', e)
       import('@/components/ui/toaster').then(({ toast }) => {
-        toast.error('Delete Failed', `Failed to delete "${recording.filename}". Please try again.`)
+        toast.error(t('toast.deleteFailedTitle'), t('toast.deleteFailedMessage', { filename: recording.filename }))
       })
     } finally {
       setDeleting(null)
     }
-  }, [refresh, loadTrash, currentlyPlayingId, audioControls, selectedSourceId, setSelectedSourceId])
+  }, [refresh, loadTrash, currentlyPlayingId, audioControls, selectedSourceId, setSelectedSourceId, t])
 
   // Soft-delete flow: a light confirm, then hide with an Undo toast (reversible).
   const handleDeleteLocal = useCallback(async (recording: UnifiedRecording) => {
@@ -1599,7 +1650,7 @@ export function Library() {
   ) => {
     setDeleting(recording.id)
     setPermanentDeleteProgress({ recordingId: recording.id, filename: recording.filename, stage: 'removing-local' })
-    announce(`Removing local data for ${recording.filename}`)
+    announce(t('announce.removingLocalDataForFilename', { filename: recording.filename }))
     try {
       const res = opts?.skipGraphCleanup
         ? await window.electronAPI.recordings.deleteCascade(recording.id, true, { skipGraphCleanup: true })
@@ -1663,7 +1714,7 @@ export function Library() {
             filename: targetDeviceFilename,
             stage: 'erasing-device'
           })
-          announce(`Removed from Library. Erasing the device copy for ${recording.filename}`)
+          announce(t('announce.removedLibraryErasingForFilename', { filename: recording.filename }))
           // One main-process operation handles both connected and disconnected
           // states: attempt the hardware erase exactly once and durably journal
           // it on failure. The old connected branch bypassed the journal, so a
@@ -1759,6 +1810,7 @@ export function Library() {
       setPermanentDeleteProgress(null)
     }
   }, [
+    t,
     refresh,
     refreshLocal,
     suppressPurgedFilenames,
@@ -1825,17 +1877,17 @@ export function Library() {
       if (!res?.success) throw new Error('Restore failed')
       await refresh(false)
       await loadTrash()
-      announce(`Restored "${recording.filename}"`)
+      announce(t('announce.restoredFilename', { filename: recording.filename }))
       import('@/components/ui/toaster').then(({ toast }) => {
-        toast.success(SUCCESS_RESTORED_TITLE, `"${recording.filename}" is back in your Library.`)
+        toast.success(SUCCESS_RESTORED_TITLE, t('toast.restoredInLibraryMessage', { filename: recording.filename }))
       })
     } catch (e) {
       console.error('Failed to restore recording:', e)
       import('@/components/ui/toaster').then(({ toast }) => {
-        toast.error('Restore Failed', `Failed to restore "${recording.filename}". Please try again.`)
+        toast.error(t('toast.restoreFailedTitle'), t('toast.restoreFailedMessage', { filename: recording.filename }))
       })
     }
-  }, [refresh, loadTrash, announce])
+  }, [refresh, loadTrash, announce, t])
 
   // Bulk "Restore" (Trash): put every selected trashed recording back into the
   // live Library, then refresh both corpora.
@@ -1860,15 +1912,15 @@ export function Library() {
       clearSelection()
       import('@/components/ui/toaster').then(({ toast }) => {
         if (failures.length === 0) {
-          toast.success('Restored', `${restored} recording${restored === 1 ? '' : 's'} back in your Library.`)
+          toast.success(t('toast.restoredBulkTitle'), t('toast.restoredBulkMessage', { count: restored }))
         } else {
-          toast.error('Some restores failed', `${restored} restored, ${failures.length} failed.`)
+          toast.error(t('toast.someRestoresFailedTitle'), t('toast.someRestoresFailedMessage', { restored, failed: failures.length }))
         }
       })
     } finally {
       setBulkProcessing(false)
     }
-  }, [trashedRecordings, selectedIds, refresh, loadTrash, clearSelection])
+  }, [trashedRecordings, selectedIds, refresh, loadTrash, clearSelection, t])
 
   // Mark / unmark a recording "personal" (ignore) — reversible, non-destructive.
   const handleMarkPersonal = useCallback(async (recording: UnifiedRecording) => {
@@ -1879,19 +1931,19 @@ export function Library() {
       await refresh(false)
       import('@/components/ui/toaster').then(({ toast }) => {
         toast.success(
-          next ? 'Marked personal' : 'Unmarked personal',
+          next ? t('toast.markedPersonalTitle') : t('toast.unmarkedPersonalSingleTitle'),
           next
-            ? `"${recording.filename}" is kept but excluded from AI processing and default views.`
-            : `"${recording.filename}" is back in AI processing and views.`
+            ? t('toast.markedPersonalSingleMessage', { filename: recording.filename })
+            : t('toast.unmarkedPersonalSingleMessage', { filename: recording.filename })
         )
       })
     } catch (e) {
       console.error('Failed to toggle personal:', e)
       import('@/components/ui/toaster').then(({ toast }) => {
-        toast.error('Action Failed', `Could not update "${recording.filename}".`)
+        toast.error(t('toast.actionFailedTitle'), t('toast.couldNotUpdateMessage', { filename: recording.filename }))
       })
     }
-  }, [refresh])
+  }, [refresh, t])
 
   // Manual per-row value-rating override (F16/spec-003) — live update (no
   // re-index needed, mirrors handleMarkPersonal's refresh(false) pattern).
@@ -1902,19 +1954,19 @@ export function Library() {
       await refresh(false)
       import('@/components/ui/toaster').then(({ toast }) => {
         toast.success(
-          rating === 'unrated' ? 'Rating cleared' : 'Rating updated',
+          rating === 'unrated' ? t('toast.ratingClearedTitle') : t('toast.ratingUpdatedTitle'),
           rating === 'unrated'
-            ? `"${recording.filename}" rating was cleared.`
-            : `"${recording.filename}" marked ${rating.replace('-', ' ')}.`
+            ? t('toast.ratingClearedMessage', { filename: recording.filename })
+            : t('toast.ratingMarkedMessage', { filename: recording.filename, rating: rating.replace('-', ' ') })
         )
       })
     } catch (e) {
       console.error('Failed to set value rating:', e)
       import('@/components/ui/toaster').then(({ toast }) => {
-        toast.error('Action Failed', `Could not update the rating for "${recording.filename}".`)
+        toast.error(t('toast.actionFailedTitle'), t('toast.couldNotUpdateRatingMessage', { filename: recording.filename }))
       })
     }
-  }, [refresh])
+  }, [refresh, t])
 
   const handleDelete = useCallback(
     (recording: UnifiedRecording) => {
@@ -2208,8 +2260,8 @@ export function Library() {
     return (
       <div className="flex flex-col h-full">
         <header className="border-b px-6 py-4">
-          <h1 className="text-2xl font-bold">Knowledge Library</h1>
-          <p className="text-sm text-muted-foreground">Loading your captured conversations...</p>
+          <h1 className="text-2xl font-bold">{t('page.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('page.loadingSubtitle')}</p>
         </header>
         {/* Skeleton filter bar */}
         <div className="px-6 py-4 flex gap-3">
@@ -2219,7 +2271,7 @@ export function Library() {
           <div className="h-8 flex-1 max-w-xs rounded-md bg-muted animate-pulse" />
         </div>
         {/* Skeleton rows */}
-        <div className="flex-1 overflow-hidden px-6 py-2 space-y-3" aria-busy="true" aria-label="Loading recordings">
+        <div className="flex-1 overflow-hidden px-6 py-2 space-y-3" aria-busy="true" aria-label={t('page.loadingRecordingsAriaLabel')}>
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
               <div className="h-5 w-5 rounded bg-muted animate-pulse shrink-0" />
@@ -2246,8 +2298,8 @@ export function Library() {
       {isDragOver && (
         <div className="absolute inset-0 z-50 bg-primary/10 border-2 border-dashed border-primary rounded-lg flex items-center justify-center pointer-events-none">
           <div className="text-center">
-            <p className="text-lg font-medium text-primary">Drop audio files to import</p>
-            <p className="text-sm text-muted-foreground mt-1">Supported: .mp3, .wav, .m4a, .ogg, .flac, .webm, .hda</p>
+            <p className="text-lg font-medium text-primary">{t('page.dropAudioFilesTitle')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('page.supportedFormatsMessage')}</p>
           </div>
         </div>
       )}
@@ -2276,7 +2328,7 @@ export function Library() {
           setCategoryFilter(null)
           setExclusiveFilter('source-only')
           setSourceTypeFilter('audio')
-          announce(`Showing ${stats.deviceOnly} audio capture${stats.deviceOnly === 1 ? '' : 's'} on device only`)
+          announce(t('announce.showingDeviceOnlyMessage', { count: stats.deviceOnly }))
         }}
         onRefresh={() => {
           // Manual force-sync (2026-07-22): probe the device count, rescan when
@@ -2357,10 +2409,10 @@ export function Library() {
                       ? 'border-primary/40 bg-primary/10 text-primary'
                       : 'border-border bg-muted/40 text-muted-foreground hover:text-foreground'
                   }`}
-                  title="Personal recordings are kept but excluded from AI processing and hidden by default"
+                  title={t('page.personalRecordingsTitle')}
                 >
                   <EyeOff className="h-3 w-3" aria-hidden="true" />
-                  {showPersonal ? `Showing ${personalCount} personal` : `Show ${personalCount} personal`}
+                  {showPersonal ? t('page.showingPersonalChip', { count: personalCount }) : t('page.showPersonalChip', { count: personalCount })}
                 </button>
               </div>
             )}
@@ -2401,17 +2453,17 @@ export function Library() {
           className="flex items-center gap-3 border-b bg-muted/40 px-6 py-2"
           data-testid="trash-bulk-bar"
           role="toolbar"
-          aria-label="Trash bulk actions"
+          aria-label={t('page.trashBulkActionsAriaLabel')}
         >
           <span className="text-sm font-medium">
-            {trashSelectedCount} of {trashedRecordings.length} selected
+            {t('page.trashSelectedCountLabel', { selected: trashSelectedCount, total: trashedRecordings.length })}
           </span>
           <button
             type="button"
             className="text-xs text-primary hover:underline"
             onClick={() => selectAll(trashedRecordings.map((r) => r.id))}
           >
-            Select all
+            {t('page.selectAllButton')}
           </button>
           <div className="ml-auto flex items-center gap-2">
             <button
@@ -2420,7 +2472,7 @@ export function Library() {
               onClick={handleSelectedRestore}
               className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-accent disabled:opacity-50"
             >
-              Restore
+              {t('page.restoreButton')}
             </button>
             <button
               type="button"
@@ -2428,11 +2480,11 @@ export function Library() {
               onClick={handleSelectedDeletePermanent}
               className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 px-2.5 py-1 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
             >
-              Delete permanently
+              {t('confirm.deletePermanentlyTitle')}
             </button>
             <button
               type="button"
-              aria-label="Clear selection"
+              aria-label={t('page.clearSelectionAriaLabel')}
               onClick={clearSelection}
               className="rounded-md p-1 text-muted-foreground hover:bg-accent"
             >
@@ -2471,7 +2523,7 @@ export function Library() {
               onKeyDown={handleKeyDown}
               tabIndex={0}
               role="application"
-              aria-label="Recording list navigation. Use arrow keys to navigate, Space to select, Enter to open."
+              aria-label={t('page.recordingListNavigationAriaLabel')}
               data-testid="library-list"
             >
         {/* min-w-0 so the list content always shrinks to the pane width and NEVER
@@ -2489,10 +2541,10 @@ export function Library() {
               <div className="min-w-0">
                 <p className="font-medium text-foreground">
                   {permanentDeleteProgress.stage === 'removing-local'
-                    ? 'Removing local data…'
+                    ? t('page.removingLocalDataLabel')
                     : bulkProgress.total > 1
-                      ? `Erasing device copies… ${bulkProgress.current} of ${bulkProgress.total}`
-                      : 'Erasing device copy…'}
+                      ? t('page.erasingDeviceCopiesProgress', { current: bulkProgress.current, total: bulkProgress.total })
+                      : t('page.erasingDeviceCopyLabel')}
                 </p>
                 <p className="truncate text-muted-foreground" title={permanentDeleteProgress.filename}>
                   {permanentDeleteProgress.filename}
@@ -2506,25 +2558,24 @@ export function Library() {
               // below is about the default pipeline's filters and would be
               // nonsensical here (Trash isn't filtered, per §D1).
               <div className="text-center py-12 px-6 max-w-md mx-auto" role="status">
-                <p className="text-base font-medium text-foreground">Trash is empty</p>
+                <p className="text-base font-medium text-foreground">{t('page.trashEmptyTitle')}</p>
                 <p className="mt-1.5 text-sm text-muted-foreground">
-                  Recordings you move to Trash appear here until restored or deleted permanently.
+                  {t('page.trashEmptyMessage')}
                 </p>
               </div>
             ) : qualityFilter !== null && qualityFilter !== 'unrated' && ratedCount === 0 ? (
               // Honest empty state: the quality filter isn't broken, there's just
               // no rated data yet. Say so, rather than a bare "no matches".
               <div className="text-center py-12 px-6 max-w-md mx-auto" role="status">
-                <p className="text-base font-medium text-foreground">No captures are classified yet</p>
+                <p className="text-base font-medium text-foreground">{t('page.noRatedCapturesTitle')}</p>
                 <p className="mt-1.5 text-sm text-muted-foreground">
-                  Nothing has a “{qualityFilter.replace('-', ' ')}” rating — every capture is still
-                  “Unrated”. Ratings appear as captures are assessed.
+                  {t('page.noRatedCapturesMessage', { filter: qualityFilter.replace('-', ' ') })}
                 </p>
                 <button
                   onClick={() => setQualityFilter(null)}
                   className="mt-4 inline-flex items-center rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
                 >
-                  Clear quality filter
+                  {t('page.clearQualityFilterButton')}
                 </button>
               </div>
             ) : (
@@ -2545,7 +2596,7 @@ export function Library() {
                 <div className="mb-2 flex items-center justify-between px-3">
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground">
-                      {displayedRecordings.length} shown
+                      {t('page.shownCountLabel', { count: displayedRecordings.length })}
                     </span>
                     {/* Select-all / deselect-all appears only once selection mode is
                         active (≥1 row selected), toggling every currently-shown row.
@@ -2557,7 +2608,7 @@ export function Library() {
                         aria-pressed={allShownSelected}
                         className="text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
                       >
-                        {allShownSelected ? 'Deselect all' : 'Select all'}
+                        {allShownSelected ? t('page.deselectAllButton') : t('page.selectAllButton')}
                       </button>
                     )}
                   </div>
@@ -2571,7 +2622,7 @@ export function Library() {
                 position: 'relative'
               }}
               role="listbox"
-              aria-label={showTrash ? 'Trash' : 'Knowledge Library'}
+              aria-label={showTrash ? t('page.listboxAriaLabelTrash') : t('page.title')}
               aria-rowcount={displayedRecordings.length}
             >
               {/* spec-005/F17 T5 §D1 — Trash ALWAYS renders the SourceRow list, even
@@ -2638,8 +2689,8 @@ export function Library() {
                             deletionLabel={
                               permanentDeleteProgress?.recordingId === recording.id &&
                               permanentDeleteProgress.stage === 'erasing-device'
-                                ? 'Erasing device copy…'
-                                : 'Removing local data…'
+                                ? t('page.erasingDeviceCopyLabel')
+                                : t('page.removingLocalDataLabel')
                             }
                             onSelectionChange={(id, shiftKey) =>
                               handleSelectionClick(id, shiftKey, displayedRecordings.map((r) => r.id))
@@ -2662,8 +2713,8 @@ export function Library() {
                             deletionLabel={
                               permanentDeleteProgress?.recordingId === recording.id &&
                               permanentDeleteProgress.stage === 'erasing-device'
-                                ? 'Erasing device copy…'
-                                : 'Removing local data…'
+                                ? t('page.erasingDeviceCopyLabel')
+                                : t('page.removingLocalDataLabel')
                             }
                             searchQuery={deferredSearchQuery}
                             onSelectionChange={(id, shiftKey) =>

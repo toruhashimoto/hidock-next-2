@@ -15,6 +15,7 @@
 
 import { useEffect, useRef } from 'react'
 import { Activity, Terminal, X, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useActivityLog, useAppStore } from '@/store/useAppStore'
@@ -22,6 +23,7 @@ import { useUIStore } from '@/store/ui/useUIStore'
 import type { ActivityLogEntry } from '@/services/hidock-device'
 
 export function ActivityLogButton() {
+  const { t } = useTranslation()
   const activityLog = useActivityLog()
   const clearActivityLog = useAppStore((s) => s.clearActivityLog)
   // Shared open-state (the store field previously reserved for the dock chrome):
@@ -46,10 +48,12 @@ export function ActivityLogButton() {
         onClick={() => setOpen(true)}
         aria-label={
           count > 0
-            ? `Activity log: ${count} ${count === 1 ? 'entry' : 'entries'}${hasErrors ? ', has errors or warnings' : ''}`
-            : 'Activity log'
+            ? hasErrors
+              ? t('layout:activityLogButton.countAriaLabelWithErrors', { count })
+              : t('layout:activityLogButton.countAriaLabel', { count })
+            : t('layout:activityLogButton.title')
         }
-        title="Activity log"
+        title={t('layout:activityLogButton.title')}
         className="titlebar-no-drag relative flex h-7 w-7 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
       >
         <Activity className="h-4 w-4" />
@@ -84,6 +88,7 @@ interface ActivityLogOverlayProps {
 }
 
 function ActivityLogOverlay({ open, onClose, entries, onClear }: ActivityLogOverlayProps) {
+  const { t } = useTranslation()
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -110,14 +115,14 @@ function ActivityLogOverlay({ open, onClose, entries, onClear }: ActivityLogOver
       className="fixed inset-0 z-50 flex items-center justify-center p-6"
       role="dialog"
       aria-modal="true"
-      aria-label="Activity log"
+      aria-label={t('layout:activityLogButton.title')}
     >
-      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <button type="button" aria-label={t('layout:activityLogButton.close')} className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative z-10 flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
           <div className="flex items-center gap-2">
             <Terminal className="h-4 w-4 text-slate-400" />
-            <h2 className="text-sm font-semibold">Activity Log</h2>
+            <h2 className="text-sm font-semibold">{t('layout:activityLogButton.overlayHeading')}</h2>
             <span className="rounded-full bg-slate-700 px-1.5 text-[10px] text-slate-300">{entries.length}</span>
           </div>
           <div className="flex items-center gap-1">
@@ -127,10 +132,10 @@ function ActivityLogOverlay({ open, onClose, entries, onClear }: ActivityLogOver
                 size="sm"
                 className="h-7 gap-1.5 px-2 text-xs text-slate-300 hover:text-slate-100"
                 onClick={onClear}
-                aria-label="Clear activity log"
+                aria-label={t('layout:activityLogButton.clearAriaLabel')}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                Clear
+                {t('layout:activityLogButton.clear')}
               </Button>
             )}
             <Button
@@ -138,7 +143,7 @@ function ActivityLogOverlay({ open, onClose, entries, onClear }: ActivityLogOver
               size="icon"
               className="h-7 w-7 text-slate-400 hover:text-slate-100"
               onClick={onClose}
-              aria-label="Close"
+              aria-label={t('layout:activityLogButton.close')}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -147,7 +152,7 @@ function ActivityLogOverlay({ open, onClose, entries, onClear }: ActivityLogOver
 
         <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-950 p-3 font-mono">
           {entries.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">No activity.</p>
+            <p className="py-8 text-center text-sm text-slate-500">{t('layout:activityLogButton.noActivity')}</p>
           ) : (
             entries.map((entry, i) => (
               <div
@@ -176,7 +181,7 @@ function ActivityLogOverlay({ open, onClose, entries, onClear }: ActivityLogOver
                   })}
                 </span>
                 {entry.message}
-                {entry.details && <span className="ml-1 text-slate-600">— {entry.details}</span>}
+                {entry.details && <span className="ml-1 text-slate-600">{t('layout:activityLogButton.detailsSeparator')}{entry.details}</span>}
               </div>
             ))
           )}

@@ -13,6 +13,7 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { UnifiedRecording, hasLocalPath } from '@/types/unified-recording'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -29,6 +30,7 @@ const MAX_QUERY_LENGTH = 500
 const MAX_QUERIES_PER_MINUTE = 10
 
 export function AssistantPanel({ recording, transcript, onAskAssistant, onGenerateOutput }: AssistantPanelProps) {
+  const { t } = useTranslation('library')
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [queryCount, setQueryCount] = useState(0)
@@ -55,7 +57,7 @@ export function AssistantPanel({ recording, transcript, onAskAssistant, onGenera
 
     // Rate limiting check
     if (queryCount >= MAX_QUERIES_PER_MINUTE) {
-      alert('Rate limit exceeded. Please wait before submitting more queries.')
+      alert(t('assistantPanel.rateLimitExceededAlert'))
       return
     }
 
@@ -101,9 +103,9 @@ export function AssistantPanel({ recording, transcript, onAskAssistant, onGenera
     }
     // Fallback to default questions
     return [
-      'What were the key topics discussed?',
-      'What action items were mentioned?',
-      'Summarize the main decisions made'
+      t('assistantPanel.defaultQuestionTopics'),
+      t('assistantPanel.defaultQuestionActionItems'),
+      t('assistantPanel.defaultQuestionSummarizeDecisions')
     ]
   })()
 
@@ -113,7 +115,7 @@ export function AssistantPanel({ recording, transcript, onAskAssistant, onGenera
       <div className="p-4 border-b">
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold">AI Assistant</h3>
+          <h3 className="font-semibold">{t('assistantPanel.heading')}</h3>
         </div>
       </div>
 
@@ -123,7 +125,7 @@ export function AssistantPanel({ recording, transcript, onAskAssistant, onGenera
           <div className="space-y-4">
             {/* Context-aware suggestions */}
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-muted-foreground">Quick Actions</h4>
+              <h4 className="text-sm font-medium text-muted-foreground">{t('assistantPanel.quickActionsHeading')}</h4>
               <div className="space-y-2">
                 {recording.transcriptionStatus === 'complete' && (
                   <Button
@@ -133,7 +135,7 @@ export function AssistantPanel({ recording, transcript, onAskAssistant, onGenera
                     onClick={() => onGenerateOutput?.(recording)}
                   >
                     <FileText className="h-4 w-4 mr-2" />
-                    Generate Meeting Minutes
+                    {t('assistantPanel.generateMeetingMinutesButton')}
                   </Button>
                 )}
 
@@ -145,7 +147,7 @@ export function AssistantPanel({ recording, transcript, onAskAssistant, onGenera
                     onClick={() => onAskAssistant?.(recording)}
                   >
                     <Lightbulb className="h-4 w-4 mr-2" />
-                    Ask about this recording
+                    {t('assistantPanel.askAboutRecordingButton')}
                   </Button>
                 )}
               </div>
@@ -153,7 +155,7 @@ export function AssistantPanel({ recording, transcript, onAskAssistant, onGenera
 
             {/* Contextual suggestions */}
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-muted-foreground">Suggested Questions</h4>
+              <h4 className="text-sm font-medium text-muted-foreground">{t('assistantPanel.suggestedQuestionsHeading')}</h4>
               <div className="space-y-2 text-sm">
                 {suggestedQuestions.map((question, index) => (
                   <button
@@ -170,7 +172,7 @@ export function AssistantPanel({ recording, transcript, onAskAssistant, onGenera
         ) : (
           <div className="text-center text-muted-foreground py-8">
             <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">Select a recording to get AI assistance</p>
+            <p className="text-sm">{t('assistantPanel.selectRecordingPrompt')}</p>
           </div>
         )}
       </div>
@@ -180,15 +182,15 @@ export function AssistantPanel({ recording, transcript, onAskAssistant, onGenera
         {isRateLimited && (
           <div className="flex items-start gap-2 p-2 bg-destructive/10 text-destructive text-xs rounded">
             <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-            <p>Rate limit reached. Wait {Math.ceil((rateLimitReset! - Date.now()) / 1000)}s before submitting more queries.</p>
+            <p>{t('assistantPanel.rateLimitReachedMessage', { seconds: Math.ceil((rateLimitReset! - Date.now()) / 1000) })}</p>
           </div>
         )}
         <div className="space-y-2">
           <Textarea
             placeholder={
               recording
-                ? 'Ask a question about this recording...'
-                : 'Select a recording first'
+                ? t('assistantPanel.askQuestionPlaceholder')
+                : t('assistantPanel.selectRecordingFirstPlaceholder')
             }
             value={query}
             onChange={(e) => setQuery(e.target.value.slice(0, MAX_QUERY_LENGTH))}
@@ -199,14 +201,14 @@ export function AssistantPanel({ recording, transcript, onAskAssistant, onGenera
           />
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">
-              {query.length}/{MAX_QUERY_LENGTH}
+              {t('assistantPanel.queryLengthCounter', { length: query.length, max: MAX_QUERY_LENGTH })}
             </span>
             <Button
               size="sm"
               onClick={handleQuerySubmit}
               disabled={!canQuery}
             >
-              Ask
+              {t('assistantPanel.askButton')}
             </Button>
           </div>
         </div>

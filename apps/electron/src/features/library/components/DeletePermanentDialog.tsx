@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle } from 'lucide-react'
 import {
   AlertDialog,
@@ -28,6 +29,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import { GRAPH_CLEANUP_RETRY_SAFETY_LINE, LEGACY_GRAPH_DISCLOSURE } from '@/features/library/utils/deletionCopy'
+import i18n from '@/i18n'
 
 export interface DeletePermanentDialogImpact {
   transcripts: number
@@ -74,30 +76,42 @@ export interface DeletePermanentDialogProps {
   onConfirm: (opts: { alsoDeleteFromDevice: boolean }) => void
 }
 
-function pluralize(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? '' : 's'}`
+/**
+ * i18n note (Task 11c): `buildRemovesText` is exported and imported directly
+ * by DeletePermanentDialog.test.tsx (`buildRemovesText(undefined)`,
+ * `.toBe('1 transcript, 2 action items, 3 embeddings, and the audio file')`
+ * etc.) with a fixed one-argument signature, so it cannot take a `t`
+ * parameter. It resolves copy via the shared `i18n` singleton instead (task
+ * brief "approach 2"), which the test satisfies transparently since
+ * `src/test/setup.ts` initializes i18n to 'en' before any test file's own
+ * imports run. `pluralize` is private and only reachable through
+ * `buildRemovesText`, so it takes a translation key rather than a raw
+ * English noun to pluralize.
+ */
+function pluralize(n: number, key: string): string {
+  return i18n.t(key, { count: n })
 }
 
 /** Builds the "As of now, this removes …" clause. Exported for direct unit testing. */
 export function buildRemovesText(impact?: DeletePermanentDialogImpact): string {
-  const FALLBACK = 'the audio file and any transcript'
+  const FALLBACK = i18n.t('library:deletePermanentDialog.removesFallback')
   if (!impact) return FALLBACK
 
   const parts: string[] = []
-  if (impact.transcripts) parts.push(pluralize(impact.transcripts, 'transcript'))
-  if (impact.actionItems) parts.push(pluralize(impact.actionItems, 'action item'))
-  if (impact.embeddings) parts.push(pluralize(impact.embeddings, 'embedding'))
-  if (impact.artifacts) parts.push(pluralize(impact.artifacts, 'artifact'))
-  if (impact.hasAudioFile) parts.push('the audio file')
+  if (impact.transcripts) parts.push(pluralize(impact.transcripts, 'library:deletePermanentDialog.transcriptCount'))
+  if (impact.actionItems) parts.push(pluralize(impact.actionItems, 'library:deletePermanentDialog.actionItemCount'))
+  if (impact.embeddings) parts.push(pluralize(impact.embeddings, 'library:deletePermanentDialog.embeddingCount'))
+  if (impact.artifacts) parts.push(pluralize(impact.artifacts, 'library:deletePermanentDialog.artifactCount'))
+  if (impact.hasAudioFile) parts.push(i18n.t('library:deletePermanentDialog.audioFilePart'))
   // null/undefined are both non-number here — only a real count folds into the sentence.
   // A `null` (explicitly unknown) instead surfaces via the dedicated warning row below.
   if (typeof impact.graphEstimate === 'number') {
-    parts.push(`~${impact.graphEstimate} graph link${impact.graphEstimate === 1 ? '' : 's'}`)
+    parts.push(i18n.t('library:deletePermanentDialog.graphLinkCount', { count: impact.graphEstimate }))
   }
 
   if (parts.length === 0) return FALLBACK
   if (parts.length === 1) return parts[0]
-  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`
+  return `${parts.slice(0, -1).join(i18n.t('library:deletePermanentDialog.listSeparator'))}${i18n.t('library:deletePermanentDialog.listConjunction')}${parts[parts.length - 1]}`
 }
 
 export function DeletePermanentDialog({
@@ -108,6 +122,7 @@ export function DeletePermanentDialog({
   deviceConnected,
   onConfirm
 }: DeletePermanentDialogProps) {
+  const { t } = useTranslation('library')
   const [alsoDeleteFromDevice, setAlsoDeleteFromDevice] = useState(false)
 
   // Default unchecked every time the dialog (re)opens, including for a different recording.
@@ -123,17 +138,17 @@ export function DeletePermanentDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete permanently</AlertDialogTitle>
+          <AlertDialogTitle>{t('deletePermanentDialog.title')}</AlertDialogTitle>
           {/* asChild swaps the underlying element for a <div> so block content
               (multiple <p>, the warning row) nests validly — Radix's default
               Description element is a <p>, which can't contain another <p>. */}
           <AlertDialogDescription asChild>
             <div className="space-y-2 text-left">
-              <p>Delete &quot;{filename}&quot; permanently?</p>
+              <p>{t('deletePermanentDialog.confirmQuestion', { filename })}</p>
               {/* AR3-8: every count is labelled point-in-time — never implied as a
                   live/future guarantee. */}
-              <p>As of now, this removes {removesText}.</p>
-              <p className="font-medium text-destructive">This CANNOT be undone.</p>
+              <p>{t('deletePermanentDialog.impactSentence', { removesText })}</p>
+              <p className="font-medium text-destructive">{t('deletePermanentDialog.cannotBeUndone')}</p>
               {/* F-INFO-5 / D2 — the fail-closed retry-safety guarantee, shown
                   unconditionally (true regardless of whether the graph
                   estimate above is known or not). */}
@@ -149,10 +164,9 @@ export function DeletePermanentDialog({
                 >
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
                   <div>
-                    <p className="text-sm font-medium">Graph impact: unknown</p>
+                    <p className="text-sm font-medium">{t('deletePermanentDialog.graphImpactUnknownTitle')}</p>
                     <p className="text-xs">
-                      Graph cleanup may not be ready — deletion will refuse rather than leave
-                      residue (you can skip it explicitly if it fails).
+                      {t('deletePermanentDialog.graphImpactUnknownBody')}
                     </p>
                   </div>
                 </div>
@@ -171,11 +185,11 @@ export function DeletePermanentDialog({
             />
             <div className="flex flex-col">
               <label htmlFor="delete-permanent-also-device" className="text-sm font-medium cursor-pointer">
-                Also delete from device
+                {t('deletePermanentDialog.alsoDeleteFromDeviceLabel')}
               </label>
               {!deviceConnected && (
                 <span className="text-xs text-muted-foreground">
-                  Device not connected — its copy will be erased automatically when it reconnects.
+                  {t('deletePermanentDialog.deviceNotConnectedNote')}
                 </span>
               )}
             </div>
@@ -183,12 +197,12 @@ export function DeletePermanentDialog({
         )}
 
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t('deletePermanentDialog.cancelButton')}</AlertDialogCancel>
           <AlertDialogAction
             onClick={() => onConfirm({ alsoDeleteFromDevice })}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            Delete permanently
+            {t('deletePermanentDialog.confirmButton')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

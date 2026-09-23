@@ -4,6 +4,7 @@
  * only — the page owns the selection set and performs the IPC work.
  */
 
+import { useTranslation } from 'react-i18next'
 import { Sparkles, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -16,20 +17,21 @@ export interface BulkActionBarProps {
 }
 
 export function BulkActionBar({ count, onDismiss, onGenerate, onClear, busy = false }: BulkActionBarProps) {
+  const { t } = useTranslation('projects')
   if (count <= 0) return null
   return (
     <div
       role="region"
-      aria-label="Bulk actions"
+      aria-label={t('bulkActionBar.regionAriaLabel')}
       className="animate-rise-in fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 bg-card border rounded-xl shadow-lg"
     >
       <span className="text-sm font-medium whitespace-nowrap">
-        {count} selected
+        {t('bulkActionBar.selectedCountLabel', { count })}
       </span>
       <div className="h-5 w-px bg-border" aria-hidden />
       <Button size="sm" className="gap-2" onClick={onGenerate} disabled={busy}>
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-        Generate
+        {t('bulkActionBar.generateButton')}
       </Button>
       <Button
         size="sm"
@@ -39,11 +41,11 @@ export function BulkActionBar({ count, onDismiss, onGenerate, onClear, busy = fa
         disabled={busy}
       >
         <X className="h-4 w-4" />
-        Dismiss
+        {t('bulkActionBar.dismissButton')}
       </Button>
       <div className="h-5 w-px bg-border" aria-hidden />
-      <Button size="sm" variant="ghost" onClick={onClear} disabled={busy} aria-label="Clear selection">
-        Clear
+      <Button size="sm" variant="ghost" onClick={onClear} disabled={busy} aria-label={t('bulkActionBar.clearSelectionAriaLabel')}>
+        {t('bulkActionBar.clearButton')}
       </Button>
     </div>
   )

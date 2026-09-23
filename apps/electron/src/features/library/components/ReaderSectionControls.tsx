@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, EyeOff, Maximize2, Minimize2, PanelTop, Square } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -88,20 +89,21 @@ export function ReaderSectionActions({
   testId,
   className
 }: ReaderSectionActionsProps) {
+  const { t } = useTranslation('library')
   const open = mode === 'expanded' || mode === 'docked'
-  const layoutLabel = `Layout options for ${label}`
+  const layoutLabel = t('readerSectionControls.layoutOptionsLabel', { label })
 
   return (
     <TooltipProvider delayDuration={300}>
       <div
         className={cn('flex shrink-0 items-center gap-0.5', className)}
         role="group"
-        aria-label={`${label} section controls`}
+        aria-label={t('readerSectionControls.sectionControlsAriaLabel', { label })}
         data-testid={testId ?? `reader-${section}-actions`}
         data-pinned={pinned ? 'true' : 'false'}
       >
         {maximized ? (
-          <IconAction label={`Return ${label} to reader`} onClick={onMaximize} testId={`reader-${section}-restore`}>
+          <IconAction label={t('readerSectionControls.returnToReaderAriaLabel', { label })} onClick={onMaximize} testId={`reader-${section}-restore`}>
             <Minimize2 className="h-4 w-4" />
           </IconAction>
         ) : (
@@ -126,39 +128,43 @@ export function ReaderSectionActions({
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuItem onClick={() => onModeChange('expanded')} disabled={mode === 'expanded'}>
                   <Square className="h-4 w-4" />
-                  Expand
+                  {t('readerSectionControls.expand')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onModeChange('compact')} disabled={mode === 'compact'}>
                   <ChevronRight className="h-4 w-4" />
-                  Minimize
+                  {t('readerSectionControls.minimize')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onModeChange('docked')} disabled={mode === 'docked'}>
                   <PanelTop className="h-4 w-4" />
-                  {section === 'player' ? 'Dock small player' : 'Dock to top'}
+                  {section === 'player' ? t('readerSectionControls.dockSmallPlayer') : t('readerSectionControls.dockToTop')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onMaximize}>
                   <Maximize2 className="h-4 w-4" />
-                  Maximize section
+                  {t('readerSectionControls.maximizeSection')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onModeChange('hidden')} className="text-muted-foreground">
                   <EyeOff className="h-4 w-4" />
-                  Hide section
+                  {t('readerSectionControls.hideSection')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
             <IconAction
-              label={open ? `Minimize ${label}` : `Expand ${label}`}
+              label={
+                open
+                  ? t('readerSectionControls.minimizeNamedSection', { label })
+                  : t('readerSectionControls.expandNamedSection', { label })
+              }
               onClick={() => onModeChange(open ? 'compact' : 'expanded')}
               testId={`reader-${section}-toggle`}
             >
               {open ? <ChevronsDownUp className="h-4 w-4" /> : <ChevronsUpDown className="h-4 w-4" />}
             </IconAction>
-            <IconAction label={`Maximize ${label}`} onClick={onMaximize} testId={`reader-${section}-maximize`}>
+            <IconAction label={t('readerSectionControls.maximizeNamedSection', { label })} onClick={onMaximize} testId={`reader-${section}-maximize`}>
               <Maximize2 className="h-4 w-4" />
             </IconAction>
-            <IconAction label={`Hide ${label}`} onClick={() => onModeChange('hidden')} testId={`reader-${section}-hide`}>
+            <IconAction label={t('readerSectionControls.hideNamedSection', { label })} onClick={() => onModeChange('hidden')} testId={`reader-${section}-hide`}>
               <EyeOff className="h-4 w-4" />
             </IconAction>
           </>
@@ -239,11 +245,13 @@ interface HiddenReaderSectionsProps {
 }
 
 export function HiddenReaderSections({ hidden, onRestore }: HiddenReaderSectionsProps) {
+  const { t } = useTranslation('library')
+
   if (hidden.length === 0) return null
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/20 px-4 py-1.5 text-xs" data-testid="reader-hidden-sections">
-      <span className="mr-1 text-muted-foreground">Hidden</span>
+      <span className="mr-1 text-muted-foreground">{t('hiddenReaderSections.label')}</span>
       {hidden.map(({ id, label }) => (
         <button
           key={id}
@@ -251,7 +259,7 @@ export function HiddenReaderSections({ hidden, onRestore }: HiddenReaderSections
           onClick={() => onRestore(id)}
           className="rounded-full border bg-background px-2.5 py-1 font-medium text-foreground hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
-          Show {label}
+          {t('hiddenReaderSections.showButton', { label })}
         </button>
       ))}
     </div>

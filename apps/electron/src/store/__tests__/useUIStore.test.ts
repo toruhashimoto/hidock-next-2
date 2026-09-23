@@ -198,6 +198,7 @@ describe('useUIStore', () => {
       expect(persistedKeys).toContain('qaLogsEnabled')
       expect(persistedKeys).toContain('autoCaptureScreenshots') // clipboard auto-capture pref
       expect(persistedKeys).toContain('theme') // user preference; read pre-paint in main.tsx
+      expect(persistedKeys).toContain('language') // user preference; read pre-paint in main.tsx
       expect(persistedKeys).toContain('operationsDockCollapsed') // dock chrome pref
       expect(persistedKeys).toContain('activityLogExpanded') // dock chrome pref
       expect(persistedKeys).toContain('chatPlacement') // assistant placement pref
@@ -205,8 +206,19 @@ describe('useUIStore', () => {
       expect(persistedKeys).toContain('chatEmbeddedCollapsed') // assistant rail pref
       expect(persistedKeys).not.toContain('operationsOverlayOpen') // transient
       expect(persistedKeys).not.toContain('chatOpen') // transient overlay state
-      expect(persistedKeys.length).toBe(9)
+      expect(persistedKeys.length).toBe(10)
     })
+  })
+
+  it("defaults the language preference to 'system' and persists an explicit choice", () => {
+    const store = useUIStore.getState()
+    expect(store.language).toBe('system')
+
+    store.setLanguage('ja')
+    expect(useUIStore.getState().language).toBe('ja')
+
+    store.setLanguage('system')
+    expect(useUIStore.getState().language).toBe('system')
   })
 
   describe('Sidebar Actions', () => {

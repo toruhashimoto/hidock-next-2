@@ -8,6 +8,7 @@
 
 import type { UnifiedRecording } from '@/types/unified-recording'
 import { getSourceType, sourceTypeHasDuration } from './sourceType'
+import i18n from '@/i18n'
 
 export type DurationPreset = 'all' | 'under10s' | 'under1m' | 'under5m' | 'over5m'
 
@@ -20,12 +21,26 @@ const PRESET_MAX: Record<DurationPreset, number | null> = {
   over5m: null // handled specially (>= 300)
 }
 
+/**
+ * i18n note (Task 11c; reactivity fixed in Task 11d): `LibraryFilters.tsx`
+ * (Part B, already committed) imports this object and indexes it directly
+ * (`DURATION_PRESET_LABELS[preset]`) as a plain string at render time, so
+ * this cannot become a function taking `t`.
+ *
+ * Task 11d fix: every property below is a `get` accessor instead of a plain
+ * data property. `DURATION_PRESET_LABELS[preset]` is syntactically identical
+ * either way, so `LibraryFilters.tsx` needs no change — but a getter calls
+ * `i18n.t()` fresh on every access instead of freezing the value from
+ * module-evaluation time, so a live language switch is picked up on the
+ * component's next render (it already calls `useTranslation()` for its own
+ * strings, so it already re-renders on a switch).
+ */
 export const DURATION_PRESET_LABELS: Record<DurationPreset, string> = {
-  all: 'Any length',
-  under10s: 'Under 10s',
-  under1m: 'Under 1 min',
-  under5m: 'Under 5 min',
-  over5m: 'Over 5 min'
+  get all() { return i18n.t('library:durationFilter.presetAll') },
+  get under10s() { return i18n.t('library:durationFilter.presetUnder10s') },
+  get under1m() { return i18n.t('library:durationFilter.presetUnder1m') },
+  get under5m() { return i18n.t('library:durationFilter.presetUnder5m') },
+  get over5m() { return i18n.t('library:durationFilter.presetOver5m') }
 }
 
 /**

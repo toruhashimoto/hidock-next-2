@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useAudioControls } from '@/components/OperationController'
 import { cn } from '@/lib/utils'
 import { formatTimestamp } from '../utils/formatTimestamp'
@@ -43,6 +44,7 @@ export function TimeAnchor({
   children,
   className
 }: TimeAnchorProps) {
+  const { t } = useTranslation('library')
   const { seek } = useAudioControls()
 
   // Determine the timestamp to display (prefer startMs if provided)
@@ -71,7 +73,7 @@ export function TimeAnchor({
         isActive && 'bg-primary/10 rounded px-1',
         className
       )}
-      aria-label={`Jump to ${formatted}`}
+      aria-label={t('timeAnchor.jumpToAriaLabel', { time: formatted })}
       aria-current={isActive ? 'time' : undefined}
     >
       {children ?? formatted}

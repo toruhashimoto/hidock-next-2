@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef, type KeyboardEvent } from 'react'
+import { useTranslation, Trans } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   Save,
   FolderOpen,
@@ -33,6 +35,8 @@ import { FeaturesSettings } from '@/components/settings/FeaturesSettings'
 import { ModelHostSettings } from '@/components/settings/ModelHostSettings'
 import { toast } from '@/components/ui/toaster'
 import { LEGACY_GRAPH_DISCLOSURE } from '@/features/library/utils/deletionCopy'
+import { useLanguage } from '@/hooks/useLanguage'
+import type { LanguagePreference } from '@/lib/language'
 import type { StorageInfo, AppConfig } from '@/types'
 
 // RAG configuration constants — MAX_CONTEXT_CHUNKS must match config.ts default (10)
@@ -50,10 +54,15 @@ const STORAGE_CONFIG_KEYS: Record<StorageFolder, 'recordingsPath' | 'transcripts
   data: 'dataPath'
 }
 
-const STORAGE_LABELS: Record<StorageFolder, string> = {
-  recordings: 'Recordings',
-  transcripts: 'Transcripts',
-  data: 'Data'
+function storageFolderLabel(t: TFunction, folder: StorageFolder): string {
+  switch (folder) {
+    case 'recordings':
+      return t('settings:storage.recordings')
+    case 'transcripts':
+      return t('settings:storage.transcripts')
+    case 'data':
+      return t('settings:storage.data')
+  }
 }
 
 type SpeakerModelAccess = {
@@ -64,7 +73,67 @@ type SpeakerModelAccess = {
   message: string
 }
 
+/**
+ * Display-language picker. Uses the same segmented-button shape as the
+ * Assistant card's placement/position controls so the Settings page has one
+ * interaction idiom rather than two.
+ */
+export function LanguageSettingsCard(): React.ReactElement {
+  const { t } = useTranslation()
+  const { language, setLanguage } = useLanguage()
+
+  /** The three display-language choices, in the order they appear. */
+  const LANGUAGE_OPTIONS: ReadonlyArray<{ value: LanguagePreference; label: string }> = [
+    { value: 'system', label: t('settings:language.system') },
+    { value: 'en', label: t('settings:language.english') },
+    // A language's own name is conventionally written in that language, so this
+    // label is intentionally exempt from translation — it stays 日本語 in every
+    // locale. Do not move it into the settings catalogue.
+    { value: 'ja', label: '日本語' }
+  ]
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('settings:appearance.title')}</CardTitle>
+        <CardDescription>{t('settings:appearance.description')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="space-y-2">
+          <span className="text-sm font-medium">{t('settings:language.label')}</span>
+          <div
+            role="group"
+            aria-label={t('settings:language.label')}
+            className="inline-flex rounded-lg border border-input bg-muted/40 p-0.5"
+          >
+            {LANGUAGE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={language === option.value}
+                onClick={() => setLanguage(option.value)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  language === option.value
+                    ? 'bg-background font-medium text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t('settings:language.hint')}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function Settings() {
+  const { t } = useTranslation()
   // SM-09 fix: Use granular selectors
   const syncCalendar = useAppStore((s) => s.syncCalendar)
   const calendarSyncing = useCalendarSyncing()
@@ -123,7 +192,7 @@ export function Settings() {
   // and filtered to the dedicated non-streaming transcription model. The
   // concrete fallback shows before the live list resolves or when offline.
   const [geminiModels, setGeminiModels] = useState<{ value: string; label: string }[]>([
-    { value: 'gemini-3.5-transcribe', label: 'Gemini 3.5 Flash Transcribe' },
+    { value: 'gemini-3.5-transcribe', label: t('settings:transcription.defaultModelLabel') },
   ])
   const [modelsLive, setModelsLive] = useState(false)
   const [modelsLoading, setModelsLoading] = useState(false)
@@ -155,7 +224,7 @@ export function Settings() {
       if (response?.success && response.data) {
         setSpeakerModelAccess(response.data as SpeakerModelAccess)
       } else {
-        const message = response?.error?.message || 'The app could not check Community-1 access.'
+        const message = response?.error?.message || t('settings:transcription.checkAccessFallback')
         setSpeakerModelAccess({
           status: 'unavailable',
           model: 'pyannote/speaker-diarization-community-1',
@@ -170,26 +239,26 @@ export function Settings() {
         fallbackModel: 'pyannote/speaker-diarization-3.1',
         message: error instanceof Error
           ? error.message
-          : 'Restart the app once to activate the Community-1 access check.'
+          : t('settings:transcription.checkAccessRestartFallback')
       })
     } finally {
       setSpeakerModelAccessChecking(false)
     }
-  }, [localAsrHfToken])
+  }, [localAsrHfToken, t])
 
   const openSpeakerModelAccess = useCallback(async () => {
     try {
       const response = await window.electronAPI.config.openSpeakerModelAccess()
       if (!response?.success) {
-        throw new Error(response?.error?.message || 'The access page could not be opened.')
+        throw new Error(response?.error?.message || t('settings:transcription.openAccessPageError'))
       }
     } catch (error) {
       toast.error(
-        'Could not open Hugging Face',
-        error instanceof Error ? error.message : 'Open the Community-1 model page in your browser.'
+        t('settings:transcription.openAccessFailedTitle'),
+        error instanceof Error ? error.message : t('settings:transcription.openAccessFailedFallback')
       )
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadGeminiModels()
@@ -199,8 +268,8 @@ export function Settings() {
   // render it even if the live list filtered it out (e.g. a custom/older id).
   const geminiModelOptions = useMemo(() => {
     if (!geminiModel || geminiModels.some((m) => m.value === geminiModel)) return geminiModels
-    return [{ value: geminiModel, label: `${geminiModel} (saved)` }, ...geminiModels]
-  }, [geminiModels, geminiModel])
+    return [{ value: geminiModel, label: t('settings:transcription.savedModelLabel', { model: geminiModel }) }, ...geminiModels]
+  }, [geminiModels, geminiModel, t])
 
   // Validation function for config values
   const validateConfig = useCallback((updates: Partial<AppConfig>): string | null => {
@@ -210,28 +279,28 @@ export function Settings() {
         (updates.transcription.provider === 'local-asr' || updates.transcription.provider === 'vibevoice') &&
         !updates.transcription.localAsrPath?.trim()
       ) {
-        return 'ASR MCP path is required'
+        return t('settings:validation.asrPathRequired')
       }
       if (
         updates.transcription.provider === 'local-asr' &&
         updates.transcription.localAsrDiarize !== false &&
         !updates.transcription.localAsrHfToken?.trim()
       ) {
-        return 'Hugging Face token is required for Local ASR speaker diarization'
+        return t('settings:validation.hfTokenRequired')
       }
       if (
         updates.transcription.localAsrNumBeams !== undefined &&
         (updates.transcription.localAsrNumBeams < 1 || updates.transcription.localAsrNumBeams > 10)
       ) {
-        return 'Local ASR beam search must be between 1 and 10'
+        return t('settings:validation.beamsRange')
       }
       if (updates.transcription.geminiApiKey !== undefined) {
         const apiKey = updates.transcription.geminiApiKey.trim()
         if (apiKey && apiKey.length < 10) {
-          return 'API key must be at least 10 characters'
+          return t('settings:validation.apiKeyTooShort')
         }
         if (apiKey && !apiKey.startsWith('AIza')) {
-          return 'Gemini API keys should start with "AIza". Please verify your key.'
+          return t('settings:validation.apiKeyFormat')
         }
       }
     }
@@ -241,13 +310,13 @@ export function Settings() {
       if (updates.calendar.icsUrl !== undefined) {
         const url = updates.calendar.icsUrl.trim()
         if (url && !url.startsWith('http')) {
-          return 'Calendar URL must start with http:// or https://'
+          return t('settings:validation.calendarUrlFormat')
         }
       }
       if (updates.calendar.syncIntervalMinutes !== undefined) {
         const interval = updates.calendar.syncIntervalMinutes
         if (interval < 5 || interval > 120) {
-          return 'Sync interval must be between 5 and 120 minutes'
+          return t('settings:validation.syncIntervalRange')
         }
       }
     }
@@ -257,13 +326,13 @@ export function Settings() {
       if (updates.embeddings.ollamaBaseUrl !== undefined) {
         const url = updates.embeddings.ollamaBaseUrl.trim()
         if (url && !url.startsWith('http')) {
-          return 'Ollama URL must start with http:// or https://'
+          return t('settings:validation.ollamaUrlFormat')
         }
       }
     }
 
     return null // Valid
-  }, [])
+  }, [t])
 
   // C-SET: Track form dirty state per section
   const isCalendarDirty = useMemo(() => {
@@ -309,11 +378,11 @@ export function Settings() {
       setLoadError(null)
       await loadConfig()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load settings'
+      const message = error instanceof Error ? error.message : t('settings:loadError.fallbackMessage')
       setLoadError(message)
-      toast.error('Failed to Load Settings', message)
+      toast.error(t('settings:loadError.title'), message)
     }
-  }, [loadConfig])
+  }, [loadConfig, t])
 
   useEffect(() => {
     loadConfigStable()
@@ -373,13 +442,13 @@ export function Settings() {
         setStorageInfo(result.data)
       } else {
         // B-SET-002: Surface storage errors to user
-        const errorMsg = result.error || 'Failed to load storage info'
+        const errorMsg = result.error || t('settings:storage.loadErrorFallback')
         setStorageError(typeof errorMsg === 'string' ? errorMsg : String(errorMsg))
         console.error('Failed to load storage info:', result.error)
       }
     } catch (error) {
       // B-SET-002: Surface storage errors to user
-      const errorMsg = error instanceof Error ? error.message : 'Failed to load storage info'
+      const errorMsg = error instanceof Error ? error.message : t('settings:storage.loadErrorFallback')
       setStorageError(errorMsg)
       console.error('Failed to load storage info:', error)
     } finally {
@@ -389,7 +458,7 @@ export function Settings() {
 
   const handleSaveCalendar = async () => {
     if (saving) {
-      toast.warning('Please wait', 'Previous save in progress')
+      toast.warning(t('settings:calendar.pleaseWaitTitle'), t('settings:calendar.saveInProgressDescription'))
       return
     }
 
@@ -407,7 +476,7 @@ export function Settings() {
     // Validate before save - validateConfig accepts any shape
     const validationError = validateConfig({ calendar: updates } as Partial<AppConfig>)
     if (validationError) {
-      toast.error('Validation Error', validationError)
+      toast.error(t('settings:calendar.validationErrorTitle'), validationError)
       return
     }
 
@@ -415,15 +484,15 @@ export function Settings() {
     try {
       await updateConfig('calendar', updates)
 
-      toast.success('Settings Saved', 'Calendar settings have been updated')
+      toast.success(t('settings:calendar.savedTitle'), t('settings:calendar.savedDescription'))
     } catch (error) {
       // Rollback on error
       setIcsUrl(previousIcsUrl)
       setSyncEnabled(previousSyncEnabled)
       setSyncInterval(previousSyncInterval)
 
-      const message = error instanceof Error ? error.message : 'Failed to save calendar settings'
-      toast.error('Save Failed', message)
+      const message = error instanceof Error ? error.message : t('settings:calendar.saveFailedFallback')
+      toast.error(t('settings:calendar.saveFailedTitle'), message)
       console.error('Failed to save calendar settings:', error)
     } finally {
       setSaving(false)
@@ -432,7 +501,7 @@ export function Settings() {
 
   const handleSaveTranscription = async () => {
     if (saving) {
-      toast.warning('Please wait', 'Previous save in progress')
+      toast.warning(t('settings:transcription.pleaseWaitTitle'), t('settings:transcription.saveInProgressDescription'))
       return
     }
 
@@ -460,7 +529,7 @@ export function Settings() {
     // Validate before save
     const validationError = validateConfig({ transcription: updates } as Partial<AppConfig>)
     if (validationError) {
-      toast.error('Validation Error', validationError)
+      toast.error(t('settings:transcription.validationErrorTitle'), validationError)
       return
     }
 
@@ -469,10 +538,10 @@ export function Settings() {
       await updateConfig('transcription', updates)
 
       toast.success(
-        'Settings Saved',
+        t('settings:transcription.savedTitle'),
         transcriptionProvider === 'local-asr'
-          ? 'Transcription provider set to Local ASR'
-          : `Transcription provider set to ${geminiModel}`
+          ? t('settings:transcription.savedLocalAsr')
+          : t('settings:transcription.savedGeneric', { model: geminiModel })
       )
     } catch (error) {
       // Rollback on error
@@ -485,8 +554,8 @@ export function Settings() {
       setLocalAsrDiarize(previousLocalAsrDiarize)
       setLocalAsrNumBeams(previousLocalAsrNumBeams)
 
-      const message = error instanceof Error ? error.message : 'Failed to save transcription settings'
-      toast.error('Save Failed', message)
+      const message = error instanceof Error ? error.message : t('settings:transcription.saveFailedFallback')
+      toast.error(t('settings:transcription.saveFailedTitle'), message)
       console.error('Failed to save transcription settings:', error)
     } finally {
       setSaving(false)
@@ -527,8 +596,8 @@ export function Settings() {
       setValueBackfillProgress(result)
       setValueBackfillRemaining(Math.max(0, result.total - result.processed))
       toast.success(
-        result.cancelled ? 'Classification cancelled' : 'Classification complete',
-        `${result.processed} classified · ${result.marked} marked low-value.`
+        result.cancelled ? t('settings:valueClassification.cancelledTitle') : t('settings:valueClassification.completeTitle'),
+        t('settings:valueClassification.resultDescription', { processed: result.processed, marked: result.marked })
       )
     })
 
@@ -537,7 +606,7 @@ export function Settings() {
       unsubProgress?.()
       unsubComplete?.()
     }
-  }, [])
+  }, [t])
 
   const handleStartValueBackfill = useCallback(async () => {
     setValueBackfillRunning(true)
@@ -546,16 +615,16 @@ export function Settings() {
       if (!res?.success || !res.started) {
         setValueBackfillRunning(false)
         if (res?.reason === 'no-provider') {
-          toast.error('No AI provider configured', 'Configure an AI provider above first.')
+          toast.error(t('settings:valueClassification.noProviderTitle'), t('settings:valueClassification.noProviderDescription'))
         } else if (res?.reason !== 'already-running') {
-          toast.error('Could not start classification', res?.error || 'Unknown error')
+          toast.error(t('settings:valueClassification.startFailedTitle'), res?.error || t('settings:valueClassification.unknownError'))
         }
       }
     } catch (error) {
       setValueBackfillRunning(false)
-      toast.error('Could not start classification', error instanceof Error ? error.message : 'Unknown error')
+      toast.error(t('settings:valueClassification.startFailedTitle'), error instanceof Error ? error.message : t('settings:valueClassification.unknownError'))
     }
-  }, [])
+  }, [t])
 
   const handleCancelValueBackfill = useCallback(async () => {
     try {
@@ -567,7 +636,7 @@ export function Settings() {
 
   const handleSaveChat = async () => {
     if (saving) {
-      toast.warning('Please wait', 'Previous save in progress')
+      toast.warning(t('settings:chat.pleaseWaitTitle'), t('settings:chat.saveInProgressDescription'))
       return
     }
 
@@ -591,7 +660,7 @@ export function Settings() {
       embeddings: embeddingsUpdates
     } as Partial<AppConfig>)
     if (validationError) {
-      toast.error('Validation Error', validationError)
+      toast.error(t('settings:chat.validationErrorTitle'), validationError)
       return
     }
 
@@ -603,7 +672,7 @@ export function Settings() {
         updateConfig('embeddings', embeddingsUpdates)
       ])
 
-      toast.success('Settings Saved', `Chat provider set to ${chatProvider}`)
+      toast.success(t('settings:chat.savedTitle'), t('settings:chat.savedDescription', { provider: chatProvider }))
     } catch (error) {
       // Rollback on error - both sections revert
       setChatProvider(previousChatProvider)
@@ -612,8 +681,8 @@ export function Settings() {
       // Reload config from backend to ensure consistency after partial failure
       try { await loadConfig() } catch { /* best effort reload */ }
 
-      const message = error instanceof Error ? error.message : 'Failed to save chat settings'
-      toast.error('Save Failed', message)
+      const message = error instanceof Error ? error.message : t('settings:chat.saveFailedFallback')
+      toast.error(t('settings:chat.saveFailedTitle'), message)
       console.error('Failed to save chat settings:', error)
     } finally {
       setSaving(false)
@@ -639,7 +708,7 @@ export function Settings() {
 
     const nextPath = rawPath.trim()
     if (!nextPath) {
-      toast.error('Invalid Folder', 'Folder path cannot be empty')
+      toast.error(t('settings:storage.invalidFolderTitle'), t('settings:storage.emptyFolderDescription'))
       setStoragePaths((prev) => ({ ...prev, [folder]: getCurrentStoragePath(folder) }))
       return
     }
@@ -653,10 +722,10 @@ export function Settings() {
       } as Partial<AppConfig['storage']>)
       setStoragePaths((prev) => ({ ...prev, [folder]: nextPath }))
       await loadStorageInfo()
-      toast.success('Storage Folder Saved', `${STORAGE_LABELS[folder]} folder updated`)
+      toast.success(t('settings:storage.folderSavedTitle'), t('settings:storage.folderUpdatedDescription', { label: storageFolderLabel(t, folder) }))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save storage folder'
-      toast.error('Save Failed', message)
+      const message = error instanceof Error ? error.message : t('settings:storage.saveFailedFallback')
+      toast.error(t('settings:storage.saveFailedTitle'), message)
       setStoragePaths((prev) => ({ ...prev, [folder]: getCurrentStoragePath(folder) }))
     } finally {
       setSavingStorageFolder(null)
@@ -666,8 +735,8 @@ export function Settings() {
   const handleSelectStorageFolder = async (folder: StorageFolder) => {
     if (!window.electronAPI.storage.selectFolder) {
       toast.error(
-        'Restart Required',
-        'The folder picker was added to the Electron preload API. Restart the app once to use Browse.'
+        t('settings:storage.restartRequiredTitle'),
+        t('settings:storage.restartRequiredDescription')
       )
       return
     }
@@ -675,7 +744,7 @@ export function Settings() {
     try {
       const result = await window.electronAPI.storage.selectFolder(storagePaths[folder] || getCurrentStoragePath(folder))
       if (!result.success) {
-        toast.error('Folder Selection Failed', result.error || 'Could not open folder picker')
+        toast.error(t('settings:storage.folderSelectionFailedTitle'), result.error || t('settings:storage.folderPickerFallback'))
         return
       }
       if (!result.data) return
@@ -683,8 +752,8 @@ export function Settings() {
       setStoragePaths((prev) => ({ ...prev, [folder]: result.data! }))
       await saveStoragePath(folder, result.data)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not open folder picker'
-      toast.error('Folder Selection Failed', message)
+      const message = error instanceof Error ? error.message : t('settings:storage.folderPickerFallback')
+      toast.error(t('settings:storage.folderSelectionFailedTitle'), message)
     }
   }
 
@@ -699,7 +768,7 @@ export function Settings() {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-        <p className="text-muted-foreground">Loading settings...</p>
+        <p className="text-muted-foreground">{t('settings:loading.settings')}</p>
       </div>
     )
   }
@@ -709,11 +778,11 @@ export function Settings() {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
         <AlertCircle className="h-12 w-12 text-destructive mb-4" />
-        <h2 className="text-xl font-semibold mb-2">Failed to Load Settings</h2>
+        <h2 className="text-xl font-semibold mb-2">{t('settings:loadError.title')}</h2>
         <p className="text-muted-foreground mb-4 text-center max-w-md">{loadError}</p>
         <Button onClick={loadConfigStable}>
           <RefreshCw className="h-4 w-4 mr-2" />
-          Retry
+          {t('settings:loadError.retry')}
         </Button>
       </div>
     )
@@ -722,7 +791,7 @@ export function Settings() {
   return (
     <div className="flex flex-col h-full">
       <header className="border-b px-6 py-4">
-        <h1 className="text-2xl font-bold">Settings</h1>
+        <h1 className="text-2xl font-bold">{t('settings:page.title')}</h1>
       </header>
 
       <div className="flex-1 overflow-auto p-6">
@@ -733,19 +802,22 @@ export function Settings() {
             <FeaturesSettings />
           </div>
 
+          {/* Appearance — display language */}
+          <LanguageSettingsCard />
+
           {/* Assistant — Chat Placement */}
           <Card>
             <CardHeader>
-              <CardTitle>Assistant</CardTitle>
-              <CardDescription>Choose how the AI assistant appears while you work</CardDescription>
+              <CardTitle>{t('settings:assistant.title')}</CardTitle>
+              <CardDescription>{t('settings:assistant.description')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               {/* Placement: Floating (bubble) vs Embedded (docked pane) */}
               <div className="space-y-2">
-                <span className="text-sm font-medium">Chat placement</span>
+                <span className="text-sm font-medium">{t('settings:assistant.placement')}</span>
                 <div
                   role="group"
-                  aria-label="Chat placement"
+                  aria-label={t('settings:assistant.placement')}
                   className="inline-flex rounded-lg border border-input bg-muted/40 p-0.5"
                 >
                   <button
@@ -760,7 +832,7 @@ export function Settings() {
                     )}
                   >
                     <MessageSquare className="h-4 w-4" aria-hidden="true" />
-                    Floating
+                    {t('settings:assistant.floating')}
                   </button>
                   <button
                     type="button"
@@ -774,22 +846,22 @@ export function Settings() {
                     )}
                   >
                     <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
-                    Embedded
+                    {t('settings:assistant.embedded')}
                   </button>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {chatPlacement === 'floating'
-                    ? 'A chat bubble floats over the app; click it to open the assistant. Pin it to embed it as a docked pane.'
-                    : 'The assistant is docked as a pane in the Library, collapsible to a side rail. Unpin it to float.'}
+                    ? t('settings:assistant.placementHintFloating')
+                    : t('settings:assistant.placementHintEmbedded')}
                 </p>
               </div>
 
               {/* Position: Left / Right edge */}
               <div className="space-y-2">
-                <span className="text-sm font-medium">Position</span>
+                <span className="text-sm font-medium">{t('settings:assistant.position')}</span>
                 <div
                   role="group"
-                  aria-label="Chat position"
+                  aria-label={t('settings:assistant.positionAriaLabel')}
                   className="inline-flex rounded-lg border border-input bg-muted/40 p-0.5"
                 >
                   <button
@@ -804,7 +876,7 @@ export function Settings() {
                     )}
                   >
                     <PanelLeft className="h-4 w-4" aria-hidden="true" />
-                    Left
+                    {t('settings:assistant.left')}
                   </button>
                   <button
                     type="button"
@@ -818,12 +890,12 @@ export function Settings() {
                     )}
                   >
                     <PanelRight className="h-4 w-4" aria-hidden="true" />
-                    Right
+                    {t('settings:assistant.right')}
                   </button>
                 </div>
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                  Sets the bubble corner and the docked pane&apos;s edge.
+                  {t('settings:assistant.positionHint')}
                 </p>
               </div>
             </CardContent>
@@ -832,26 +904,26 @@ export function Settings() {
           {/* Calendar Settings */}
           <Card>
             <CardHeader>
-              <CardTitle>Calendar</CardTitle>
-              <CardDescription>Configure calendar sync from Outlook</CardDescription>
+              <CardTitle>{t('settings:calendar.title')}</CardTitle>
+              <CardDescription>{t('settings:calendar.description')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <label htmlFor="icsUrl" className="text-sm font-medium">ICS Calendar URL</label>
+                <label htmlFor="icsUrl" className="text-sm font-medium">{t('settings:calendar.icsUrlLabel')}</label>
                 <Input
                   id="icsUrl"
                   type="url"
-                  placeholder="https://outlook.office365.com/owa/calendar/.../calendar.ics"
+                  placeholder={t('settings:calendar.icsUrlPlaceholder')}
                   value={icsUrl}
                   onChange={(e) => setIcsUrl(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveCalendar()}
                   disabled={saving}
-                  aria-label="ICS Calendar URL"
+                  aria-label={t('settings:calendar.icsUrlLabel')}
                   aria-describedby="icsUrl-description"
                   className="mt-1"
                 />
                 <p id="icsUrl-description" className="text-xs text-muted-foreground mt-1">
-                  Publish your Outlook calendar and paste the ICS link here
+                  {t('settings:calendar.icsUrlHint')}
                 </p>
               </div>
 
@@ -863,16 +935,16 @@ export function Settings() {
                     checked={syncEnabled}
                     onChange={(e) => setSyncEnabled(e.target.checked)}
                     disabled={saving}
-                    aria-label="Enable auto-sync"
+                    aria-label={t('settings:calendar.autoSyncAriaLabel')}
                     className="rounded"
                   />
                   <label htmlFor="syncEnabled" className="text-sm">
-                    Auto-sync enabled
+                    {t('settings:calendar.autoSyncLabel')}
                   </label>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <label htmlFor="syncInterval" className="text-sm">Every</label>
+                  <label htmlFor="syncInterval" className="text-sm">{t('settings:calendar.every')}</label>
                   <Input
                     id="syncInterval"
                     type="number"
@@ -887,10 +959,10 @@ export function Settings() {
                     }}
                     onKeyDown={(e) => e.key === 'Enter' && handleSaveCalendar()}
                     disabled={saving}
-                    aria-label="Sync interval in minutes"
+                    aria-label={t('settings:calendar.syncIntervalAriaLabel')}
                     className="w-20"
                   />
-                  <span className="text-sm">minutes</span>
+                  <span className="text-sm">{t('settings:calendar.minutes')}</span>
                 </div>
               </div>
 
@@ -898,23 +970,23 @@ export function Settings() {
                 <Button
                   onClick={handleSaveCalendar}
                   disabled={saving || !isCalendarDirty}
-                  aria-label="Save calendar settings"
+                  aria-label={t('settings:calendar.saveAriaLabel')}
                 >
                   <Save className="h-4 w-4 mr-2" aria-hidden="true" />
-                  {isCalendarDirty ? 'Save' : 'Saved'}
+                  {isCalendarDirty ? t('settings:calendar.save') : t('settings:calendar.saved')}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => syncCalendar('manual')}
                   disabled={calendarManualSyncing || saving}
-                  aria-label="Sync calendar now"
+                  aria-label={t('settings:calendar.syncNowAriaLabel')}
                 >
                   <RefreshCw className={`h-4 w-4 mr-2 ${calendarSyncing ? 'animate-spin' : ''}`} aria-hidden="true" />
-                  Sync Now
+                  {t('settings:calendar.syncNow')}
                 </Button>
                 {config?.calendar.lastSyncAt && (
                   <span className="text-xs text-muted-foreground ml-2">
-                    Last synced: {new Date(config.calendar.lastSyncAt).toLocaleString()}
+                    {t('settings:calendar.lastSyncedPrefix')}{new Date(config.calendar.lastSyncAt).toLocaleString()}
                   </span>
                 )}
               </div>
@@ -930,46 +1002,48 @@ export function Settings() {
           {/* Transcription Settings */}
           <Card>
             <CardHeader>
-              <CardTitle>Transcription</CardTitle>
-              <CardDescription>Choose cloud Gemini or local ASR for meeting transcripts</CardDescription>
+              <CardTitle>{t('settings:transcription.title')}</CardTitle>
+              <CardDescription>{t('settings:transcription.description')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <label id="transcriptionProvider-label" className="text-sm font-medium">Provider</label>
+                <label id="transcriptionProvider-label" className="text-sm font-medium">{t('settings:transcription.providerLabel')}</label>
                 <div className="flex gap-2 mt-2" role="group" aria-labelledby="transcriptionProvider-label">
                   <Button
                     variant={transcriptionProvider === 'gemini' ? 'default' : 'outline'}
                     onClick={() => setTranscriptionProvider('gemini')}
                     disabled={saving}
-                    aria-label="Use Gemini transcription provider"
+                    aria-label={t('settings:transcription.useGeminiAriaLabel')}
                     aria-pressed={transcriptionProvider === 'gemini'}
                   >
-                    Gemini
+                    {t('settings:transcription.gemini')}
                   </Button>
                   <Button
                     variant={transcriptionProvider === 'local-asr' ? 'default' : 'outline'}
                     onClick={() => setTranscriptionProvider('local-asr')}
                     disabled={saving}
-                    aria-label="Use local ASR transcription provider"
+                    aria-label={t('settings:transcription.useLocalAsrAriaLabel')}
                     aria-pressed={transcriptionProvider === 'local-asr'}
                   >
-                    Local ASR
+                    {t('settings:transcription.localAsr')}
                   </Button>
                   <Button
                     variant={transcriptionProvider === 'vibevoice' ? 'default' : 'outline'}
                     onClick={() => setTranscriptionProvider('vibevoice')}
                     disabled={saving}
-                    aria-label="Use VibeVoice transcription provider"
+                    aria-label={t('settings:transcription.useVibeVoiceAriaLabel')}
                     aria-pressed={transcriptionProvider === 'vibevoice'}
                   >
-                    VibeVoice
+                    {t('settings:transcription.vibevoice')}
                   </Button>
                 </div>
                 {transcriptionProvider === 'vibevoice' && (
                   <p className="text-xs text-muted-foreground mt-2">
-                    VibeVoice (microsoft/VibeVoice-ASR) runs locally for full-file / re-processing:
-                    joint transcription, speaker diarization and timestamps in one pass. Auto-detects
-                    language. Requires the optional <code>vibevoice</code> install in the ASR MCP project.
+                    <Trans i18nKey="settings:transcription.vibevoiceHint">
+                      VibeVoice (microsoft/VibeVoice-ASR) runs locally for full-file / re-processing:
+                      joint transcription, speaker diarization and timestamps in one pass. Auto-detects
+                      language. Requires the optional <code>vibevoice</code> install in the ASR MCP project.
+                    </Trans>
                   </p>
                 )}
               </div>
@@ -981,11 +1055,10 @@ export function Settings() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 id="speaker-model-heading" className="text-sm font-semibold">
-                      Speaker identification model
+                      {t('settings:transcription.speakerModelHeading')}
                     </h3>
                     <p className="mt-1 max-w-prose text-xs text-muted-foreground">
-                      Runs locally before transcription to keep the same voice linked across recordings. Community-1
-                      requires a Hugging Face token whose account has accepted the model&apos;s contact-sharing conditions.
+                      {t('settings:transcription.speakerModelDescription')}
                     </p>
                   </div>
                   <div
@@ -1011,29 +1084,29 @@ export function Settings() {
                     )}
                     <span className="truncate">
                       {speakerModelAccessChecking
-                        ? 'Checking access…'
+                        ? t('settings:transcription.checkingAccess')
                         : speakerModelAccess?.status === 'granted'
-                          ? isSpeakerTokenDirty ? 'Access valid · Save token' : 'Community-1 ready'
+                          ? isSpeakerTokenDirty ? t('settings:transcription.accessValidSaveToken') : t('settings:transcription.community1Ready')
                           : speakerModelAccess?.status === 'terms-pending'
-                            ? 'Acceptance required'
+                            ? t('settings:transcription.acceptanceRequired')
                             : speakerModelAccess?.status === 'invalid-token'
-                              ? 'Token rejected'
+                              ? t('settings:transcription.tokenRejected')
                               : speakerModelAccess?.status === 'unavailable'
-                                ? 'Check unavailable'
+                                ? t('settings:transcription.checkUnavailable')
                                 : localAsrHfToken.trim()
-                                  ? 'Not checked'
-                                  : 'Token required'}
+                                  ? t('settings:transcription.notChecked')
+                                  : t('settings:transcription.tokenRequired')}
                     </span>
                   </div>
                 </div>
 
                 <div className="mt-4">
-                  <label htmlFor="localAsrHfToken" className="text-sm font-medium">Hugging Face Token</label>
+                  <label htmlFor="localAsrHfToken" className="text-sm font-medium">{t('settings:transcription.hfTokenLabel')}</label>
                   <div className="relative mt-1">
                     <Input
                       id="localAsrHfToken"
                       type={showHfToken ? 'text' : 'password'}
-                      placeholder="hf_xxxxxxxxxxxxxxxxxxxx"
+                      placeholder={t('settings:transcription.hfTokenPlaceholder')}
                       value={localAsrHfToken}
                       onChange={(event) => {
                         setLocalAsrHfToken(event.target.value)
@@ -1042,7 +1115,7 @@ export function Settings() {
                       }}
                       onKeyDown={(event) => event.key === 'Enter' && handleSaveTranscription()}
                       disabled={saving}
-                      aria-label="Hugging Face token for speaker identification"
+                      aria-label={t('settings:transcription.hfTokenAriaLabel')}
                       aria-describedby="localAsrHfToken-description speaker-model-access-detail"
                       className="pr-10"
                     />
@@ -1052,14 +1125,14 @@ export function Settings() {
                       size="sm"
                       className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 p-0"
                       onClick={() => setShowHfToken(!showHfToken)}
-                      aria-label={showHfToken ? 'Hide token' : 'Show token'}
+                      aria-label={showHfToken ? t('settings:transcription.hideToken') : t('settings:transcription.showToken')}
                       tabIndex={-1}
                     >
                       {showHfToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                   <p id="localAsrHfToken-description" className="mt-1 text-xs text-muted-foreground">
-                    The token is checked only against fixed huggingface.co endpoints and is never shown in status text.
+                    {t('settings:transcription.hfTokenHint')}
                   </p>
                 </div>
 
@@ -1073,17 +1146,17 @@ export function Settings() {
                   )}
                 >
                   {speakerModelAccess?.message ||
-                    'Access has not been checked yet. Until Community-1 is available, the app records the actual fallback model in the Tools metadata.'}
-                  {speakerModelAccess?.account ? ` Hugging Face account: ${speakerModelAccess.account}.` : ''}
+                    t('settings:transcription.accessNotCheckedYet')}
+                  {speakerModelAccess?.account ? t('settings:transcription.accountSuffix', { account: speakerModelAccess.account }) : ''}
                   {speakerModelAccess?.status === 'granted' && isSpeakerTokenDirty
-                    ? ' Save transcription settings to make this the active token.'
+                    ? t('settings:transcription.saveToActivateSuffix')
                     : ''}
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button type="button" variant="outline" size="sm" onClick={openSpeakerModelAccess}>
                     <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
-                    Review model access
+                    {t('settings:transcription.reviewAccess')}
                   </Button>
                   <Button
                     type="button"
@@ -1096,7 +1169,7 @@ export function Settings() {
                       className={cn('mr-2 h-4 w-4', speakerModelAccessChecking && 'animate-spin')}
                       aria-hidden="true"
                     />
-                    Check again
+                    {t('settings:transcription.checkAgain')}
                   </Button>
                 </div>
               </section>
@@ -1104,17 +1177,17 @@ export function Settings() {
               {transcriptionProvider === 'gemini' ? (
                 <>
                   <div>
-                    <label htmlFor="geminiApiKey" className="text-sm font-medium">Gemini API Key</label>
+                    <label htmlFor="geminiApiKey" className="text-sm font-medium">{t('settings:transcription.geminiApiKeyLabel')}</label>
                     <div className="relative mt-1">
                       <Input
                         id="geminiApiKey"
                         type={showApiKey ? 'text' : 'password'}
-                        placeholder="Enter your Gemini API key"
+                        placeholder={t('settings:transcription.geminiApiKeyPlaceholder')}
                         value={geminiApiKey}
                         onChange={(e) => setGeminiApiKey(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSaveTranscription()}
                         disabled={saving}
-                        aria-label="Gemini API Key"
+                        aria-label={t('settings:transcription.geminiApiKeyLabel')}
                         aria-describedby="geminiApiKey-description"
                         className="pr-10"
                       />
@@ -1124,34 +1197,36 @@ export function Settings() {
                         size="sm"
                         className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
                         onClick={() => setShowApiKey(!showApiKey)}
-                        aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                        aria-label={showApiKey ? t('settings:transcription.hideApiKey') : t('settings:transcription.showApiKey')}
                         tabIndex={-1}
                       >
                         {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
                     <p id="geminiApiKey-description" className="text-xs text-muted-foreground mt-1">
-                      Get your API key from{' '}
-                      <a
-                        href="https://aistudio.google.com/app/apikey"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        Google AI Studio
-                      </a>
+                      <Trans i18nKey="settings:transcription.getApiKeyFrom">
+                        Get your API key from{' '}
+                        <a
+                          href="https://aistudio.google.com/app/apikey"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          Google AI Studio
+                        </a>
+                      </Trans>
                     </p>
                   </div>
 
                   <div>
-                    <label htmlFor="geminiModel" className="text-sm font-medium">Transcription Model</label>
+                    <label htmlFor="geminiModel" className="text-sm font-medium">{t('settings:transcription.modelLabel')}</label>
                     <select
                       id="geminiModel"
                       value={geminiModel}
                       onChange={(e) => setGeminiModel(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSaveTranscription()}
                       disabled={saving}
-                      aria-label="Transcription Model"
+                      aria-label={t('settings:transcription.modelLabel')}
                       aria-describedby="geminiModel-description"
                       className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                     >
@@ -1163,46 +1238,46 @@ export function Settings() {
                     </select>
                     <p id="geminiModel-description" className="text-xs text-muted-foreground mt-1">
                       {modelsLoading
-                        ? 'Loading available models…'
+                        ? t('settings:transcription.modelLoadingHint')
                         : modelsLive
-                          ? 'Live list from your Gemini API key (audio-capable models only).'
-                          : 'Showing built-in defaults — add/verify your API key to load the live model list.'}
+                          ? t('settings:transcription.modelLiveHint')
+                          : t('settings:transcription.modelFallbackHint')}
                     </p>
                   </div>
                 </>
               ) : (
                 <>
                   <div>
-                    <label htmlFor="localAsrPath" className="text-sm font-medium">ASR MCP Path</label>
+                    <label htmlFor="localAsrPath" className="text-sm font-medium">{t('settings:transcription.localAsrPathLabel')}</label>
                     <Input
                       id="localAsrPath"
                       value={localAsrPath}
                       onChange={(e) => setLocalAsrPath(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSaveTranscription()}
                       disabled={saving}
-                      aria-label="ASR MCP project path"
+                      aria-label={t('settings:transcription.localAsrPathAriaLabel')}
                       aria-describedby="localAsrPath-description"
                       className="mt-1 font-mono text-xs"
                     />
                     <p id="localAsrPath-description" className="text-xs text-muted-foreground mt-1">
-                      Folder containing mcp_runner.py from the ASR MCP project
+                      {t('settings:transcription.localAsrPathHint')}
                     </p>
                   </div>
 
                   <div>
-                    <label htmlFor="localAsrVocabularyFile" className="text-sm font-medium">Vocabulary File</label>
+                    <label htmlFor="localAsrVocabularyFile" className="text-sm font-medium">{t('settings:transcription.vocabularyFileLabel')}</label>
                     <Input
                       id="localAsrVocabularyFile"
                       value={localAsrVocabularyFile}
                       onChange={(e) => setLocalAsrVocabularyFile(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSaveTranscription()}
                       disabled={saving}
-                      aria-label="Local ASR vocabulary file"
+                      aria-label={t('settings:transcription.vocabularyFileAriaLabel')}
                       aria-describedby="localAsrVocabularyFile-description"
                       className="mt-1 font-mono text-xs"
                     />
                     <p id="localAsrVocabularyFile-description" className="text-xs text-muted-foreground mt-1">
-                      Relative or absolute JSON correction file. Leave empty to disable corrections.
+                      {t('settings:transcription.vocabularyFileHint')}
                     </p>
                   </div>
 
@@ -1214,16 +1289,16 @@ export function Settings() {
                         checked={localAsrDiarize}
                         onChange={(e) => setLocalAsrDiarize(e.target.checked)}
                         disabled={saving}
-                        aria-label="Enable speaker diarization"
+                        aria-label={t('settings:transcription.diarizeAriaLabel')}
                         className="rounded"
                       />
                       <label htmlFor="localAsrDiarize" className="text-sm">
-                        Speaker diarization
+                        {t('settings:transcription.diarizeLabel')}
                       </label>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <label htmlFor="localAsrNumBeams" className="text-sm">Beams</label>
+                      <label htmlFor="localAsrNumBeams" className="text-sm">{t('settings:transcription.beamsLabel')}</label>
                       <Input
                         id="localAsrNumBeams"
                         type="number"
@@ -1236,7 +1311,7 @@ export function Settings() {
                         }}
                         onKeyDown={(e) => e.key === 'Enter' && handleSaveTranscription()}
                         disabled={saving}
-                        aria-label="Local ASR beam search width"
+                        aria-label={t('settings:transcription.beamsAriaLabel')}
                         className="w-20"
                       />
                     </div>
@@ -1253,10 +1328,9 @@ export function Settings() {
               */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">Title for unassigned recordings</p>
+                  <p className="text-sm font-medium">{t('settings:transcription.unassignedTitleLabel')}</p>
                   <p className="text-xs text-muted-foreground">
-                    What the library shows for a recording with no calendar event. A title you
-                    type always wins; this chooses what fills in when you have not.
+                    {t('settings:transcription.unassignedTitleDescription')}
                   </p>
                 </div>
                 <Select
@@ -1266,18 +1340,21 @@ export function Settings() {
                     try {
                       await updateConfig('ui', { unassignedTitleSource: value as 'suggested' | 'filename' })
                       setUnassignedTitleSource(value)
-                      toast.success('Saved', 'The library updates right away.')
+                      toast.success(
+                        t('settings:transcription.saved'),
+                        t('settings:transcription.unassignedTitleSavedDescription')
+                      )
                     } catch (error) {
-                      toast.error('Could not save', String(error))
+                      toast.error(t('settings:transcription.couldNotSaveTitle'), String(error))
                     }
                   }}
                 >
-                  <SelectTrigger className="w-56" aria-label="Title for unassigned recordings">
+                  <SelectTrigger className="w-56" aria-label={t('settings:transcription.unassignedTitleLabel')}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="suggested">Suggested title</SelectItem>
-                    <SelectItem value="filename">File name</SelectItem>
+                    <SelectItem value="suggested">{t('settings:transcription.unassignedTitleOptionSuggested')}</SelectItem>
+                    <SelectItem value="filename">{t('settings:transcription.unassignedTitleOptionFilename')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1293,11 +1370,9 @@ export function Settings() {
               */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">Live microphone channel</p>
+                  <p className="text-sm font-medium">{t('settings:transcription.liveMicChannelLabel')}</p>
                   <p className="text-xs text-muted-foreground">
-                    Which of the device&apos;s two channels is your microphone, used to label live
-                    turns as you or them. Measured automatically; pin it if the labels come out
-                    swapped.
+                    {t('settings:transcription.liveMicChannelDescription')}
                   </p>
                 </div>
                 <Select
@@ -1315,19 +1390,22 @@ export function Settings() {
                         ...(value === 'auto' ? { liveMicChannelMeasured: null } : {}),
                       })
                       setLiveMicChannelSetting(value)
-                      toast.success('Saved', 'Applies to the next live session.')
+                      toast.success(
+                        t('settings:transcription.saved'),
+                        t('settings:transcription.liveMicChannelSavedDescription')
+                      )
                     } catch (error) {
-                      toast.error('Could not save', String(error))
+                      toast.error(t('settings:transcription.couldNotSaveTitle'), String(error))
                     }
                   }}
                 >
-                  <SelectTrigger className="w-56" aria-label="Live microphone channel">
+                  <SelectTrigger className="w-56" aria-label={t('settings:transcription.liveMicChannelLabel')}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Measure automatically</SelectItem>
-                    <SelectItem value="0">Left channel</SelectItem>
-                    <SelectItem value="1">Right channel</SelectItem>
+                    <SelectItem value="auto">{t('settings:transcription.liveMicChannelOptionAuto')}</SelectItem>
+                    <SelectItem value="0">{t('settings:transcription.liveMicChannelOptionLeft')}</SelectItem>
+                    <SelectItem value="1">{t('settings:transcription.liveMicChannelOptionRight')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1335,10 +1413,10 @@ export function Settings() {
               <Button
                 onClick={handleSaveTranscription}
                 disabled={saving || !isTranscriptionDirty}
-                aria-label="Save transcription settings"
+                aria-label={t('settings:transcription.saveAriaLabel')}
               >
                 <Save className="h-4 w-4 mr-2" aria-hidden="true" />
-                {isTranscriptionDirty ? 'Save' : 'Saved'}
+                {isTranscriptionDirty ? t('settings:transcription.save') : t('settings:transcription.saved')}
               </Button>
             </CardContent>
           </Card>
@@ -1348,15 +1426,9 @@ export function Settings() {
           {/* Library value classification (F16/spec-003) */}
           <Card>
             <CardHeader>
-              <CardTitle>Find low-value recordings</CardTitle>
+              <CardTitle>{t('settings:valueClassification.title')}</CardTitle>
               <CardDescription>
-                The AI reads the transcript of each recording you haven&apos;t rated yet and judges whether the
-                conversation is actually useful — or noise, like personal chatter, a call where nobody showed up, or
-                background audio picked up by mistake. Recordings judged as noise get a Low-value or Garbage badge in
-                the Library, and from then on — going forward — they are left out of Assistant answers, the Context
-                Graph, and action-item extraction. Nothing is deleted, and ratings you set yourself are never changed —
-                you can re-rate any recording from its row menu. Uses your configured AI provider (one request per
-                recording); runs in the background, and you can cancel and resume anytime.
+                {t('settings:valueClassification.description')}
               </CardDescription>
               {/* RE-3 — scope the promise honestly: the exclusion applies going
                   forward to content this version rates + attributes; it does not
@@ -1366,38 +1438,37 @@ export function Settings() {
             </CardHeader>
             <CardContent className="space-y-3">
               {!hasValueProvider && (
-                <p className="text-xs text-muted-foreground">Configure an AI provider above to enable.</p>
+                <p className="text-xs text-muted-foreground">{t('settings:valueClassification.needsProviderHint')}</p>
               )}
               {config?.transcription.valueClassificationEnabled === false && (
                 <p className="text-xs text-muted-foreground">
-                  Automatic rating of newly transcribed recordings is turned off in your config
-                  (valueClassificationEnabled) — this manual scan still works.
+                  {t('settings:valueClassification.disabledHint')}
                 </p>
               )}
               <div className="flex items-center gap-2">
                 <Button
                   onClick={handleStartValueBackfill}
                   disabled={!hasValueProvider || valueBackfillRunning}
-                  aria-label="Scan library for low-value recordings"
+                  aria-label={t('settings:valueClassification.scanAriaLabel')}
                 >
                   {valueBackfillRunning && <RefreshCw className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />}
                   {valueBackfillRunning
-                    ? 'Scanning…'
+                    ? t('settings:valueClassification.scanning')
                     : valueBackfillRemaining > 0
-                      ? `Resume scan (${valueBackfillRemaining} left)`
-                      : 'Scan unrated recordings'}
+                      ? t('settings:valueClassification.resumeScan', { remaining: valueBackfillRemaining })
+                      : t('settings:valueClassification.scanUnrated')}
                 </Button>
                 {valueBackfillRunning && (
-                  <Button variant="outline" onClick={handleCancelValueBackfill} aria-label="Cancel scan">
-                    Cancel
+                  <Button variant="outline" onClick={handleCancelValueBackfill} aria-label={t('settings:valueClassification.cancelScanAriaLabel')}>
+                    {t('settings:valueClassification.cancel')}
                   </Button>
                 )}
               </div>
               {(valueBackfillRunning || valueBackfillProgress) && (
                 <p className="text-xs text-muted-foreground" aria-live="polite">
                   {valueBackfillProgress
-                    ? `Checked ${valueBackfillProgress.processed} of ${valueBackfillProgress.total} recordings · ${valueBackfillProgress.marked} marked low-value`
-                    : 'Starting…'}
+                    ? t('settings:valueClassification.progress', { processed: valueBackfillProgress.processed, total: valueBackfillProgress.total, marked: valueBackfillProgress.marked })
+                    : t('settings:valueClassification.starting')}
                 </p>
               )}
             </CardContent>
@@ -1406,53 +1477,53 @@ export function Settings() {
           {/* Chat Settings */}
           <Card>
             <CardHeader>
-              <CardTitle>Chat / RAG</CardTitle>
-              <CardDescription>Configure chat provider for querying meetings</CardDescription>
+              <CardTitle>{t('settings:chat.title')}</CardTitle>
+              <CardDescription>{t('settings:chat.description')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <label id="chatProvider-label" className="text-sm font-medium">Chat Provider</label>
+                <label id="chatProvider-label" className="text-sm font-medium">{t('settings:chat.providerLabel')}</label>
                 <div className="flex gap-2 mt-2" role="group" aria-labelledby="chatProvider-label">
                   <Button
                     variant={chatProvider === 'gemini' ? 'default' : 'outline'}
                     onClick={() => setChatProvider('gemini')}
                     onKeyDown={(e) => e.key === 'Enter' && setChatProvider('gemini')}
                     disabled={saving}
-                    aria-label="Use Gemini chat provider"
+                    aria-label={t('settings:chat.useGeminiAriaLabel')}
                     aria-pressed={chatProvider === 'gemini'}
                   >
-                    Gemini
+                    {t('settings:chat.gemini')}
                   </Button>
                   <Button
                     variant={chatProvider === 'ollama' ? 'default' : 'outline'}
                     onClick={() => setChatProvider('ollama')}
                     onKeyDown={(e) => e.key === 'Enter' && setChatProvider('ollama')}
                     disabled={saving}
-                    aria-label="Use Ollama local chat provider"
+                    aria-label={t('settings:chat.useOllamaAriaLabel')}
                     aria-pressed={chatProvider === 'ollama'}
                   >
-                    Ollama (Local)
+                    {t('settings:chat.ollama')}
                   </Button>
                 </div>
               </div>
 
               {chatProvider === 'ollama' && (
                 <div>
-                  <label htmlFor="ollamaUrl" className="text-sm font-medium">Ollama URL</label>
+                  <label htmlFor="ollamaUrl" className="text-sm font-medium">{t('settings:chat.ollamaUrlLabel')}</label>
                   <Input
                     id="ollamaUrl"
                     type="url"
-                    placeholder="http://localhost:11434"
+                    placeholder={t('settings:chat.ollamaUrlPlaceholder')}
                     value={ollamaUrl}
                     onChange={(e) => setOllamaUrl(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSaveChat()}
                     disabled={saving}
-                    aria-label="Ollama base URL"
+                    aria-label={t('settings:chat.ollamaUrlAriaLabel')}
                     aria-describedby="ollamaUrl-description"
                     className="mt-1"
                   />
                   <p id="ollamaUrl-description" className="text-xs text-muted-foreground mt-1">
-                    URL of your local Ollama server
+                    {t('settings:chat.ollamaUrlHint')}
                   </p>
                 </div>
               )}
@@ -1460,7 +1531,7 @@ export function Settings() {
               {/* C-CHAT: RAG Context Window Size */}
               <div>
                 <label htmlFor="ragContextSize" className="text-sm font-medium">
-                  RAG Context Window
+                  {t('settings:chat.ragContextWindowLabel')}
                 </label>
                 <Input
                   id="ragContextSize"
@@ -1476,22 +1547,22 @@ export function Settings() {
                   }}
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveChat()}
                   disabled={saving}
-                  aria-label="RAG context window size"
+                  aria-label={t('settings:chat.ragContextWindowAriaLabel')}
                   aria-describedby="ragContextSize-description"
                   className="mt-1"
                 />
                 <p id="ragContextSize-description" className="text-xs text-muted-foreground mt-1">
-                  Number of knowledge chunks to retrieve for context (1-20). Default: 10
+                  {t('settings:chat.ragContextWindowHint')}
                 </p>
               </div>
 
               <Button
                 onClick={handleSaveChat}
                 disabled={saving || !isChatDirty}
-                aria-label="Save chat settings"
+                aria-label={t('settings:chat.saveAriaLabel')}
               >
                 <Save className="h-4 w-4 mr-2" aria-hidden="true" />
-                {isChatDirty ? 'Save' : 'Saved'}
+                {isChatDirty ? t('settings:chat.save') : t('settings:chat.saved')}
               </Button>
             </CardContent>
           </Card>
@@ -1499,15 +1570,15 @@ export function Settings() {
           {/* Storage */}
           <Card>
             <CardHeader>
-              <CardTitle>Storage</CardTitle>
-              <CardDescription>Local data storage information</CardDescription>
+              <CardTitle>{t('settings:storage.title')}</CardTitle>
+              <CardDescription>{t('settings:storage.description')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Storage loading indicator */}
               {storageLoading && !storageInfo && (
                 <div className="flex items-center gap-2 py-4 justify-center">
                   <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Loading storage info...</span>
+                  <span className="text-sm text-muted-foreground">{t('settings:storage.loadingInfo')}</span>
                 </div>
               )}
               {/* B-SET-002: Storage error with retry button */}
@@ -1517,7 +1588,7 @@ export function Settings() {
                   <div className="flex-1 text-sm">{storageError}</div>
                   <Button variant="outline" size="sm" onClick={loadStorageInfo}>
                     <RefreshCw className="h-3 w-3 mr-1" />
-                    Retry
+                    {t('settings:storage.retry')}
                   </Button>
                 </div>
               )}
@@ -1525,20 +1596,20 @@ export function Settings() {
                 <>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-muted-foreground">Total Size</p>
+                      <p className="text-muted-foreground">{t('settings:storage.totalSize')}</p>
                       <p className="font-medium">{formatBytes(storageInfo.totalSizeBytes)}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Recordings</p>
-                      <p className="font-medium">{storageInfo.recordingsCount} files</p>
+                      <p className="text-muted-foreground">{t('settings:storage.recordings')}</p>
+                      <p className="font-medium">{t('settings:storage.filesCount', { count: storageInfo.recordingsCount })}</p>
                     </div>
                   </div>
 
                   <div className="space-y-3 text-sm">
                     {([
-                      ['recordings', 'Recordings'],
-                      ['transcripts', 'Transcripts'],
-                      ['data', 'Data']
+                      ['recordings', t('settings:storage.recordings')],
+                      ['transcripts', t('settings:storage.transcripts')],
+                      ['data', t('settings:storage.data')]
                     ] as const).map(([folder, label]) => (
                       <div key={folder} className="flex items-center gap-2 p-2 bg-muted/50 rounded">
                         <div className="flex-1 min-w-0">
@@ -1554,7 +1625,7 @@ export function Settings() {
                             disabled={savingStorageFolder === folder}
                             className="mt-1 h-8 font-mono text-xs"
                             title={storagePaths[folder]}
-                            aria-label={`${label} folder path`}
+                            aria-label={t('settings:storage.folderPathAriaLabel', { label })}
                           />
                         </div>
                         <Button
@@ -1563,7 +1634,7 @@ export function Settings() {
                           size="sm"
                           onClick={() => handleSelectStorageFolder(folder)}
                           disabled={savingStorageFolder === folder}
-                          aria-label={`Select ${label.toLowerCase()} folder`}
+                          aria-label={t('settings:storage.selectFolderAriaLabel', { label: label.toLowerCase() })}
                         >
                           {savingStorageFolder === folder ? (
                             <RefreshCw className="h-4 w-4 animate-spin" />
@@ -1582,26 +1653,28 @@ export function Settings() {
           {/* Capture — turning ambient inputs (clipboard screenshots) into knowledge. */}
           <Card>
             <CardHeader>
-              <CardTitle>Capture</CardTitle>
-              <CardDescription>Bring screenshots into your knowledge library</CardDescription>
+              <CardTitle>{t('settings:capture.title')}</CardTitle>
+              <CardDescription>{t('settings:capture.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <label htmlFor="autoCaptureScreenshotsToggle" className="text-sm font-medium">
-                    Auto-capture screenshots from clipboard
+                    {t('settings:capture.autoCaptureLabel')}
                   </label>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Watch the clipboard and automatically add copied screenshots as image
-                    captures. You can always paste (<code>Ctrl/Cmd+V</code>) to add one manually,
-                    even with this off.
+                    <Trans i18nKey="settings:capture.autoCaptureHint">
+                      Watch the clipboard and automatically add copied screenshots as image
+                      captures. You can always paste (<code>Ctrl/Cmd+V</code>) to add one manually,
+                      even with this off.
+                    </Trans>
                   </p>
                 </div>
                 <Switch
                   id="autoCaptureScreenshotsToggle"
                   checked={autoCaptureScreenshots}
                   onCheckedChange={setAutoCaptureScreenshots}
-                  aria-label="Auto-capture screenshots from clipboard"
+                  aria-label={t('settings:capture.autoCaptureLabel')}
                 />
               </div>
             </CardContent>
@@ -1611,25 +1684,27 @@ export function Settings() {
               always-visible sidebar footer, which the product owner flagged). */}
           <Card>
             <CardHeader>
-              <CardTitle>Developer</CardTitle>
-              <CardDescription>Advanced diagnostics and logging</CardDescription>
+              <CardTitle>{t('settings:developer.title')}</CardTitle>
+              <CardDescription>{t('settings:developer.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <label htmlFor="qaLogsToggle" className="text-sm font-medium">
-                    QA Logs
+                    {t('settings:developer.qaLogsLabel')}
                   </label>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Emit verbose <code>[QA-MONITOR]</code> diagnostics to the console. For
-                    debugging only — leave off for normal use.
+                    <Trans i18nKey="settings:developer.qaLogsHint">
+                      Emit verbose <code>[QA-MONITOR]</code> diagnostics to the console. For
+                      debugging only — leave off for normal use.
+                    </Trans>
                   </p>
                 </div>
                 <Switch
                   id="qaLogsToggle"
                   checked={qaLogsEnabled}
                   onCheckedChange={setQaLogsEnabled}
-                  aria-label="Enable QA diagnostic logs"
+                  aria-label={t('settings:developer.qaLogsAriaLabel')}
                 />
               </div>
             </CardContent>

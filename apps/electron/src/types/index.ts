@@ -267,6 +267,9 @@ export interface AppConfig {
     /** Library title for sources with no calendar event. */
     unassignedTitleSource?: 'suggested' | 'filename'
     theme: 'light' | 'dark' | 'system'
+    // UI display language. 'system' follows the OS locale. Absent in configs
+    // written before i18n existed, which resolve to 'system' via DEFAULT_CONFIG.
+    language: 'system' | 'en' | 'ja'
     defaultView: 'week' | 'month'
     startOfWeek: number
     calendarView: 'day' | 'workweek' | 'week' | 'month'

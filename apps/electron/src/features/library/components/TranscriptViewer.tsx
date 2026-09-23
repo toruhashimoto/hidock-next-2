@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { TimeAnchor } from './TimeAnchor'
 import { SpeakerAssignPopover, type AssignScope } from './SpeakerAssignPopover'
 import {
@@ -302,6 +303,7 @@ export function TranscriptViewer({
   highlightRequest,
   onTranscriptUpdated
 }: TranscriptViewerProps) {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const activeSegmentRef = useRef<HTMLDivElement | null>(null)
   const pulseSegmentRef = useRef<HTMLDivElement | null>(null)
@@ -437,10 +439,10 @@ export function TranscriptViewer({
       try {
         if (scope === 'turn') {
           const res = await window.electronAPI.turnSpeakers.setOverride({ recordingId, turnIndex: ctx.turnIndex, ...payload })
-          if (!res.success) return toast.error('Failed to assign speaker')
+          if (!res.success) return toast.error(t('library:transcriptViewer.assignFailedTitle'))
           await loadTurnOverrides()
           setContactsLoaded(false)
-          toast.success('Turn assigned', `This turn is now ${res.data.name}.`)
+          toast.success(t('library:transcriptViewer.turnAssignedTitle'), t('library:transcriptViewer.turnAssignedMessage', { name: res.data.name }))
         } else if (scope === 'fromHere') {
           const res = await window.electronAPI.turnSpeakers.assignFromHere({
             recordingId,
@@ -448,26 +450,32 @@ export function TranscriptViewer({
             fromTurnIndex: ctx.turnIndex,
             ...payload
           })
-          if (!res.success) return toast.error('Failed to assign speaker')
+          if (!res.success) return toast.error(t('library:transcriptViewer.assignFailedTitle'))
           await Promise.all([loadSplits(), loadSpeakerMap()])
           setContactsLoaded(false)
-          toast.success('Speaker split', `From here on is now ${res.data.contact.name}.`)
+          toast.success(
+            t('library:transcriptViewer.speakerSplitTitle'),
+            t('library:transcriptViewer.speakerSplitFromHereMessage', { name: res.data.contact.name })
+          )
         } else {
           const res = await window.electronAPI.transcripts.assignSpeaker({
             recordingId,
             speakerLabel: ctx.effectiveLabel,
             ...payload
           })
-          if (!res.success) return toast.error('Failed to assign speaker')
+          if (!res.success) return toast.error(t('library:transcriptViewer.assignFailedTitle'))
           await loadSpeakerMap()
           setContactsLoaded(false)
-          toast.success('Speaker assigned', `${ctx.effectiveLabel} is now ${res.data.name}.`)
+          toast.success(
+            t('library:transcriptViewer.speakerAssignedTitle'),
+            t('library:transcriptViewer.speakerAssignedMessage', { label: ctx.effectiveLabel, name: res.data.name })
+          )
         }
       } catch (err) {
-        toast.error('Failed to assign speaker', err instanceof Error ? err.message : undefined)
+        toast.error(t('library:transcriptViewer.assignFailedTitle'), err instanceof Error ? err.message : undefined)
       }
     },
-    [recordingId, loadSpeakerMap, loadTurnOverrides, loadSplits]
+    [recordingId, loadSpeakerMap, loadTurnOverrides, loadSplits, t]
   )
 
   // Clear the effective assignment for a turn: its per-turn override if present,
@@ -478,20 +486,20 @@ export function TranscriptViewer({
       try {
         if (ctx.hasOverride) {
           const res = await window.electronAPI.turnSpeakers.clearOverride({ recordingId, turnIndex: ctx.turnIndex })
-          if (!res.success) return toast.error('Failed to reset turn')
+          if (!res.success) return toast.error(t('library:transcriptViewer.resetTurnFailedTitle'))
           await loadTurnOverrides()
-          toast.success('Turn reset')
+          toast.success(t('library:transcriptViewer.turnResetTitle'))
         } else {
           const res = await window.electronAPI.transcripts.unassignSpeaker({ recordingId, speakerLabel: ctx.effectiveLabel })
-          if (!res.success) return toast.error('Failed to unassign speaker')
+          if (!res.success) return toast.error(t('library:transcriptViewer.unassignFailedTitle'))
           await loadSpeakerMap()
-          toast.success('Speaker unassigned')
+          toast.success(t('library:transcriptViewer.speakerUnassignedTitle'))
         }
       } catch (err) {
-        toast.error('Failed to unassign speaker', err instanceof Error ? err.message : undefined)
+        toast.error(t('library:transcriptViewer.unassignFailedTitle'), err instanceof Error ? err.message : undefined)
       }
     },
-    [recordingId, loadSpeakerMap, loadTurnOverrides]
+    [recordingId, loadSpeakerMap, loadTurnOverrides, t]
   )
 
   const splitSpeaker = useCallback(
@@ -499,14 +507,17 @@ export function TranscriptViewer({
       if (!recordingId) return
       try {
         const res = await window.electronAPI.turnSpeakers.split({ recordingId, baseLabel, fromTurnIndex })
-        if (!res.success) return toast.error('Failed to split speaker')
+        if (!res.success) return toast.error(t('library:transcriptViewer.splitFailedTitle'))
         await loadSplits()
-        toast.success('Speaker split', `Turns from here are now ${res.data.derivedLabel}.`)
+        toast.success(
+          t('library:transcriptViewer.speakerSplitTitle'),
+          t('library:transcriptViewer.speakerSplitMessage', { label: res.data.derivedLabel })
+        )
       } catch (err) {
-        toast.error('Failed to split speaker', err instanceof Error ? err.message : undefined)
+        toast.error(t('library:transcriptViewer.splitFailedTitle'), err instanceof Error ? err.message : undefined)
       }
     },
-    [recordingId, loadSplits]
+    [recordingId, loadSplits, t]
   )
 
   const mergeSplit = useCallback(
@@ -514,14 +525,14 @@ export function TranscriptViewer({
       if (!recordingId) return
       try {
         const res = await window.electronAPI.turnSpeakers.mergeSplit({ recordingId, baseLabel, fromTurnIndex })
-        if (!res.success) return toast.error('Failed to merge speaker')
+        if (!res.success) return toast.error(t('library:transcriptViewer.mergeFailedTitle'))
         await Promise.all([loadSplits(), loadSpeakerMap()])
-        toast.success('Merged back', `Rejoined ${baseLabel}.`)
+        toast.success(t('library:transcriptViewer.mergedBackTitle'), t('library:transcriptViewer.mergedBackMessage', { label: baseLabel }))
       } catch (err) {
-        toast.error('Failed to merge speaker', err instanceof Error ? err.message : undefined)
+        toast.error(t('library:transcriptViewer.mergeFailedTitle'), err instanceof Error ? err.message : undefined)
       }
     },
-    [recordingId, loadSplits, loadSpeakerMap]
+    [recordingId, loadSplits, loadSpeakerMap, t]
   )
 
   // Prefer pre-parsed segments (timestamped speaker turns) when available;
@@ -573,7 +584,7 @@ export function TranscriptViewer({
     if (!recordingId || editingIndex === null || savingIndex !== null) return
     const corrected = editDraft.trim()
     if (!corrected) {
-      setEditError('A transcript turn cannot be empty.')
+      setEditError(t('library:transcriptViewer.emptyTurnError'))
       return
     }
     if (corrected === segments[editingIndex]?.text.trim()) {
@@ -598,7 +609,7 @@ export function TranscriptViewer({
       })
       if (!result.success) {
         setEditError(result.error.message)
-        toast.error('Could not save transcript correction', result.error.message)
+        toast.error(t('library:transcriptViewer.saveCorrectionFailedTitle'), result.error.message)
         return
       }
 
@@ -616,24 +627,24 @@ export function TranscriptViewer({
       if (result.data.ragStatus === 'indexed') {
         setRagPending(null)
         toast.success(
-          'Transcript and RAG updated',
-          `${result.data.indexedChunks} search chunk${result.data.indexedChunks === 1 ? '' : 's'} regenerated.`
+          t('library:transcriptViewer.transcriptRagUpdatedTitle'),
+          t('library:transcriptViewer.chunksRegenerated', { count: result.data.indexedChunks })
         )
       } else {
-        setRagPending(result.data.ragError ?? 'The embedding provider did not rebuild the search index.')
+        setRagPending(result.data.ragError ?? t('library:transcriptViewer.ragNotRebuiltFallback'))
         toast.error(
-          'Transcript saved; RAG update pending',
-          result.data.ragError ?? 'Use Retry RAG when the embedding provider is available.'
+          t('library:transcriptViewer.transcriptSavedRagPendingTitle'),
+          result.data.ragError ?? t('library:transcriptViewer.useRetryRagFallback')
         )
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'The correction could not be saved.'
+      const message = err instanceof Error ? err.message : t('library:transcriptViewer.correctionNotSavedFallback')
       setEditError(message)
-      toast.error('Could not save transcript correction', message)
+      toast.error(t('library:transcriptViewer.saveCorrectionFailedTitle'), message)
     } finally {
       setSavingIndex(null)
     }
-  }, [cancelEditing, editDraft, editingIndex, onTranscriptUpdated, persistedFullText, recordingId, savingIndex, segments])
+  }, [cancelEditing, editDraft, editingIndex, onTranscriptUpdated, persistedFullText, recordingId, savingIndex, segments, t])
 
   const retryRag = useCallback(async () => {
     if (!recordingId || retryingRag) return
@@ -642,22 +653,22 @@ export function TranscriptViewer({
       const result = await window.electronAPI.transcripts.reindex({ recordingId })
       if (!result.success) {
         setRagPending(result.error.message)
-        toast.error('RAG update still pending', result.error.message)
+        toast.error(t('library:transcriptViewer.ragUpdateStillPendingTitle'), result.error.message)
         return
       }
       setRagPending(null)
       toast.success(
-        'RAG updated',
-        `${result.data.indexedChunks} search chunk${result.data.indexedChunks === 1 ? '' : 's'} regenerated.`
+        t('library:transcriptViewer.ragUpdatedTitle'),
+        t('library:transcriptViewer.chunksRegenerated', { count: result.data.indexedChunks })
       )
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'The RAG index could not be updated.'
+      const message = err instanceof Error ? err.message : t('library:transcriptViewer.ragIndexNotUpdatedFallback')
       setRagPending(message)
-      toast.error('RAG update still pending', message)
+      toast.error(t('library:transcriptViewer.ragUpdateStillPendingTitle'), message)
     } finally {
       setRetryingRag(false)
     }
-  }, [recordingId, retryingRag])
+  }, [recordingId, retryingRag, t])
 
   // Find current segment index based on currentTimeMs (only meaningful with timestamps)
   const currentSegmentIndex = useMemo(() => {
@@ -787,7 +798,7 @@ export function TranscriptViewer({
             className="flex items-center justify-between w-full text-left hover:text-foreground/70 transition-colors"
             aria-expanded={summaryExpanded}
           >
-            <span className="text-sm font-semibold">Summary</span>
+            <span className="text-sm font-semibold">{t('library:transcriptViewer.summaryHeading')}</span>
             {summaryExpanded ? (
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             ) : (
@@ -808,7 +819,7 @@ export function TranscriptViewer({
             className="flex items-center justify-between w-full text-left hover:text-foreground/70 transition-colors"
             aria-expanded={actionItemsExpanded}
           >
-            <span className="text-sm font-semibold">Action Items</span>
+            <span className="text-sm font-semibold">{t('library:transcriptViewer.actionItemsHeading')}</span>
             {actionItemsExpanded ? (
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             ) : (
@@ -833,7 +844,7 @@ export function TranscriptViewer({
             className="flex items-center justify-between flex-1 text-left hover:text-foreground/70 transition-colors"
             aria-expanded={transcriptExpanded}
           >
-            <span className="text-sm font-semibold">Full Transcript</span>
+            <span className="text-sm font-semibold">{t('library:transcriptViewer.fullTranscriptHeading')}</span>
             {transcriptExpanded ? (
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             ) : (
@@ -851,10 +862,14 @@ export function TranscriptViewer({
                 if (isPlaying === false) scrollToTop()
               }}
               className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-primary hover:bg-accent transition-colors"
-              title={isPlaying === false ? 'Jump to the top of the transcript' : 'Resume auto-scroll to follow playback'}
+              title={
+                isPlaying === false
+                  ? t('library:transcriptViewer.jumpToTopTitle')
+                  : t('library:transcriptViewer.resumeAutoScrollTitle')
+              }
             >
               <ArrowDownToLine className="h-3.5 w-3.5" />
-              Follow
+              {t('library:transcriptViewer.followButton')}
             </button>
           )}
         </div>}
@@ -866,10 +881,14 @@ export function TranscriptViewer({
                 if (isPlaying === false) scrollToTop()
               }}
               className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-accent"
-              title={isPlaying === false ? 'Jump to the top of the transcript' : 'Resume auto-scroll to follow playback'}
+              title={
+                isPlaying === false
+                  ? t('library:transcriptViewer.jumpToTopTitle')
+                  : t('library:transcriptViewer.resumeAutoScrollTitle')
+              }
             >
               <ArrowDownToLine className="h-3.5 w-3.5" />
-              Follow
+              {t('library:transcriptViewer.followButton')}
             </button>
           </div>
         )}
@@ -887,7 +906,8 @@ export function TranscriptViewer({
               >
                 <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                  Transcript saved. RAG search is pending: {ragPending}
+                  {t('library:transcriptViewer.ragPendingPrefix')}
+                  {ragPending}
                 </span>
                 <button
                   type="button"
@@ -896,7 +916,7 @@ export function TranscriptViewer({
                   className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-semibold text-amber-100 transition-colors hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-wait disabled:opacity-60"
                 >
                   <RefreshCw className={cn('h-3.5 w-3.5', retryingRag && 'animate-spin')} aria-hidden="true" />
-                  {retryingRag ? 'Updating RAG…' : 'Retry RAG'}
+                  {retryingRag ? t('library:transcriptViewer.updatingRag') : t('library:transcriptViewer.retryRagButton')}
                 </button>
               </div>
             )}
@@ -1002,13 +1022,13 @@ export function TranscriptViewer({
                           }}
                           disabled={savingIndex === i}
                           rows={Math.min(8, Math.max(2, editDraft.split('\n').length + 1))}
-                          aria-label={`Edit transcript turn ${i + 1}`}
+                          aria-label={t('library:transcriptViewer.editTurnAriaLabel', { number: i + 1 })}
                           aria-describedby={`transcript-edit-hint-${i}${editError ? ` transcript-edit-error-${i}` : ''}`}
                           className="w-full resize-y rounded-lg border border-primary/50 bg-background px-3 py-2 text-sm leading-relaxed text-foreground shadow-sm outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:cursor-wait disabled:opacity-70"
                         />
                         <div className="flex flex-wrap items-center gap-2">
                           <span id={`transcript-edit-hint-${i}`} className="mr-auto text-xs text-muted-foreground">
-                            Ctrl+Enter saves and rebuilds RAG. Esc cancels.
+                            {t('library:transcriptViewer.editHint')}
                           </span>
                           <button
                             type="button"
@@ -1017,7 +1037,7 @@ export function TranscriptViewer({
                             className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50"
                           >
                             <X className="h-3.5 w-3.5" aria-hidden="true" />
-                            Cancel
+                            {t('library:transcriptViewer.cancelButton')}
                           </button>
                           <button
                             type="button"
@@ -1030,7 +1050,7 @@ export function TranscriptViewer({
                             ) : (
                               <Check className="h-3.5 w-3.5" aria-hidden="true" />
                             )}
-                            {savingIndex === i ? 'Saving + rebuilding RAG…' : 'Save correction'}
+                            {savingIndex === i ? t('library:transcriptViewer.savingRebuildingRag') : t('library:transcriptViewer.saveCorrectionButton')}
                           </button>
                         </div>
                         {editError && (
@@ -1048,8 +1068,8 @@ export function TranscriptViewer({
                             onClick={() => startEditing(i)}
                             disabled={savingIndex !== null}
                             className="absolute -top-1 right-0 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-40 transition-[color,background-color,opacity] hover:bg-accent hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-20 group-hover/turn:opacity-100"
-                            aria-label={`Edit transcript turn ${i + 1}`}
-                            title="Edit this transcript turn"
+                            aria-label={t('library:transcriptViewer.editTurnAriaLabel', { number: i + 1 })}
+                            title={t('library:transcriptViewer.editTurnTitle')}
                           >
                             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                           </button>

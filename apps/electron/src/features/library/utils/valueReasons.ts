@@ -13,6 +13,8 @@
  * rather than dropping it silently.
  */
 
+import i18n from '@/i18n'
+
 export type KnownValueReason =
   | 'personal_family'
   | 'greeting_only_no_show'
@@ -20,12 +22,32 @@ export type KnownValueReason =
   | 'no_substance'
   | 'off_topic_chatter'
 
+/**
+ * i18n note (Task 11c; reactivity fixed in Task 11d): `SourceRow.tsx`'s
+ * `ValueBadge` does NOT read this object directly — it only imports and
+ * calls `formatValueReasons()` below. The direct property reader is this
+ * file's own test (`valueReasons.test.ts`), which asserts
+ * `VALUE_REASON_LABELS.personal_family` etc. directly — so this cannot
+ * become a function.
+ *
+ * Task 11d fix: every property below is a `get` accessor instead of a plain
+ * data property. `VALUE_REASON_LABELS.personal_family` (or the `[r]` index
+ * access inside `formatValueReasons`) is syntactically identical either way
+ * — including for `Object.prototype.hasOwnProperty` in `isKnownValueReason`
+ * below, and for the direct-property-access test — but a getter calls
+ * `i18n.t()` fresh on every access instead of freezing the value from
+ * module-evaluation time. `formatValueReasons()` is called from
+ * `SourceRow.tsx`'s `ValueBadge` right next to a reactive `t()` call for the
+ * tooltip's first line, so before this fix a language switch could leave
+ * that tooltip's two lines visibly in different languages; now both read
+ * the same live language.
+ */
 export const VALUE_REASON_LABELS: Record<KnownValueReason, string> = {
-  personal_family: 'Personal / family',
-  greeting_only_no_show: 'Greeting only / no-show',
-  background_ambient: 'Background / ambient',
-  no_substance: 'No substance',
-  off_topic_chatter: 'Off-topic chatter'
+  get personal_family() { return i18n.t('library:valueReasons.personalFamily') },
+  get greeting_only_no_show() { return i18n.t('library:valueReasons.greetingOnlyNoShow') },
+  get background_ambient() { return i18n.t('library:valueReasons.backgroundAmbient') },
+  get no_substance() { return i18n.t('library:valueReasons.noSubstance') },
+  get off_topic_chatter() { return i18n.t('library:valueReasons.offTopicChatter') }
 }
 
 function isKnownValueReason(reason: string): reason is KnownValueReason {

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AlertCircle, CheckCircle2, AlertTriangle, RefreshCw, Wrench, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -48,6 +49,7 @@ interface PurgeResult {
 }
 
 export function HealthCheck() {
+  const { t } = useTranslation()
   const invalidateRecordings = useAppStore((state) => state.invalidateUnifiedRecordings)
   const [scanning, setScanning] = useState(false)
   const [repairing, setRepairing] = useState(false)
@@ -69,7 +71,7 @@ export function HealthCheck() {
       const result = await window.electronAPI.integrity.runScan()
       setReport(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run health check')
+      setError(err instanceof Error ? err.message : t('settings:healthCheck.scanFailedFallback'))
     } finally {
       setScanning(false)
     }
@@ -88,14 +90,14 @@ export function HealthCheck() {
       // Invalidate recordings cache so Library reloads with fresh data
       invalidateRecordings()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to repair issues')
+      setError(err instanceof Error ? err.message : t('settings:healthCheck.repairFailedFallback'))
     } finally {
       setRepairing(false)
     }
   }
 
   const cleanupWronglyNamed = async () => {
-    if (!confirm('This will DELETE all downloaded recordings with wrong filenames (format: YYYY-MM-DD_HHMM.wav) and clear sync records.\n\nAfter cleanup, reconnect your device to re-download files with correct names.\n\nAre you sure?')) {
+    if (!confirm(t('settings:healthCheck.cleanupConfirm'))) {
       return
     }
     setCleaning(true)
@@ -107,14 +109,14 @@ export function HealthCheck() {
       // Invalidate recordings cache so Library reloads with fresh data
       invalidateRecordings()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to cleanup files')
+      setError(err instanceof Error ? err.message : t('settings:healthCheck.cleanupFailedFallback'))
     } finally {
       setCleaning(false)
     }
   }
 
   const purgeMissingFiles = async () => {
-    if (!confirm('This will DELETE all database records where the audio file is missing or not downloaded.\n\nThis is a more aggressive cleanup than the Health Check repair.\n\nAre you sure?')) {
+    if (!confirm(t('settings:healthCheck.purgeConfirm'))) {
       return
     }
     setPurging(true)
@@ -126,7 +128,7 @@ export function HealthCheck() {
       // Invalidate recordings cache so Library reloads with fresh data
       invalidateRecordings()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to purge missing files')
+      setError(err instanceof Error ? err.message : t('settings:healthCheck.purgeFailedFallback'))
     } finally {
       setPurging(false)
     }
@@ -144,23 +146,24 @@ export function HealthCheck() {
   }
 
   const getTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      orphaned_download: 'Orphaned Download',
-      missing_file: 'Missing File',
-      orphaned_file: 'Orphaned File',
-      date_mismatch: 'Date Mismatch',
-      size_mismatch: 'Size Mismatch',
-      incomplete_download: 'Incomplete Download'
+    const keys: Record<string, string> = {
+      orphaned_download: 'orphanedDownload',
+      missing_file: 'missingFile',
+      orphaned_file: 'orphanedFile',
+      date_mismatch: 'dateMismatch',
+      size_mismatch: 'sizeMismatch',
+      incomplete_download: 'incompleteDownload'
     }
-    return labels[type] || type
+    const key = keys[type]
+    return key ? t(`settings:healthCheck.typeLabel.${key}`) : type
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Data Health Check</CardTitle>
+        <CardTitle>{t('settings:healthCheck.title')}</CardTitle>
         <CardDescription>
-          Scan for and repair data integrity issues (orphaned downloads, missing files, wrong dates)
+          {t('settings:healthCheck.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -168,13 +171,13 @@ export function HealthCheck() {
         <div className="flex items-center gap-2">
           <Button onClick={runScan} disabled={scanning || repairing}>
             <RefreshCw className={`h-4 w-4 mr-2 ${scanning ? 'animate-spin' : ''}`} />
-            {scanning ? 'Scanning...' : 'Run Health Check'}
+            {scanning ? t('settings:healthCheck.scanningButton') : t('settings:healthCheck.runButton')}
           </Button>
 
           {report && report.autoRepairableCount > 0 && (
             <Button variant="outline" onClick={repairAll} disabled={scanning || repairing}>
               <Wrench className={`h-4 w-4 mr-2 ${repairing ? 'animate-spin' : ''}`} />
-              {repairing ? 'Repairing...' : `Repair All (${report.autoRepairableCount})`}
+              {repairing ? t('settings:healthCheck.repairingButton') : t('settings:healthCheck.repairAllButton', { count: report.autoRepairableCount })}
             </Button>
           )}
         </div>
@@ -190,10 +193,10 @@ export function HealthCheck() {
         {repairResults.length > 0 && (
           <div className="p-3 bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-900 rounded-lg text-sm">
             <div className="font-medium text-green-700 dark:text-green-400 mb-1">
-              Repair Complete
+              {t('settings:healthCheck.repairCompleteTitle')}
             </div>
             <div className="text-green-600 dark:text-green-500">
-              {repairResults.filter(r => r.success).length} of {repairResults.length} issues repaired successfully
+              {t('settings:healthCheck.repairSummary', { repaired: repairResults.filter(r => r.success).length, total: repairResults.length })}
             </div>
           </div>
         )}
@@ -202,15 +205,15 @@ export function HealthCheck() {
         {cleanupResult && (
           <div className="p-3 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 rounded-lg text-sm">
             <div className="font-medium text-amber-700 dark:text-amber-400 mb-1">
-              Cleanup Complete
+              {t('settings:healthCheck.cleanupCompleteTitle')}
             </div>
             <div className="text-amber-600 dark:text-amber-500 space-y-1">
-              <div>Deleted {cleanupResult.deletedFiles.length} wrongly-named files</div>
-              <div>Cleared {cleanupResult.clearedDbRecords} sync records</div>
-              <div>Kept {cleanupResult.keptFiles.length} correctly-named files</div>
+              <div>{t('settings:healthCheck.cleanupDeletedFiles', { count: cleanupResult.deletedFiles.length })}</div>
+              <div>{t('settings:healthCheck.cleanupClearedRecords', { count: cleanupResult.clearedDbRecords })}</div>
+              <div>{t('settings:healthCheck.cleanupKeptFiles', { count: cleanupResult.keptFiles.length })}</div>
             </div>
             <div className="text-xs text-amber-500 dark:text-amber-400 mt-2">
-              Reconnect your device to re-download files with correct names
+              {t('settings:healthCheck.cleanupReconnectHint')}
             </div>
           </div>
         )}
@@ -221,7 +224,7 @@ export function HealthCheck() {
             {report.totalIssues === 0 ? (
               <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-900 rounded-lg">
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
-                <span className="text-green-700 dark:text-green-400">All data integrity checks passed</span>
+                <span className="text-green-700 dark:text-green-400">{t('settings:healthCheck.allChecksPassed')}</span>
               </div>
             ) : (
               <>
@@ -229,32 +232,32 @@ export function HealthCheck() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="p-3 bg-muted/50 rounded-lg text-center">
                     <div className="text-2xl font-bold">{report.totalIssues}</div>
-                    <div className="text-xs text-muted-foreground">Total Issues</div>
+                    <div className="text-xs text-muted-foreground">{t('settings:healthCheck.totalIssuesLabel')}</div>
                   </div>
                   <div className="p-3 bg-muted/50 rounded-lg text-center">
                     <div className="text-2xl font-bold text-red-500">
                       {report.issuesBySeverity['high'] || 0}
                     </div>
-                    <div className="text-xs text-muted-foreground">High Severity</div>
+                    <div className="text-xs text-muted-foreground">{t('settings:healthCheck.highSeverityLabel')}</div>
                   </div>
                   <div className="p-3 bg-muted/50 rounded-lg text-center">
                     <div className="text-2xl font-bold text-green-500">
                       {report.autoRepairableCount}
                     </div>
-                    <div className="text-xs text-muted-foreground">Auto-Repairable</div>
+                    <div className="text-xs text-muted-foreground">{t('settings:healthCheck.autoRepairableLabel')}</div>
                   </div>
                 </div>
 
                 {/* Issues by Type */}
                 <div className="text-sm">
-                  <div className="font-medium mb-2">Issues by Type:</div>
+                  <div className="font-medium mb-2">{t('settings:healthCheck.issuesByTypeLabel')}</div>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(report.issuesByType).map(([type, count]) => (
                       <span
                         key={type}
                         className="px-2 py-1 bg-muted rounded text-xs"
                       >
-                        {getTypeLabel(type)}: {count}
+                        {t('settings:healthCheck.issueTypeCount', { label: getTypeLabel(type), count })}
                       </span>
                     ))}
                   </div>
@@ -269,11 +272,11 @@ export function HealthCheck() {
                 >
                   {showDetails ? (
                     <>
-                      <ChevronUp className="h-4 w-4 mr-2" /> Hide Details
+                      <ChevronUp className="h-4 w-4 mr-2" /> {t('settings:healthCheck.hideDetails')}
                     </>
                   ) : (
                     <>
-                      <ChevronDown className="h-4 w-4 mr-2" /> Show Details ({report.issues.length} issues)
+                      <ChevronDown className="h-4 w-4 mr-2" /> {t('settings:healthCheck.showDetailsCount', { count: report.issues.length })}
                     </>
                   )}
                 </Button>
@@ -295,13 +298,13 @@ export function HealthCheck() {
                             </div>
                             {issue.filename && (
                               <div className="text-xs text-muted-foreground mt-1">
-                                File: {issue.filename}
+                                {t('settings:healthCheck.fileLabel', { filename: issue.filename })}
                               </div>
                             )}
                           </div>
                           {issue.autoRepairable && (
                             <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400 rounded">
-                              Auto-fix
+                              {t('settings:healthCheck.autoFixBadge')}
                             </span>
                           )}
                         </div>
@@ -314,7 +317,7 @@ export function HealthCheck() {
 
             {/* Scan Timestamp */}
             <div className="text-xs text-muted-foreground text-center">
-              Last scan: {new Date(report.scanCompleted).toLocaleString()}
+              {t('settings:healthCheck.lastScanLabel', { datetime: new Date(report.scanCompleted).toLocaleString() })}
             </div>
           </div>
         )}
@@ -322,7 +325,7 @@ export function HealthCheck() {
         {/* Initial State */}
         {!report && !scanning && (
           <div className="text-sm text-muted-foreground text-center py-4">
-            Run a health check to scan for data integrity issues
+            {t('settings:healthCheck.emptyStateHint')}
           </div>
         )}
 
@@ -334,7 +337,7 @@ export function HealthCheck() {
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="w-full flex justify-between items-center"
           >
-            <span className="font-medium">Advanced Operations</span>
+            <span className="font-medium">{t('settings:healthCheck.advancedOperations')}</span>
             {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
 
@@ -344,22 +347,21 @@ export function HealthCheck() {
               {purgeResult && (
                 <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 rounded-lg text-sm">
                   <div className="font-medium text-red-700 dark:text-red-400 mb-1">
-                    Purge Complete
+                    {t('settings:healthCheck.purgeCompleteTitle')}
                   </div>
                   <div className="text-red-600 dark:text-red-500 space-y-1">
-                    <div>Total records scanned: {purgeResult.totalRecords}</div>
-                    <div>Deleted {purgeResult.deleted} orphaned records</div>
-                    <div>Kept {purgeResult.kept} valid records</div>
+                    <div>{t('settings:healthCheck.purgeTotalScanned', { count: purgeResult.totalRecords })}</div>
+                    <div>{t('settings:healthCheck.purgeDeleted', { count: purgeResult.deleted })}</div>
+                    <div>{t('settings:healthCheck.purgeKept', { count: purgeResult.kept })}</div>
                   </div>
                 </div>
               )}
 
               {/* Purge Section - Nuclear Option */}
               <div>
-                <div className="text-sm font-medium mb-2 text-red-600 dark:text-red-400">Purge Orphaned Records</div>
+                <div className="text-sm font-medium mb-2 text-red-600 dark:text-red-400">{t('settings:healthCheck.purgeOrphanedHeading')}</div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Delete ALL database records where the audio file doesn&apos;t exist on disk.
-                  Use this if Health Check finds no issues but the Library still shows deleted files.
+                  {t('settings:healthCheck.purgeOrphanedParagraph')}
                 </p>
                 <Button
                   variant="destructive"
@@ -368,7 +370,7 @@ export function HealthCheck() {
                   disabled={purging || cleaning || scanning || repairing}
                 >
                   <Trash2 className={`h-4 w-4 mr-2 ${purging ? 'animate-pulse' : ''}`} />
-                  {purging ? 'Purging...' : 'Purge Missing Files'}
+                  {purging ? t('settings:healthCheck.purgingButton') : t('settings:healthCheck.purgeMissingFilesButton')}
                 </Button>
               </div>
 
@@ -376,25 +378,24 @@ export function HealthCheck() {
               {cleanupResult && (
                 <div className="p-3 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 rounded-lg text-sm">
                   <div className="font-medium text-amber-700 dark:text-amber-400 mb-1">
-                    Cleanup Complete
+                    {t('settings:healthCheck.cleanupCompleteTitle')}
                   </div>
                   <div className="text-amber-600 dark:text-amber-500 space-y-1">
-                    <div>Deleted {cleanupResult.deletedFiles.length} wrongly-named files</div>
-                    <div>Cleared {cleanupResult.clearedDbRecords} sync records</div>
-                    <div>Kept {cleanupResult.keptFiles.length} correctly-named files</div>
+                    <div>{t('settings:healthCheck.cleanupDeletedFiles', { count: cleanupResult.deletedFiles.length })}</div>
+                    <div>{t('settings:healthCheck.cleanupClearedRecords', { count: cleanupResult.clearedDbRecords })}</div>
+                    <div>{t('settings:healthCheck.cleanupKeptFiles', { count: cleanupResult.keptFiles.length })}</div>
                   </div>
                   <div className="text-xs text-amber-500 dark:text-amber-400 mt-2">
-                    Reconnect your device to re-download files with correct names
+                    {t('settings:healthCheck.cleanupReconnectHint')}
                   </div>
                 </div>
               )}
 
               {/* Cleanup Section */}
               <div>
-                <div className="text-sm font-medium mb-2">Reset Downloaded Recordings</div>
+                <div className="text-sm font-medium mb-2">{t('settings:healthCheck.resetDownloadedHeading')}</div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  If your downloaded files have wrong names (e.g., 2025-12-27_2252.wav instead of 2025Dec15-100105-Rec22.wav),
-                  use this to delete them and clear sync records. Then reconnect your device to re-download with correct names.
+                  {t('settings:healthCheck.resetDownloadedParagraph')}
                 </p>
                 <Button
                   variant="destructive"
@@ -403,7 +404,7 @@ export function HealthCheck() {
                   disabled={cleaning || scanning || repairing || purging}
                 >
                   <Trash2 className={`h-4 w-4 mr-2 ${cleaning ? 'animate-pulse' : ''}`} />
-                  {cleaning ? 'Cleaning...' : 'Delete Wrongly-Named Files'}
+                  {cleaning ? t('settings:healthCheck.cleaningButton') : t('settings:healthCheck.deleteWronglyNamedButton')}
                 </Button>
               </div>
             </div>

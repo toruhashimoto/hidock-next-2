@@ -1,4 +1,5 @@
 import { X, Download, Wand2, Trash2, CheckSquare, Square, EyeOff, Skull } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
@@ -44,6 +45,7 @@ export function BulkActionsBar({
   onMarkPersonal,
   onDeletePermanent
 }: BulkActionsBarProps) {
+  const { t } = useTranslation('library')
   if (selectedCount === 0) return null
 
   const allSelected = selectedCount === totalCount && totalCount > 0
@@ -56,7 +58,7 @@ export function BulkActionsBar({
         'animate-in slide-in-from-top-2 duration-200'
       )}
       role="toolbar"
-      aria-label="Bulk actions"
+      aria-label={t('bulkActionsBar.toolbarAriaLabel')}
     >
       <div className="flex items-center gap-3">
         {/* Selection Toggle */}
@@ -65,19 +67,19 @@ export function BulkActionsBar({
           size="sm"
           onClick={allSelected ? onDeselectAll : onSelectAll}
           className="gap-2"
-          aria-label={allSelected ? 'Deselect all' : 'Select all'}
+          aria-label={allSelected ? t('bulkActionsBar.deselectAllAriaLabel') : t('bulkActionsBar.selectAllAriaLabel')}
         >
           {allSelected ? (
             <CheckSquare className="h-4 w-4 text-primary" />
           ) : (
             <Square className="h-4 w-4" />
           )}
-          {allSelected ? 'Deselect All' : 'Select All'}
+          {allSelected ? t('bulkActionsBar.deselectAllButton') : t('bulkActionsBar.selectAllButton')}
         </Button>}
 
         {/* Selection Count */}
         <span className="text-sm text-muted-foreground">
-          {selectedCount} of {totalCount} selected
+          {t('bulkActionsBar.selectionCountLabel', { selected: selectedCount, total: totalCount })}
         </span>
 
         {/* Progress Indicator */}
@@ -85,7 +87,7 @@ export function BulkActionsBar({
           <div className="flex items-center gap-2 ml-4">
             <Progress value={(progress.current / progress.total) * 100} className="w-32 h-2" />
             <span className="text-xs text-muted-foreground">
-              {progress.current}/{progress.total}
+              {t('bulkActionsBar.progressCounter', { current: progress.current, total: progress.total })}
             </span>
           </div>
         )}
@@ -99,10 +101,10 @@ export function BulkActionsBar({
           onClick={onDownload}
           disabled={!deviceConnected || isProcessing || disabledActions.download}
           className="gap-2"
-          title={!deviceConnected ? 'Device not connected' : 'Download selected from device'}
+          title={!deviceConnected ? t('bulkActionsBar.deviceNotConnectedTitle') : t('bulkActionsBar.downloadFromDeviceTitle')}
         >
           <Download className="h-4 w-4" />
-          Download
+          {t('bulkActionsBar.downloadButton')}
         </Button>}
 
         {/* Process/Transcribe Action */}
@@ -112,10 +114,10 @@ export function BulkActionsBar({
           onClick={onProcess}
           disabled={isProcessing || disabledActions.process}
           className="gap-2"
-          title="Transcribe selected recordings"
+          title={t('bulkActionsBar.transcribeTitle')}
         >
           <Wand2 className="h-4 w-4" />
-          {isProcessing ? 'Processing...' : 'Transcribe'}
+          {isProcessing ? t('bulkActionsBar.processingButton') : t('bulkActionsBar.transcribeButton')}
         </Button>
 
         {/* Mark Personal Action */}
@@ -126,10 +128,10 @@ export function BulkActionsBar({
             onClick={onMarkPersonal}
             disabled={isProcessing}
             className="gap-2"
-            title="Mark selected personal — kept, but excluded from AI processing and default views"
+            title={t('bulkActionsBar.markPersonalTitle')}
           >
             <EyeOff className="h-4 w-4" />
-            Mark personal
+            {t('bulkActionsBar.markPersonalButton')}
           </Button>
         )}
 
@@ -140,10 +142,10 @@ export function BulkActionsBar({
           onClick={onDelete}
           disabled={isProcessing || disabledActions.delete}
           className="gap-2"
-          title="Move selected to Trash (hidden, restorable — nothing is erased)"
+          title={t('bulkActionsBar.moveToTrashTitle')}
         >
           <Trash2 className="h-4 w-4" />
-          Move to Trash
+          {t('bulkActionsBar.moveToTrashButton')}
         </Button>
 
         {/* Permanent delete — HARD cascade per row (tombstones + cache + optional device copy). */}
@@ -154,10 +156,10 @@ export function BulkActionsBar({
             onClick={onDeletePermanent}
             disabled={isProcessing || disabledActions.delete}
             className="gap-2 text-destructive hover:text-destructive border-destructive/40"
-            title="Permanently erase selected rows and all derived data (transcripts, embeddings, actionables) — cannot be undone"
+            title={t('bulkActionsBar.deletePermanentlyTitle')}
           >
             <Skull className="h-4 w-4" />
-            Delete permanently
+            {t('bulkActionsBar.deletePermanentlyButton')}
           </Button>
         )}
 
@@ -167,7 +169,7 @@ export function BulkActionsBar({
           size="sm"
           onClick={onDeselectAll}
           className="ml-2"
-          aria-label="Clear selection"
+          aria-label={t('bulkActionsBar.clearSelectionAriaLabel')}
         >
           <X className="h-4 w-4" />
         </Button>

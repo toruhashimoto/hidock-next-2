@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store/useAppStore'
 import { getSourceType, type LibrarySourceType } from '@/features/library/utils/sourceType'
 import type { UnifiedRecording } from '@/types/unified-recording'
@@ -60,6 +61,7 @@ function capturedToday(rec: UnifiedRecording, today: Date): boolean {
  * @param nowInput optional clock override (tests); defaults to `new Date()`.
  */
 export function useTodayCaptures(nowInput?: Date): TodayCapture[] {
+  const { t } = useTranslation()
   const recordings = useAppStore((s) => s.unifiedRecordings) as UnifiedRecording[]
   // Anchor the day-boundary once per render to a stable millisecond value so the
   // memo below doesn't thrash on every `new Date()` identity.
@@ -74,7 +76,7 @@ export function useTodayCaptures(nowInput?: Date): TodayCapture[] {
       if (!capturedToday(rec, today)) continue
       out.push({
         id: rec.id,
-        title: rec.title || rec.filename || 'Untitled',
+        title: rec.title || rec.filename || t('today:captures.untitledFallback'),
         type,
         date: rec.dateRecorded
       })
@@ -82,5 +84,5 @@ export function useTodayCaptures(nowInput?: Date): TodayCapture[] {
     // Newest first — mirrors the follow-ups digest ordering.
     out.sort((a, b) => b.date.getTime() - a.date.getTime())
     return out
-  }, [recordings, todayMs])
+  }, [recordings, todayMs, t])
 }

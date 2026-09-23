@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { RotateCcw } from 'lucide-react'
@@ -16,8 +17,8 @@ import { useConfigStore } from '@/store/domain/useConfigStore'
 import { usePendingRestart, useFeatureStore, describeDisableReason } from '@/store/useFeatureStore'
 import {
   ALL_FEATURE_IDS,
-  FEATURES,
-  PRESET_INFO,
+  translatedFeatureInfo,
+  translatedPresetInfo,
   type PresetId,
 } from '@/shared/feature-registry'
 import { toast } from '@/components/ui/toaster'
@@ -25,6 +26,7 @@ import { toast } from '@/components/ui/toaster'
 const SELECTABLE_PRESETS: PresetId[] = ['library-only', 'library-transcription', 'full', 'custom']
 
 export function FeaturesSettings(): React.ReactElement {
+  const { t } = useTranslation()
   const { config, updateConfig } = useConfigStore()
   const resolved = useFeatureStore((s) => s.resolved)
   const pendingRestart = usePendingRestart()
@@ -41,12 +43,12 @@ export function FeaturesSettings(): React.ReactElement {
       const flags = next === 'custom' ? (config?.features?.flags ?? {}) : {}
       await updateConfig('features', { preset: next, flags })
       toast({
-        title: 'Feature preset applied',
-        description: PRESET_INFO[next].label,
+        title: t('settings:features.presetAppliedTitle'),
+        description: translatedPresetInfo(t, next).label,
         variant: 'success',
       })
     } catch (e) {
-      toast.error('Failed to apply preset', e instanceof Error ? e.message : undefined)
+      toast.error(t('settings:features.applyFailedTitle'), e instanceof Error ? e.message : undefined)
     } finally {
       setSaving(false)
     }
@@ -60,19 +62,19 @@ export function FeaturesSettings(): React.ReactElement {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Features</CardTitle>
+        <CardTitle>{t('settings:features.title')}</CardTitle>
         <CardDescription>
-          Choose how much of the app runs. Smaller presets skip background work entirely.
+          {t('settings:features.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <label htmlFor="feature-preset" className="text-sm font-medium">
-            Preset
+            {t('settings:features.presetLabel')}
           </label>
           <select
             id="feature-preset"
-            aria-label="Feature preset"
+            aria-label={t('settings:features.presetAriaLabel')}
             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             value={preset}
             disabled={saving}
@@ -80,20 +82,20 @@ export function FeaturesSettings(): React.ReactElement {
           >
             {SELECTABLE_PRESETS.map((id) => (
               <option key={id} value={id}>
-                {PRESET_INFO[id].label}
+                {translatedPresetInfo(t, id).label}
               </option>
             ))}
           </select>
-          <p className="text-xs text-muted-foreground">{PRESET_INFO[preset].description}</p>
+          <p className="text-xs text-muted-foreground">{translatedPresetInfo(t, preset).description}</p>
         </div>
 
         {disabled.length > 0 && (
           <div className="rounded-md border border-border bg-muted/40 p-3">
-            <p className="text-xs font-medium">Turned off by this preset:</p>
+            <p className="text-xs font-medium">{t('settings:features.turnedOffLabel')}</p>
             <ul className="mt-1 space-y-0.5">
               {disabled.map((id) => (
                 <li key={id} className="text-xs text-muted-foreground">
-                  {FEATURES[id].label}
+                  {translatedFeatureInfo(t, id).label}
                   {resolved[id]?.reason?.startsWith('requires:') && (
                     <span className="ml-1 text-muted-foreground/70">
                       — {describeDisableReason(resolved[id]?.reason)}
@@ -117,23 +119,23 @@ export function FeaturesSettings(): React.ReactElement {
                   fully unloads it (teardown/status stay available meanwhile). */}
               {pendingRestart.filter((id) => resolved[id]?.enabled).length > 0 && (
                 <p>
-                  Restart required to activate:{' '}
+                  {t('settings:features.restartRequiredPrefix')}{' '}
                   <span className="font-medium">
                     {pendingRestart
                       .filter((id) => resolved[id]?.enabled)
-                      .map((id) => FEATURES[id].label)
-                      .join(', ')}
+                      .map((id) => translatedFeatureInfo(t, id).label)
+                      .join(t('settings:features.listSeparator'))}
                   </span>
                 </p>
               )}
               {pendingRestart.filter((id) => !resolved[id]?.enabled).length > 0 && (
                 <p>
-                  Disabled for new work — restart to fully unload:{' '}
+                  {t('settings:features.restartDisabledPrefix')}{' '}
                   <span className="font-medium">
                     {pendingRestart
                       .filter((id) => !resolved[id]?.enabled)
-                      .map((id) => FEATURES[id].label)
-                      .join(', ')}
+                      .map((id) => translatedFeatureInfo(t, id).label)
+                      .join(t('settings:features.listSeparator'))}
                   </span>
                 </p>
               )}
@@ -145,7 +147,7 @@ export function FeaturesSettings(): React.ReactElement {
               onClick={() => window.electronAPI?.app?.restart()}
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              Restart now
+              {t('settings:features.restartNow')}
             </Button>
           </div>
         )}

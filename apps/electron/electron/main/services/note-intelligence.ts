@@ -258,12 +258,21 @@ export function meetingHappeningNow(at: string = new Date().toISOString()): stri
   return row?.id ?? null
 }
 
+/**
+ * Which of the three signals produced a suggestion. The renderer translates
+ * from this, not from `reason`: matching on the English sentence would break
+ * the moment anyone reworded it, and the wording is meant to be editable.
+ */
+export type MeetingSuggestionReason = 'covering' | 'similar' | 'sameDay'
+
 export interface MeetingSuggestion {
   meetingId: string
   subject: string
   startTime: string
   /** Said in words, because a number the person cannot check is not a reason. */
   reason: string
+  /** Stable name for `reason`, so a localised UI can say it in its own words. */
+  reasonKey: MeetingSuggestionReason
   score: number
 }
 
@@ -295,6 +304,7 @@ export async function suggestMeetings(noteId: string, limit = 5): Promise<Meetin
       subject: meeting.subject || 'Untitled meeting',
       startTime: meeting.start_time,
       reason: 'You wrote this while that meeting was happening.',
+      reasonKey: 'covering',
       // Above any similarity score, which is what the reason claims. Cosine
       // scores from this store are not bounded at 1, so a hardcoded 1 could be
       // outranked by a merely similar transcript and the list would contradict
@@ -318,6 +328,7 @@ export async function suggestMeetings(noteId: string, limit = 5): Promise<Meetin
         subject: meeting.subject || 'Untitled meeting',
         startTime: meeting.start_time,
         reason: 'This note says the same things as that meeting’s transcript.',
+        reasonKey: 'similar',
         score: hit.score,
       })
     }
@@ -346,6 +357,7 @@ export async function suggestMeetings(noteId: string, limit = 5): Promise<Meetin
         subject: meeting.subject || 'Untitled meeting',
         startTime: meeting.start_time,
         reason: 'Happened the same day. Pick it if it is the right one.',
+        reasonKey: 'sameDay',
         // Below both real signals: this one is a list, not a suggestion.
         score: -1,
       })

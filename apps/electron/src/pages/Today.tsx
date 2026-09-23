@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation, Trans } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   Sun,
   Sparkles,
@@ -39,6 +41,7 @@ import {
   classifyMeetingTimings,
   formatMinutesLeft,
   formatMinutesUntil,
+  formatMinutesUntilBare,
   formatMinutesSinceEnd,
   recordingOverlapsMeeting,
   allDayMeetingOnLocalDate,
@@ -51,7 +54,6 @@ import {
   type RecordingSpan
 } from '@/lib/meeting-timing'
 import { CATEGORY_DOT, CATEGORY_CHIP, CATEGORY_ORDER } from '@/lib/meeting-category-colors'
-import { UNLINKED_STATE_LABEL } from '@/lib/calendar-utils'
 import type { Contact } from '@/types'
 
 const TODAY_PARTICIPANT_LIMIT = 4
@@ -111,11 +113,11 @@ interface BriefingData {
   stats: { transcribedCount: number; indexedChunks: number; pendingActionables: number }
 }
 
-function greeting(): string {
+function greeting(t: TFunction): string {
   const h = new Date().getHours()
-  if (h < 12) return 'Good morning'
-  if (h < 19) return 'Good afternoon'
-  return 'Good evening'
+  if (h < 12) return t('today:header.greetingMorning')
+  if (h < 19) return t('today:header.greetingAfternoon')
+  return t('today:header.greetingEvening')
 }
 
 function formatTime(iso?: string): string {
@@ -133,7 +135,7 @@ function formatClock(d: Date): string {
  * every zone variant shows it. `compact` drops the start's meridiem when it
  * matches the end's ("12:00–01:00 PM") to save horizontal space in the slim rows.
  */
-function formatTimeRange(startIso?: string, endIso?: string, compact = false): string {
+function formatTimeRange(separator: string, startIso?: string, endIso?: string, compact = false): string {
   const start = formatTime(startIso)
   const end = formatTime(endIso)
   if (!start) return ''
@@ -142,9 +144,9 @@ function formatTimeRange(startIso?: string, endIso?: string, compact = false): s
     const sm = start.match(/([AP]M)$/i)
     const em = end.match(/([AP]M)$/i)
     const startPart = sm && em && sm[1].toUpperCase() === em[1].toUpperCase() ? start.replace(/\s*[AP]M$/i, '') : start
-    return `${startPart}–${end}`
+    return `${startPart}${separator}${end}`
   }
-  return `${start}–${end}`
+  return `${start}${separator}${end}`
 }
 
 function formatDay(iso?: string): string {
@@ -186,29 +188,33 @@ const RelativeBadge = ({ vm, subtle }: { vm: MeetingVM; subtle?: boolean }) => {
   )
 }
 
-const RecordingMic = ({ vm }: { vm: MeetingVM }) =>
-  vm.hasRecording ? (
-    <Mic className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-500 flex-shrink-0" aria-label="Recording linked" />
+const RecordingMic = ({ vm }: { vm: MeetingVM }) => {
+  const { t } = useTranslation()
+  return vm.hasRecording ? (
+    <Mic className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-500 flex-shrink-0" aria-label={t('today:ribbon.recordingLinkedAriaLabel')} />
   ) : vm.recordedOnDevice ? (
     <span
       className="flex items-center gap-1 flex-shrink-0 text-amber-600 dark:text-amber-500"
-      aria-label="Recorded — on device, not yet downloaded"
+      aria-label={t('today:ribbon.recordedOnDeviceAriaLabel')}
     >
       <Mic className="h-3.5 w-3.5" />
-      <span className="text-[10px] font-medium whitespace-nowrap">recorded · on device</span>
+      <span className="text-[10px] font-medium whitespace-nowrap">{t('today:ribbon.recordedOnDeviceLabel')}</span>
     </span>
   ) : null
+}
 
-const RecordingChip = ({ vm }: { vm: MeetingVM }) =>
-  vm.recording || vm.runningOver ? (
+const RecordingChip = ({ vm }: { vm: MeetingVM }) => {
+  const { t } = useTranslation()
+  return vm.recording || vm.runningOver ? (
     <span
       className="flex items-center gap-1 flex-shrink-0 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-600 dark:text-red-400"
-      aria-label="Recording in progress"
+      aria-label={t('today:ribbon.recordingInProgressAriaLabel')}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse motion-reduce:animate-none" />
-      Recording
+      {t('today:ribbon.recordingLabel')}
     </span>
   ) : null
+}
 
 /**
  * Inline node dot carrying the meeting's semantic category color — the leading
@@ -250,6 +256,7 @@ interface MeetingVM {
 }
 
 export function Today() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [data, setData] = useState<BriefingData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -325,13 +332,21 @@ export function Today() {
       if (res.success && res.data) {
         setData(res.data as BriefingData)
       } else {
-        setError(res.error || 'Failed to load briefing')
+        setError(res.error || t('today:errors.loadBriefingFailedFallback'))
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load briefing')
+      setError(e instanceof Error ? e.message : t('today:errors.loadBriefingFailedFallback'))
     } finally {
       setLoading(false)
     }
+    // `t` intentionally excluded: `load` is depended on by two other effects
+    // (initial mount, calendar-sync resubscribe below) and must stay
+    // reference-stable across language switches, or both would re-fire on
+    // every change — including an unwanted extra briefing re-fetch. The only
+    // cost is that an in-flight error's fallback text keeps the language it
+    // was set in until the next load() call, which is an acceptable trade-off
+    // for an error-path-only string.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -504,7 +519,7 @@ export function Today() {
         ? formatMinutesLeft(timing.minutes ?? 0)
         : ranOver
           ? runningOver
-            ? 'Running over · recording continues'
+            ? t('today:ribbon.runningOverBadge')
             : formatMinutesSinceEnd(timing.minutes ?? 0)
           : formatMinutesUntil(timing.minutes ?? 0)
       const category = categorizeMeeting({ subject: m.subject, attendeeCount: people.length || undefined })
@@ -534,7 +549,8 @@ export function Today() {
       recordingByMeeting,
       recordedOnDeviceByMeeting,
       deviceRecording,
-      recordingStartedDuring
+      recordingStartedDuring,
+      t
     ]
   )
 
@@ -653,7 +669,7 @@ export function Today() {
             )}
           >
             {formatTime(m.start_time)}
-            <span className="mx-0.5 opacity-50">–</span>
+            <span className="mx-0.5 opacity-50">{t('today:ribbon.timeRangeSeparator')}</span>
             {formatTime(m.end_time)}
           </span>
           <div className="min-w-0 flex-1">
@@ -668,7 +684,7 @@ export function Today() {
                 {m.subject}
               </span>
               {vm.online && (
-                <Video className="h-3.5 w-3.5 text-foreground/50 flex-shrink-0" aria-label="Online meeting" />
+                <Video className="h-3.5 w-3.5 text-foreground/50 flex-shrink-0" aria-label={t('today:ribbon.onlineMeetingAriaLabel')} />
               )}
               <RecordingMic vm={vm} />
               <RecordingChip vm={vm} />
@@ -681,7 +697,7 @@ export function Today() {
               <div className="mt-3">
                 <span className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm transition-colors group-hover:bg-primary/90">
                   <Video className="h-3.5 w-3.5" />
-                  {vm.inProgress ? 'Join now' : 'Join meeting'}
+                  {vm.inProgress ? t('today:ribbon.joinNowButton') : t('today:ribbon.joinMeetingButton')}
                 </span>
               </div>
             )}
@@ -714,7 +730,7 @@ export function Today() {
       >
         <CategoryDot vm={vm} className="h-2 w-2" />
         <span className="w-28 flex-shrink-0 whitespace-nowrap text-xs font-medium tabular-nums text-foreground/55">
-          {formatTimeRange(m.start_time, m.end_time, true)}
+          {formatTimeRange(t('today:ribbon.timeRangeSeparator'), m.start_time, m.end_time, true)}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
@@ -745,7 +761,7 @@ export function Today() {
       >
         <CategoryDot vm={vm} className="h-2 w-2 opacity-70" />
         <span className="w-28 flex-shrink-0 whitespace-nowrap text-xs font-medium tabular-nums text-foreground/50">
-          {formatTimeRange(m.start_time, m.end_time, true)}
+          {formatTimeRange(t('today:ribbon.timeRangeSeparator'), m.start_time, m.end_time, true)}
         </span>
         <span
           className={cn(
@@ -755,7 +771,7 @@ export function Today() {
         >
           {m.subject}
         </span>
-        {vm.online && <Video className="h-3.5 w-3.5 flex-shrink-0 text-foreground/40" aria-label="Online meeting" />}
+        {vm.online && <Video className="h-3.5 w-3.5 flex-shrink-0 text-foreground/40" aria-label={t('today:ribbon.onlineMeetingAriaLabel')} />}
         <RecordingMic vm={vm} />
         <RelativeBadge vm={vm} subtle />
       </button>
@@ -781,11 +797,11 @@ export function Today() {
           />
           <span className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{group.label}</span>
           <span className="text-xs text-foreground/50">
-            · {group.meetings.length} {group.meetings.length === 1 ? 'meeting' : 'meetings'}
+            {t('today:ribbon.groupMeetingsCount', { count: group.meetings.length })}
           </span>
           {recordedCount > 0 && (
             <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-500">
-              · {recordedCount} recorded
+              {t('today:ribbon.groupRecordedCount', { count: recordedCount })}
               <CheckCircle2 className="h-3 w-3" />
             </span>
           )}
@@ -819,7 +835,7 @@ export function Today() {
                 >
                   <CategoryDot vm={vm} className="h-2 w-2" />
                   <span className="w-28 flex-shrink-0 whitespace-nowrap text-xs tabular-nums text-foreground/55">
-                    {formatTimeRange(m.start_time, m.end_time, true)}
+                    {formatTimeRange(t('today:ribbon.timeRangeSeparator'), m.start_time, m.end_time, true)}
                   </span>
                   <span className={cn('min-w-0 flex-1 truncate text-foreground/80', vm.cancelled && 'line-through')}>
                     {m.subject}
@@ -861,7 +877,7 @@ export function Today() {
       return (
         <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/55">
           <Link2Off className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-          {UNLINKED_STATE_LABEL}
+          {t('calendar:tooltips.unlinkedLabel')}
         </div>
       )
     }
@@ -881,13 +897,13 @@ export function Today() {
   const followUpMeta = (item: BriefingRecentItem) =>
     [
       formatDay(item.dateRecorded),
-      `${item.wordCount ?? '—'} words`,
+      t('today:followUps.wordsLabel', { count: item.wordCount ?? t('today:followUps.wordCountUnavailable') }),
       item.actionItems.length > 0
-        ? `${item.actionItems.length} action ${item.actionItems.length === 1 ? 'item' : 'items'}`
+        ? t('today:followUps.actionItemsCount', { count: item.actionItems.length })
         : null
     ]
       .filter(Boolean)
-      .join(' · ')
+      .join(t('today:followUps.metaSeparator'))
 
   /** Detail body reused by expanded digest rows and the fallback card. */
   const FollowUpDetail = (item: BriefingRecentItem) => (
@@ -897,7 +913,7 @@ export function Today() {
         <ul className="space-y-1 text-sm">
           {item.actionItems.slice(0, 4).map((a, i) => (
             <li key={i} className="flex gap-2">
-              <span className="text-muted-foreground">→</span>
+              <span className="text-muted-foreground">{t('today:followUps.detailBullet')}</span>
               <span className="line-clamp-2">{a}</span>
             </li>
           ))}
@@ -906,11 +922,11 @@ export function Today() {
       <div className="flex flex-wrap gap-2 pt-1">
         <Button size="sm" onClick={() => generateFor(item.recordingId, 'claude_code_prompt')}>
           <Terminal className="mr-2 h-4 w-4" />
-          Claude Code handoff
+          {t('today:followUps.claudeCodeHandoffButton')}
         </Button>
         <Button size="sm" variant="outline" onClick={() => generateFor(item.recordingId, 'meeting_minutes')}>
           <FileText className="mr-2 h-4 w-4" />
-          Meeting minutes
+          {t('today:followUps.meetingMinutesButton')}
         </Button>
         <Button
           size="sm"
@@ -918,14 +934,14 @@ export function Today() {
           onClick={() => navigate('/assistant', { state: { contextId: item.recordingId } })}
         >
           <Bot className="mr-2 h-4 w-4" />
-          Ask the assistant
+          {t('today:followUps.askAssistantButton')}
         </Button>
         <Button
           size="sm"
           variant="ghost"
           onClick={() => navigate('/library', { state: { selectedId: item.recordingId } })}
         >
-          Open in Library
+          {t('today:followUps.openInLibraryButton')}
           <ArrowRight className="ml-1 h-4 w-4" />
         </Button>
       </div>
@@ -976,19 +992,25 @@ export function Today() {
               <Sun className="h-4 w-4" />
               {new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
             </div>
-            <h1 className="mt-1 text-4xl font-bold tracking-tight">{greeting()}, Sebastián</h1>
+            <h1 className="mt-1 text-4xl font-bold tracking-tight">{greeting(t)}</h1>
             {data && (
               <p className="mt-2 text-sm text-foreground/70">
-                <span className="font-semibold text-foreground">{data.stats.transcribedCount}</span> meetings in your
-                knowledge base ·{' '}
-                <span className="font-semibold text-foreground">{data.stats.indexedChunks}</span> memory chunks indexed
-                · <span className="font-semibold text-foreground">{data.stats.pendingActionables}</span> pending actions
+                <Trans
+                  i18nKey="today:header.stats"
+                  values={{
+                    transcribed: data.stats.transcribedCount,
+                    indexed: data.stats.indexedChunks,
+                    pending: data.stats.pendingActionables
+                  }}
+                >
+                  <span className="font-semibold text-foreground">{{ transcribed: data.stats.transcribedCount } as unknown as string}</span> meetings in your knowledge base · <span className="font-semibold text-foreground">{{ indexed: data.stats.indexedChunks } as unknown as string}</span> memory chunks indexed · <span className="font-semibold text-foreground">{{ pending: data.stats.pendingActionables } as unknown as string}</span> pending actions
+                </Trans>
               </p>
             )}
           </div>
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
-            Refresh
+            {t('today:header.refreshButton')}
           </Button>
         </div>
 
@@ -1008,22 +1030,22 @@ export function Today() {
             <CardTitle className="flex items-center justify-between text-base">
               <span className="flex items-center gap-2">
                 <Clock className="h-4 w-4" />
-                Your day
+                {t('today:ribbon.title')}
               </span>
               {/* Category legend — click to open (discoverable, not hover-only). */}
               <Popover>
                 <PopoverTrigger asChild>
                   <button
                     className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-normal text-foreground/45 transition-colors hover:text-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label="Meeting category legend"
+                    aria-label={t('today:ribbon.legendAriaLabel')}
                   >
                     <Info className="h-3.5 w-3.5" />
-                    Legend
+                    {t('today:ribbon.legendButton')}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-52 p-3">
                   <div className="space-y-1.5">
-                    <div className="text-xs font-semibold text-foreground/70">Meeting types</div>
+                    <div className="text-xs font-semibold text-foreground/70">{t('today:ribbon.legendHeading')}</div>
                     {CATEGORY_ORDER.map((c) => (
                       <div key={c} className="flex items-center gap-2 text-xs">
                         <span className={cn('h-2.5 w-2.5 rounded-full', CATEGORY_DOT[c])} aria-hidden="true" />
@@ -1039,18 +1061,17 @@ export function Today() {
             {!data?.calendar.configured ? (
               <div className="flex items-center justify-between gap-4 rounded-lg border border-dashed p-4">
                 <div className="text-sm text-muted-foreground">
-                  Your Outlook calendar isn&apos;t connected yet. Add your Outlook ICS URL in Settings and your meetings
-                  will appear here, correlate with recordings automatically, and enrich every transcript.
+                  {t('today:ribbon.calendarNotConnected')}
                 </div>
                 <Button size="sm" onClick={() => navigate('/settings')}>
                   <SettingsIcon className="mr-2 h-4 w-4" />
-                  Connect calendar
+                  {t('today:ribbon.connectCalendarButton')}
                 </Button>
               </div>
             ) : data.todayMeetings.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No meetings scheduled today.</p>
+              <p className="text-sm text-muted-foreground">{t('today:ribbon.noMeetingsToday')}</p>
             ) : timedMeetings.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No timed meetings today.</p>
+              <p className="text-sm text-muted-foreground">{t('today:ribbon.noTimedMeetingsToday')}</p>
             ) : (
               <div>
                 <div className="space-y-2">
@@ -1061,7 +1082,7 @@ export function Today() {
                   {zoned.recent.map((m, i) => RecentRow(buildVM(m), i))}
 
                   {/* NOW line */}
-                  <div ref={nowLineRef} className="flex items-center gap-2 py-1.5" aria-label="Current time">
+                  <div ref={nowLineRef} className="flex items-center gap-2 py-1.5" aria-label={t('today:ribbon.currentTimeAriaLabel')}>
                     <span className="relative flex h-3 w-3 flex-shrink-0">
                       <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-60 animate-ping motion-reduce:hidden" />
                       <span className="relative inline-flex h-3 w-3 rounded-full bg-primary" />
@@ -1069,7 +1090,7 @@ export function Today() {
                     <span className="text-xs font-bold uppercase tracking-wider text-primary tabular-nums">
                       {formatClock(now)}
                     </span>
-                    <span className="ml-1 text-[11px] font-medium uppercase tracking-wider text-primary/60">Now</span>
+                    <span className="ml-1 text-[11px] font-medium uppercase tracking-wider text-primary/60">{t('today:ribbon.nowLabel')}</span>
                     <span className="h-px flex-1 bg-gradient-to-r from-primary/40 to-transparent" aria-hidden="true" />
                   </div>
 
@@ -1085,12 +1106,12 @@ export function Today() {
                   {preFirstMeeting && firstUpcoming && (
                     <div>
                       <div className="rounded-xl border border-primary/30 bg-primary/[0.04] p-5 shadow-sm">
-                        <div className="text-xs font-medium uppercase tracking-wide text-primary/70">First meeting</div>
+                        <div className="text-xs font-medium uppercase tracking-wide text-primary/70">{t('today:ribbon.firstMeetingLabel')}</div>
                         <div className="mt-1 text-2xl font-bold tracking-tight text-foreground">
-                          {formatMinutesUntil(firstUpcomingTiming?.minutes ?? 0).replace(/^in /, '')}
+                          {formatMinutesUntilBare(firstUpcomingTiming?.minutes ?? 0)}
                         </div>
                         <div className="mt-1 text-sm text-foreground/70">
-                          {firstUpcoming.subject} · {formatTime(firstUpcoming.start_time)}
+                          {firstUpcoming.subject}{t('today:ribbon.firstMeetingSeparator')}{formatTime(firstUpcoming.start_time)}
                         </div>
                       </div>
                     </div>
@@ -1105,11 +1126,10 @@ export function Today() {
                       <div className="rounded-xl border border-border/70 bg-muted/40 p-5">
                         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                           <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
-                          That&apos;s a wrap for today
+                          {t('today:ribbon.dayOverTitle')}
                         </div>
                         <div className="mt-1 text-sm text-foreground/65">
-                          {timedMeetings.length} {timedMeetings.length === 1 ? 'meeting' : 'meetings'} ·{' '}
-                          {recordedSet.size} recorded
+                          {t('today:ribbon.dayOverSummary', { count: timedMeetings.length, recorded: recordedSet.size })}
                         </div>
                         <Button
                           size="sm"
@@ -1117,7 +1137,7 @@ export function Today() {
                           className="mt-3"
                           onClick={() => navigate('/actionables')}
                         >
-                          Review actionables
+                          {t('today:ribbon.reviewActionablesButton')}
                           <ArrowRight className="ml-1 h-4 w-4" />
                         </Button>
                       </div>
@@ -1132,10 +1152,10 @@ export function Today() {
                 {allDayMeetings.length > 0 && (
                   <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 pt-2 text-foreground/45">
                     <CalendarBadge />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide">All day</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">{t('today:ribbon.allDayLabel')}</span>
                     {allDayMeetings.map((m, i) => (
                       <Fragment key={m.id}>
-                        {i > 0 && <span aria-hidden="true">·</span>}
+                        {i > 0 && <span aria-hidden="true">{t('today:ribbon.allDaySeparator')}</span>}
                         <span className="text-[11px] font-medium text-foreground/60">{m.subject}</span>
                       </Fragment>
                     ))}
@@ -1153,10 +1173,10 @@ export function Today() {
               <CardTitle className="flex items-center justify-between text-base">
                 <span className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-amber-500" />
-                  Today&apos;s follow-ups
+                  {t('today:followUps.title')}
                 </span>
                 <span className="text-xs font-normal text-muted-foreground">
-                  {followUps.length} {followUps.length === 1 ? 'meeting' : 'meetings'}
+                  {t('today:followUps.meetingsCount', { count: followUps.length })}
                 </span>
               </CardTitle>
             </CardHeader>
@@ -1168,7 +1188,7 @@ export function Today() {
                   data-testid="followup-pending"
                 >
                   <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                  {pendingCount} of today&apos;s recordings still processing
+                  {t('today:followUps.pendingProcessing', { count: pendingCount })}
                 </div>
               )}
             </CardContent>
@@ -1178,7 +1198,7 @@ export function Today() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Sparkles className="h-4 w-4 text-amber-500" />
-                Today&apos;s follow-ups
+                {t('today:followUps.title')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1187,7 +1207,7 @@ export function Today() {
                 data-testid="followup-pending"
               >
                 <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                {pendingCount} of today&apos;s recordings still processing
+                {t('today:followUps.pendingProcessing', { count: pendingCount })}
               </div>
             </CardContent>
           </Card>
@@ -1196,7 +1216,7 @@ export function Today() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Sparkles className="h-4 w-4 text-amber-500" />
-                Latest analyzed meeting
+                {t('today:followUps.latestAnalyzedTitle')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -1232,10 +1252,10 @@ export function Today() {
               <CardTitle className="flex items-center justify-between text-base">
                 <span className="flex items-center gap-2">
                   <ListTodo className="h-4 w-4" />
-                  Next actions
+                  {t('today:actions.title')}
                 </span>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/actionables')}>
-                  View all
+                  {t('today:actions.viewAllButton')}
                   <ArrowRight className="ml-1 h-4 w-4" />
                 </Button>
               </CardTitle>
@@ -1243,7 +1263,7 @@ export function Today() {
             <CardContent>
               {!data || data.pendingActionables.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Nothing pending. New suggestions appear here after each transcription.
+                  {t('today:actions.emptyState')}
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -1252,7 +1272,7 @@ export function Today() {
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium">{a.title}</div>
                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          {a.type.replace(/_/g, ' ')}
+                          {t(`domain:actionableType.${a.type}.rawLabel`, { defaultValue: a.type.replace(/_/g, ' ') })}
                         </div>
                       </div>
                       <Button
@@ -1262,7 +1282,7 @@ export function Today() {
                         onClick={() => generateFor(a.sourceKnowledgeId, a.suggestedTemplate || 'meeting_minutes')}
                       >
                         <Sparkles className="mr-1 h-4 w-4" />
-                        Generate
+                        {t('today:actions.generateButton')}
                       </Button>
                     </div>
                   ))}
@@ -1277,10 +1297,10 @@ export function Today() {
               <CardTitle className="flex items-center justify-between text-base">
                 <span className="flex items-center gap-2">
                   <BookOpen className="h-4 w-4" />
-                  Recent knowledge
+                  {t('today:knowledge.title')}
                 </span>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/library')}>
-                  Library
+                  {t('today:knowledge.libraryButton')}
                   <ArrowRight className="ml-1 h-4 w-4" />
                 </Button>
               </CardTitle>
@@ -1288,7 +1308,7 @@ export function Today() {
             <CardContent>
               {!data || data.recentKnowledge.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Transcribe recordings from your HiDock and they&apos;ll show up here.
+                  {t('today:knowledge.emptyState')}
                 </p>
               ) : (
                 <div className="space-y-2">

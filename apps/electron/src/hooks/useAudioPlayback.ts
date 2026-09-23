@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useUIStore } from '@/store/useUIStore'
 import { toast } from '@/components/ui/toaster'
 import { parseError, getErrorMessage } from '@/features/library/utils/errorHandling'
@@ -50,6 +51,7 @@ async function persistWaveform(
 }
 
 export function useAudioPlayback() {
+  const { t } = useTranslation()
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioBlobUrlRef = useRef<string | null>(null)
   const waveformAbortControllerRef = useRef<AbortController | null>(null)
@@ -101,9 +103,9 @@ export function useAudioPlayback() {
         if (shouldLogQa()) console.log(`[QA-MONITOR][Operation] Reading audio file: ${filePath}`)
         const response = await window.electronAPI.storage.readRecording(filePath)
         if (!response.success || !response.data) {
-          const errorMsg = response.error || 'Failed to load audio file'
+          const errorMsg = response.error || t('common:playback.loadFailedDescription')
           console.error(`[useAudioPlayback] readRecording failed:`, errorMsg)
-          toast({ title: 'Error', description: errorMsg, variant: 'error' })
+          toast({ title: t('common:playback.errorTitle'), description: errorMsg, variant: 'error' })
           setCurrentlyPlaying(null, null)
           return
         }
@@ -151,7 +153,7 @@ export function useAudioPlayback() {
             })
             const libraryError = parseError(e, 'audio playback')
             toast({
-              title: 'Playback error',
+              title: t('common:playback.playbackErrorTitle'),
               description: getErrorMessage(libraryError.type),
               variant: 'error'
             })
@@ -253,7 +255,7 @@ export function useAudioPlayback() {
         const libraryError = parseError(error, 'audio playback')
         console.error('[useAudioPlayback] Play error:', error)
         toast({
-          title: 'Playback error',
+          title: t('common:playback.playbackErrorTitle'),
           description: getErrorMessage(libraryError.type),
           variant: 'error'
         })
@@ -267,7 +269,7 @@ export function useAudioPlayback() {
     })()
 
     return playbackLockRef.current
-  }, [setCurrentlyPlaying, setPlaybackProgress, setIsPlaying, setWaveformData])
+  }, [setCurrentlyPlaying, setPlaybackProgress, setIsPlaying, setWaveformData, t])
 
   // ---- Waveform-Only Load ----
 

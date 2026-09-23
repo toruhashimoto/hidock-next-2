@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { getHiDockDeviceService, HiDockRecording } from '@/services/hidock-device'
 import { useAppStore } from '@/store/useAppStore'
 import {
@@ -529,6 +530,7 @@ interface UseUnifiedRecordingsResult {
  * NOTE: Recordings are stored in the Zustand store to persist across page navigation.
  */
 export function useUnifiedRecordings(): UseUnifiedRecordingsResult {
+  const { t } = useTranslation()
   // Get state from store (persists across navigation)
   const recordings = useAppStore((state) => state.unifiedRecordings) as UnifiedRecording[]
   const loading = useAppStore((state) => state.unifiedRecordingsLoading)
@@ -741,7 +743,7 @@ export function useUnifiedRecordings(): UseUnifiedRecordingsResult {
       }
     } catch (e) {
       console.error('[useUnifiedRecordings] Error loading recordings:', e)
-      setError(e instanceof Error ? e.message : 'Failed to load recordings')
+      setError(e instanceof Error ? e.message : t('device:recordings.loadFailedFallback'))
       if (!decremented) {
         decrementLoading()
         decremented = true
@@ -754,7 +756,7 @@ export function useUnifiedRecordings(): UseUnifiedRecordingsResult {
       }
       console.log('[useUnifiedRecordings] loadRecordings completed')
     }
-  }, [deviceService, setRecordings, incrementLoading, decrementLoading, setError, markLoaded])
+  }, [deviceService, setRecordings, incrementLoading, decrementLoading, setError, markLoaded, t])
 
   // spec-006/F17 T6 fix round 2 (CX-T6-4) — cache-only rebuild. Re-reads the
   // LOCAL sources (DB recordings, synced_files, device_file_cache, captures)
@@ -908,8 +910,8 @@ export function useUnifiedRecordings(): UseUnifiedRecordingsResult {
 
         import('@/components/ui/toaster').then(({ toast }) => {
           toast.success(
-            count === 1 ? 'New recording detected' : `${count} new recordings detected`,
-            count === 1 ? filename : 'The library has been updated.'
+            t('device:watcher.newRecordingDetectedTitle', { count }),
+            count === 1 ? filename : t('device:watcher.libraryUpdatedDescription')
           )
         })
 
@@ -926,7 +928,7 @@ export function useUnifiedRecordings(): UseUnifiedRecordingsResult {
         recordingRefreshTimerRef.current = null
       }
     }
-  }, [refreshLocal])
+  }, [refreshLocal, t])
 
   // Poll device for file count changes (detect new recordings on device)
   useEffect(() => {
@@ -967,9 +969,12 @@ export function useUnifiedRecordings(): UseUnifiedRecordingsResult {
           if (diff > 0) {
             // New recordings detected
             import('@/components/ui/toaster').then(({ toast }) => {
+              // diff is always ≥ 1 in this branch (guarded by `if (diff > 0)` below), so
+              // the `> 1` ternary here is equivalent to the standard `=== 1` plural rule —
+              // no fake-count trick needed.
               toast.info(
-                `${diff} New Recording${diff > 1 ? 's' : ''} on Device`,
-                `Detected ${diff} new recording${diff > 1 ? 's' : ''}`
+                t('device:watcher.newRecordingOnDeviceTitle', { count: diff }),
+                t('device:watcher.newRecordingOnDeviceDescription', { count: diff })
               )
             })
           }
@@ -990,7 +995,7 @@ export function useUnifiedRecordings(): UseUnifiedRecordingsResult {
     const interval = setInterval(checkDeviceChanges, 30000)
 
     return () => clearInterval(interval)
-  }, [deviceConnected, deviceService, loadRecordings])
+  }, [deviceConnected, deviceService, loadRecordings, t])
 
   // Memoize stats calculation - only recalculate when recordings change
   const stats = useMemo(() => {

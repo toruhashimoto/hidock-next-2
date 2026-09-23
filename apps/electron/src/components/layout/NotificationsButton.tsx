@@ -17,6 +17,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Bell, Download, AlertCircle, RefreshCw, ArrowRight, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { cn } from '@/lib/utils'
 import { useDownloadQueue } from '@/store/useAppStore'
 import type { DownloadQueueEntry } from '@/store/useAppStore'
@@ -32,11 +34,18 @@ function displayName(filename: string): string {
   return filename.replace(/\.(hda|wav|mp3|m4a)$/i, '')
 }
 
-const STATUS_LABEL: Record<TranscriptionStatus, string> = {
-  pending: 'Queued',
-  processing: 'Transcribing…',
-  completed: 'Done',
-  failed: 'Failed'
+/** Human-readable status for a transcription queue item. */
+function statusLabel(t: TFunction, status: TranscriptionStatus): string {
+  switch (status) {
+    case 'pending':
+      return t('layout:status.queued')
+    case 'processing':
+      return t('layout:status.transcribing')
+    case 'completed':
+      return t('layout:status.done')
+    case 'failed':
+      return t('layout:status.failed')
+  }
 }
 
 /** Display order: active first, then queued, then failed. */
@@ -45,20 +54,22 @@ function statusRank(s: TranscriptionStatus): number {
 }
 
 /** Human-readable status line for a download row. */
-function downloadStatusLabel(dl: DownloadQueueEntry): string {
+function downloadStatusLabel(t: TFunction, dl: DownloadQueueEntry): string {
   switch (dl.status) {
     case 'pending':
-      return 'Queued'
+      return t('layout:status.queued')
     case 'cancelling':
-      return 'Cancelling…'
+      return t('layout:status.cancelling')
     case 'cancelled':
-      return 'Cancelled'
+      return t('layout:status.cancelled')
     case 'failed':
-      return 'Failed'
+      return t('layout:status.failed')
     case 'completed':
-      return 'Done'
+      return t('layout:status.done')
     default:
-      return dl.progress > 0 ? `Downloading… ${Math.round(dl.progress)}%` : 'Starting download…'
+      return dl.progress > 0
+        ? t('layout:status.downloadingProgress', { progress: Math.round(dl.progress) })
+        : t('layout:status.startingDownload')
   }
 }
 
@@ -68,6 +79,7 @@ function isCancelableDownload(dl: DownloadQueueEntry): boolean {
 }
 
 export function NotificationsButton() {
+  const { t } = useTranslation()
   const downloadQueue = useDownloadQueue()
   const txStats = useTranscriptionStats()
   const txQueue = useTranscriptionStore((s) => s.queue)
@@ -142,11 +154,13 @@ export function NotificationsButton() {
           type="button"
           aria-label={
             active > 0 || errors > 0
-              ? `Notifications: ${active} operation${active === 1 ? '' : 's'} in progress${errors ? `, ${errors} failed` : ''}`
-              : 'Notifications'
+              ? errors > 0
+                ? t('layout:notifications.ariaLabelWithErrors', { count: active, errors })
+                : t('layout:notifications.ariaLabelActive', { count: active })
+              : t('layout:notifications.title')
           }
           aria-haspopup="dialog"
-          title="Notifications & operations"
+          title={t('layout:notifications.triggerTitle')}
           className="titlebar-no-drag relative flex h-7 w-7 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 data-[state=open]:bg-slate-700 data-[state=open]:text-white"
         >
           <Bell className={cn('h-4 w-4', active > 0 && 'animate-pulse motion-reduce:animate-none')} />
@@ -164,19 +178,23 @@ export function NotificationsButton() {
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-80 p-0" aria-label="Notifications">
+      <PopoverContent align="end" className="w-80 p-0" aria-label={t('layout:notifications.title')}>
         <div className="flex items-center justify-between border-b px-3 py-2">
-          <h2 className="text-sm font-semibold">Notifications</h2>
+          <h2 className="text-sm font-semibold">{t('layout:notifications.title')}</h2>
           {total > 0 && (
             <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-              {active > 0 && errors > 0 ? `${active} active · ${errors} failed` : active > 0 ? `${active} active` : `${errors} failed`}
+              {active > 0 && errors > 0
+                ? t('layout:notifications.summaryActiveAndFailed', { active, errors })
+                : active > 0
+                  ? t('layout:notifications.summaryActive', { active })
+                  : t('layout:notifications.summaryFailed', { errors })}
             </span>
           )}
         </div>
 
         <div className="max-h-80 overflow-y-auto p-1.5">
           {!hasActivity ? (
-            <p className="px-2 py-6 text-center text-sm text-muted-foreground">No recent activity</p>
+            <p className="px-2 py-6 text-center text-sm text-muted-foreground">{t('layout:notifications.noRecentActivity')}</p>
           ) : (
             <ul className="space-y-0.5">
               {transcriptions.map((item) => (
@@ -189,7 +207,7 @@ export function NotificationsButton() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm text-foreground">{displayName(item.filename)}</div>
                     <div className="truncate text-[11px] text-muted-foreground">
-                      {STATUS_LABEL[item.status]}
+                      {statusLabel(t, item.status)}
                       {item.error ? ` · ${item.error}` : ''}
                     </div>
                   </div>
@@ -212,7 +230,7 @@ export function NotificationsButton() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm text-foreground">{displayName(dl.filename)}</div>
                     <div className="truncate text-[11px] text-muted-foreground">
-                      {downloadStatusLabel(dl)}{dl.error ? ` · ${dl.error}` : ''}
+                      {downloadStatusLabel(t, dl)}{dl.error ? ` · ${dl.error}` : ''}
                     </div>
                   </div>
                   {(isCancelableDownload(dl) || dl.status === 'cancelling') && (
@@ -220,8 +238,8 @@ export function NotificationsButton() {
                       type="button"
                       onClick={() => cancelDownload(dl.filename)}
                       disabled={dl.status === 'cancelling'}
-                      aria-label={`Cancel download ${displayName(dl.filename)}`}
-                      title="Cancel download"
+                      aria-label={t('layout:operations.cancelDownloadNamed', { filename: displayName(dl.filename) })}
+                      title={t('layout:notifications.cancelDownloadTitle')}
                       className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -239,11 +257,11 @@ export function NotificationsButton() {
               <button
                 type="button"
                 onClick={() => cancelAllDownloads()}
-                aria-label="Cancel all downloads"
+                aria-label={t('layout:operations.cancelAllDownloads')}
                 className="flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 dark:text-red-400"
               >
                 <X className="h-3.5 w-3.5" />
-                Cancel all downloads
+                {t('layout:operations.cancelAllDownloads')}
               </button>
             )}
             <button
@@ -251,7 +269,7 @@ export function NotificationsButton() {
               onClick={viewAll}
               className="ml-auto flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
             >
-              View all in Operations
+              {t('layout:notifications.viewAllInOperations')}
               <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>

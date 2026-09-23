@@ -1,0 +1,47 @@
+{
+  "notesPage.searchPlaceholder": "ノートを検索",
+  "notesPage.searchAriaLabel": "ノートを検索",
+  "notesPage.newNoteAriaLabel": "新しいノート",
+  "notesPage.newNoteTitle": "新しいノート（Ctrl+N）。会議中に書き始めたノートは、その会議にリンクされます。",
+  "notesPage.emptySearchMessage": "一致するノートはありません。",
+  "notesPage.emptyMessage": "まだノートがありません。プラスボタンか Ctrl+N を押すと、カーソルが入った状態でノートが開きます。",
+  "notesPage.noSelectionMessage": "ノートを選ぶか、新しく作成してください。",
+
+  "notesPage.titlePlaceholder": "タイトル（任意）",
+  "notesPage.titleAriaLabel": "ノートのタイトル",
+  "notesPage.savingLabel": "保存中…",
+  "notesPage.savedLabel": "保存済み",
+  "notesPage.analyseButtonLabel": "分類して要約",
+  "notesPage.analyseFailedTitle": "このノートを分析できませんでした",
+  "notesPage.findRelatedButtonLabel": "関連項目を探す",
+  "notesPage.findRelatedFailedTitle": "関連項目を検索できませんでした",
+  "notesPage.suggestMeetingButtonLabel": "会議を提案",
+  "notesPage.suggestMeetingFailedTitle": "会議を提案できませんでした",
+  "notesPage.deleteNoteAriaLabel": "ノートを削除",
+
+  "notesPage.editorAriaLabel": "ノート",
+  "notesPage.editorPlaceholder": "書いてください。ほかのことはすべて後から行われます。",
+
+  "notesPage.analysisFailedMessage": "前回の分析に失敗しました: {{error}}",
+  "notesPage.summaryHeading": "要約",
+  "notesPage.categoryHeading": "カテゴリ",
+  "notesPage.categoryAriaLabel": "カテゴリ",
+  "notesPage.categoryUserSetHint": "ご自身で設定したカテゴリのため、再分析しても変更されません。",
+
+  "notesPage.meetingHeading": "会議",
+  "notesPage.linkSourceLiveMessage": "その会議の開催中にリンクされました。",
+  "notesPage.linkSourceUserMessage": "ご自身で選択した会議です。",
+  "notesPage.linkSourceSuggestedMessage": "提案を承認してリンクしました。",
+  "notesPage.unlinkButtonLabel": "リンクを解除",
+  "notesPage.suggestionsHeading": "このノートに関係していそうな会議",
+  "notesPage.linkToMeetingButtonLabel": "この会議にリンク",
+  "notesPage.relatedHeading": "関連項目",
+
+  "noteTitle.newNoteFallback": "新しいノート",
+  "noteTitle.writtenDuringMeeting": "会議中に作成",
+  "noteTitle.unknownTime": "不明",
+
+  "notesPage.suggestionReason.covering": "その会議の最中に書かれたノートです。",
+  "notesPage.suggestionReason.similar": "この会議の文字起こしと同じ内容が書かれています。",
+  "notesPage.suggestionReason.sameDay": "同じ日の会議です。該当するものがあれば選んでください。"
+}

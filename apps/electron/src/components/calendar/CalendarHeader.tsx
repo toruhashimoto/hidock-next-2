@@ -3,6 +3,7 @@
  */
 
 import { memo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight, RefreshCw, Calendar as CalendarIcon, List } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -49,6 +50,7 @@ export const CalendarHeader = memo(function CalendarHeader({
   onViewToggle,
   onCalendarViewChange,
 }: CalendarHeaderProps) {
+  const { t } = useTranslation()
   return (
     <header className="flex items-center justify-between border-b px-6 py-4 flex-shrink-0">
       <div className="flex items-center gap-4">
@@ -60,7 +62,7 @@ export const CalendarHeader = memo(function CalendarHeader({
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button variant="outline" size="sm" onClick={onGoToToday}>
-              Today
+              {t('calendar:header.todayButton')}
             </Button>
             <Button variant="outline" size="icon" onClick={onNavigateNext}>
               <ChevronRight className="h-4 w-4" />
@@ -75,16 +77,16 @@ export const CalendarHeader = memo(function CalendarHeader({
           {calendarSyncing ? (
             <span className="flex items-center gap-1">
               <RefreshCw className="h-3 w-3 animate-spin" />
-              Syncing...
+              {t('calendar:header.syncingLabel')}
             </span>
           ) : (
             <>
-              {lastSync && <span>Synced {formatLastSync()}</span>}
+              {lastSync && <span>{t('calendar:header.syncedAt', { time: formatLastSync() })}</span>}
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={onSync}
-                title="Clear cache and resync calendar"
+                title={t('calendar:header.resyncTitle')}
                 className="h-6 px-2"
               >
                 <RefreshCw className="h-3 w-3" />
@@ -100,9 +102,9 @@ export const CalendarHeader = memo(function CalendarHeader({
           <Label
             htmlFor="auto-sync-header"
             className="text-xs cursor-pointer"
-            title={syncIntervalMinutes ? `Auto-sync every ${syncIntervalMinutes} minutes` : 'Auto-sync'}
+            title={syncIntervalMinutes ? t('calendar:header.autoSyncIntervalTitle', { minutes: syncIntervalMinutes }) : t('calendar:header.autoSyncTitle')}
           >
-            Auto{syncIntervalMinutes ? ` (${syncIntervalMinutes}m)` : ''}
+            {syncIntervalMinutes ? t('calendar:header.autoSyncLabelWithInterval', { minutes: syncIntervalMinutes }) : t('calendar:header.autoSyncLabel')}
           </Label>
         </div>
 
@@ -115,7 +117,7 @@ export const CalendarHeader = memo(function CalendarHeader({
             className="scale-75"
           />
           <Label htmlFor="hide-empty" className="text-muted-foreground cursor-pointer">
-            Hide empty
+            {t('calendar:header.hideEmptyLabel')}
           </Label>
         </div>
 
@@ -126,7 +128,7 @@ export const CalendarHeader = memo(function CalendarHeader({
             size="sm"
             onClick={() => onViewToggle(false)}
             className="rounded-none border-0 px-2"
-            title="Calendar view"
+            title={t('calendar:header.calendarViewTitle')}
           >
             <CalendarIcon className="h-4 w-4" />
           </Button>
@@ -135,7 +137,7 @@ export const CalendarHeader = memo(function CalendarHeader({
             size="sm"
             onClick={() => onViewToggle(true)}
             className="rounded-none border-0 border-l px-2"
-            title="List view"
+            title={t('calendar:header.listViewTitle')}
           >
             <List className="h-4 w-4" />
           </Button>
@@ -150,7 +152,7 @@ export const CalendarHeader = memo(function CalendarHeader({
               onClick={() => onCalendarViewChange('day')}
               className="rounded-none border-0"
             >
-              Day
+              {t('calendar:header.dayViewButton')}
             </Button>
             <Button
               variant={calendarView === 'workweek' ? 'default' : 'ghost'}
@@ -158,7 +160,7 @@ export const CalendarHeader = memo(function CalendarHeader({
               onClick={() => onCalendarViewChange('workweek')}
               className="rounded-none border-0 border-l"
             >
-              Work
+              {t('calendar:header.workViewButton')}
             </Button>
             <Button
               variant={calendarView === 'week' ? 'default' : 'ghost'}
@@ -166,7 +168,7 @@ export const CalendarHeader = memo(function CalendarHeader({
               onClick={() => onCalendarViewChange('week')}
               className="rounded-none border-0 border-l"
             >
-              Week
+              {t('calendar:header.weekViewButton')}
             </Button>
             <Button
               variant={calendarView === 'month' ? 'default' : 'ghost'}
@@ -174,7 +176,7 @@ export const CalendarHeader = memo(function CalendarHeader({
               onClick={() => onCalendarViewChange('month')}
               className="rounded-none border-0 border-l"
             >
-              Month
+              {t('calendar:header.monthViewButton')}
             </Button>
           </div>
         )}

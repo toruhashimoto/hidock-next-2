@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import {
   Folder,
@@ -91,6 +92,7 @@ import { pageContent } from '@/lib/pageLayout'
 import { toast } from '@/components/ui/toaster'
 
 export function Projects() {
+  const { t } = useTranslation('projects')
   const [projects, setProjects] = useState<Project[]>([])
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
@@ -203,7 +205,7 @@ export function Projects() {
       }
     } catch (error) {
       console.error('Failed to load projects:', error)
-      toast.error('Failed to load projects', error instanceof Error ? error.message : 'An unexpected error occurred')
+      toast.error(t('common:projects.loadFailedFallback'), error instanceof Error ? error.message : t('common:errorBoundary.fallbackMessage'))
     } finally {
       setLoading(false)
     }
@@ -234,17 +236,21 @@ export function Projects() {
       if (result.success && result.data) {
         const { candidatePairs, suggestionsCreated, autoMergeable } = result.data
         toast.success(
-          'Discovery complete',
-          `${candidatePairs} candidate pairs analyzed, ${suggestionsCreated} new ${suggestionsCreated === 1 ? 'suggestion' : 'suggestions'}, ${autoMergeable} high-confidence`
+          t('projectsSidebar.discoveryCompleteTitle'),
+          t('projectsSidebar.discoveryCompleteMessage', {
+            count: suggestionsCreated,
+            pairs: candidatePairs,
+            confidence: autoMergeable
+          })
         )
         suggestionsRef.current?.reload()
         refreshSuggestionCount()
       } else {
-        toast.error('Discovery failed', result.error || 'Unknown error')
+        toast.error(t('projectsSidebar.discoveryFailedTitle'), result.error || t('common:errors.unknown'))
       }
     } catch (error) {
       console.error('Failed to discover projects:', error)
-      toast.error('Discovery failed', error instanceof Error ? error.message : 'An unexpected error occurred')
+      toast.error(t('projectsSidebar.discoveryFailedTitle'), error instanceof Error ? error.message : t('common:errorBoundary.fallbackMessage'))
     } finally {
       setDiscovering(false)
     }
@@ -271,11 +277,11 @@ export function Projects() {
         }
         setProjects(prev => [mapped, ...prev])
         setActiveProject(mapped)
-        toast.success('Project created', `"${mapped.name}" has been created.`)
+        toast.success(t('projectsSidebar.projectCreatedTitle'), t('projectsSidebar.projectCreatedMessage', { name: mapped.name }))
       }
     } catch (error) {
       console.error('Failed to create project:', error)
-      toast.error('Failed to create project', error instanceof Error ? error.message : 'An unexpected error occurred')
+      toast.error(t('common:projects.createFailedFallback'), error instanceof Error ? error.message : t('common:errorBoundary.fallbackMessage'))
     }
 
     setCreateDialogOpen(false)
@@ -301,9 +307,9 @@ export function Projects() {
         : await window.electronAPI.projects.delete(activeProject.id)
       if (result.success) {
         if (dismissing) {
-          toast.success('Discovery dismissed', `"${activeProject.name}" won't be re-created from transcripts.`)
+          toast.success(t('projectDetail.discoveryDismissedTitle'), t('projectDetail.discoveryDismissedMessage', { name: activeProject.name }))
         } else {
-          toast.success('Project deleted', `"${activeProject.name}" has been deleted.`)
+          toast.success(t('projectDetail.projectDeletedTitle'), t('projectDetail.projectDeletedMessage', { name: activeProject.name }))
         }
         setProjects(prev => prev.filter(p => p.id !== activeProject.id))
         setActiveProject(null)
@@ -311,8 +317,8 @@ export function Projects() {
     } catch (error) {
       console.error('Failed to delete project:', error)
       toast.error(
-        dismissing ? 'Failed to dismiss project' : 'Failed to delete project',
-        error instanceof Error ? error.message : 'An unexpected error occurred'
+        dismissing ? t('projectDetail.dismissProjectFailedTitle') : t('common:projects.deleteFailedFallback'),
+        error instanceof Error ? error.message : t('common:errorBoundary.fallbackMessage')
       )
     }
     setDeleteDialogOpen(false)
@@ -374,7 +380,7 @@ export function Projects() {
         setSourceMeetings(
           rawMeetings
             .filter((m: any) => m && m.id)
-            .map((m: any) => ({ id: String(m.id), subject: (m.subject || m.title || 'Untitled meeting') as string }))
+            .map((m: any) => ({ id: String(m.id), subject: (m.subject || m.title || t('projectDetail.untitledMeetingFallback')) as string }))
         )
 
         void loadProjectExtras(detailed.id)
@@ -409,7 +415,7 @@ export function Projects() {
       }
     } catch (err) {
       console.error('Failed to load project details:', err)
-      toast.error('Failed to load project details', err instanceof Error ? err.message : 'An unexpected error occurred')
+      toast.error(t('projectDetail.loadDetailsFailedTitle'), err instanceof Error ? err.message : t('common:errorBoundary.fallbackMessage'))
     } finally {
       setDetailLoading(false)
     }
@@ -427,11 +433,11 @@ export function Projects() {
         const updated: Project = { ...activeProject, description: editDescription.trim() || null }
         setActiveProject(updated)
         setProjects(prev => prev.map(p => p.id === activeProject.id ? updated : p))
-        toast.success('Description updated', 'Project description has been saved.')
+        toast.success(t('projectDetail.descriptionUpdatedTitle'), t('projectDetail.descriptionUpdatedMessage'))
       }
     } catch (err) {
       console.error('Failed to update description:', err)
-      toast.error('Failed to update description', err instanceof Error ? err.message : 'An unexpected error occurred')
+      toast.error(t('projectDetail.updateDescriptionFailedTitle'), err instanceof Error ? err.message : t('common:errorBoundary.fallbackMessage'))
     }
     setIsEditingDescription(false)
   }
@@ -447,14 +453,14 @@ export function Projects() {
         setProjects(prev => prev.map(p => (p.id === activeProject.id ? { ...p, ...patch } : p)))
         return true
       }
-      toast.error('Failed to update project')
+      toast.error(t('common:projects.updateFailedFallback'))
       return false
     } catch (err) {
       console.error('Failed to update project:', err)
-      toast.error('Failed to update project', err instanceof Error ? err.message : 'An unexpected error occurred')
+      toast.error(t('common:projects.updateFailedFallback'), err instanceof Error ? err.message : t('common:errorBoundary.fallbackMessage'))
       return false
     }
-  }, [activeProject])
+  }, [activeProject, t])
 
   // Rename (inline)
   const handleSaveName = async () => {
@@ -464,7 +470,7 @@ export function Projects() {
       return
     }
     if (await applyProjectUpdate({ name: trimmed })) {
-      toast.success('Project renamed', `Now "${trimmed}".`)
+      toast.success(t('projectDetail.projectRenamedTitle'), t('projectDetail.projectRenamedMessage', { name: trimmed }))
     }
     setIsEditingName(false)
   }
@@ -478,7 +484,7 @@ export function Projects() {
       return
     }
     if (await applyProjectUpdate({ folderPath: value || null })) {
-      toast.success('Folder updated')
+      toast.success(t('projectDetail.folderUpdatedTitle'))
     }
     setIsEditingFolder(false)
   }
@@ -489,13 +495,13 @@ export function Projects() {
       if (result?.success && result.data) {
         setEditFolder(result.data)
         if (await applyProjectUpdate({ folderPath: result.data })) {
-          toast.success('Folder updated')
+          toast.success(t('projectDetail.folderUpdatedTitle'))
         }
         setIsEditingFolder(false)
       }
     } catch (err) {
       console.error('Failed to pick folder:', err)
-      toast.error('Failed to pick folder')
+      toast.error(t('projectDetail.pickFolderFailedTitle'))
     }
   }
 
@@ -504,11 +510,11 @@ export function Projects() {
     try {
       const result = await window.electronAPI.projects.openFolder(activeProject.id)
       if (!result.success) {
-        toast.error('Cannot open folder', (result as any).error?.message || 'Folder is not set or does not exist.')
+        toast.error(t('projectDetail.cannotOpenFolderTitle'), (result as any).error?.message || t('projectDetail.folderNotSetMessage'))
       }
     } catch (err) {
       console.error('Failed to open folder:', err)
-      toast.error('Failed to open folder')
+      toast.error(t('projectDetail.openFolderFailedTitle'))
     }
   }
 
@@ -521,7 +527,7 @@ export function Projects() {
       return
     }
     if (await applyProjectUpdate({ url: value || null })) {
-      toast.success('URL updated')
+      toast.success(t('projectDetail.urlUpdatedTitle'))
     }
     setIsEditingUrl(false)
   }
@@ -538,11 +544,11 @@ export function Projects() {
         if (kind === 'issue') setNewIssue('')
         else setNewRisk('')
       } else {
-        toast.error(`Failed to add ${kind}`)
+        toast.error(t(`noteList.${kind}.addFailedTitle`))
       }
     } catch (err) {
       console.error(`Failed to add ${kind}:`, err)
-      toast.error(`Failed to add ${kind}`)
+      toast.error(t(`noteList.${kind}.addFailedTitle`))
     }
   }
 
@@ -555,7 +561,7 @@ export function Projects() {
       }
     } catch (err) {
       console.error('Failed to update note:', err)
-      toast.error('Failed to update')
+      toast.error(t('projectDetail.noteToggleFailedTitle'))
     }
   }
 
@@ -567,7 +573,7 @@ export function Projects() {
       }
     } catch (err) {
       console.error('Failed to delete note:', err)
-      toast.error('Failed to delete')
+      toast.error(t('projectDetail.noteDeleteFailedTitle'))
     }
   }
 
@@ -580,7 +586,7 @@ export function Projects() {
       <aside className="w-80 border-r flex flex-col bg-muted/10">
         <div className="p-4 border-b space-y-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold">Projects</h1>
+            <h1 className="text-xl font-bold">{t('projectsSidebar.title')}</h1>
             <div className="flex items-center gap-1">
               <Button
                 onClick={handleDiscover}
@@ -588,14 +594,14 @@ export function Projects() {
                 size="sm"
                 variant="outline"
                 className="h-8 gap-1"
-                title="Analyze projects for possible duplicates"
+                title={t('projectsSidebar.discoverButtonTitle')}
               >
                 <Sparkles className={cn("h-4 w-4", discovering && "animate-pulse")} />
-                {discovering ? 'Discovering…' : 'Discover'}
+                {discovering ? t('projectsSidebar.discoveringLabel') : t('projectsSidebar.discoverLabel')}
               </Button>
               <Button onClick={openCreateDialog} size="sm" className="h-8 gap-1">
                 <Plus className="h-4 w-4" />
-                New
+                {t('projectsSidebar.newButtonLabel')}
               </Button>
             </div>
           </div>
@@ -603,7 +609,7 @@ export function Projects() {
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search projects..."
+              placeholder={t('projectsSidebar.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 h-9"
@@ -620,7 +626,7 @@ export function Projects() {
                   statusFilter === s ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {s}
+                {t(`projectsSidebar.statusFilterLabel.${s}`)}
               </button>
             ))}
           </div>
@@ -636,15 +642,17 @@ export function Projects() {
               <Folder className="h-8 w-8 mx-auto text-muted-foreground opacity-20 mb-3" />
               <p className="text-xs text-muted-foreground mb-3">
                 {searchQuery
-                  ? `No projects matching "${searchQuery}"`
+                  ? t('projectsSidebar.emptySearchMessage', { query: searchQuery })
                   : statusFilter === 'all'
-                    ? 'No projects yet'
-                    : `No ${statusFilter} projects`}
+                    ? t('projectsSidebar.emptyAllMessage')
+                    : statusFilter === 'active'
+                      ? t('projectsSidebar.emptyActiveMessage')
+                      : t('projectsSidebar.emptyArchivedMessage')}
               </p>
               {!searchQuery && (
                 <Button onClick={openCreateDialog} size="sm" variant="outline" className="h-7 text-xs gap-1">
                   <Plus className="h-3 w-3" />
-                  Create Project
+                  {t('projectDialogs.createProjectButton')}
                 </Button>
               )}
             </div>
@@ -658,7 +666,11 @@ export function Projects() {
                     type="button"
                     onClick={() => handleSelectProject(project)}
                     aria-current={isActive ? 'true' : undefined}
-                    title={`${project.name} · ${project.status} · created ${new Date(project.createdAt).toLocaleDateString()}`}
+                    title={t('projectsSidebar.itemTooltip', {
+                      name: project.name,
+                      status: t(`projectsSidebar.statusFilterLabel.${project.status}`, { defaultValue: project.status }),
+                      date: new Date(project.createdAt).toLocaleDateString()
+                    })}
                     style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
                     className={cn(
                       "animate-rise-in lift w-full text-left p-3 rounded-xl cursor-pointer group",
@@ -685,7 +697,7 @@ export function Projects() {
                                 ? "bg-emerald-500"
                                 : isActive ? "bg-primary-foreground/50" : "bg-slate-400 dark:bg-slate-500"
                             )}
-                            title={project.status === 'active' ? 'Active project' : 'Archived project'}
+                            title={project.status === 'active' ? t('projectDetail.statusDotActiveTitle') : t('projectDetail.statusDotArchivedTitle')}
                             aria-hidden="true"
                           />
                           <Clock className="h-3 w-3" aria-hidden="true" />
@@ -714,10 +726,10 @@ export function Projects() {
                 type="button"
                 onClick={collapseReview}
                 className="flex items-center gap-2 px-8 pt-6 pb-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
-                aria-label={`Back to ${activeProject.name}`}
+                aria-label={t('projectDetail.backToProjectLabel', { name: activeProject.name })}
               >
                 <ChevronLeft className="h-4 w-4" />
-                Back to {activeProject.name}
+                {t('projectDetail.backToProjectLabel', { name: activeProject.name })}
               </button>
               <div className="flex-1 overflow-auto px-8 pb-6">
                 <IdentitySuggestionsSection kind="project" ref={suggestionsRef} />
@@ -728,15 +740,15 @@ export function Projects() {
               type="button"
               onClick={() => setReviewExpanded(true)}
               className="mx-8 mt-6 mb-2 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-sm hover:bg-amber-500/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              aria-label={`Review ${projectSuggestionCount} project name ${projectSuggestionCount === 1 ? 'suggestion' : 'suggestions'}`}
+              aria-label={t('projectDetail.reviewSuggestionsAriaLabel', { count: projectSuggestionCount })}
             >
               <Sparkles className="h-4 w-4 text-amber-500 flex-shrink-0" />
               <span className="font-medium">
-                {projectSuggestionCount} project name {projectSuggestionCount === 1 ? 'suggestion' : 'suggestions'}
+                {t('projectDetail.suggestionCountLabel', { count: projectSuggestionCount })}
               </span>
-              <span className="text-xs text-muted-foreground hidden sm:inline">— possible duplicate names to confirm</span>
+              <span className="text-xs text-muted-foreground hidden sm:inline">{t('projectDetail.suggestionHintText')}</span>
               <span className="ml-auto inline-flex items-center gap-1 text-primary font-medium">
-                Review <ChevronRight className="h-4 w-4" />
+                {t('projectDetail.reviewButtonLabel')} <ChevronRight className="h-4 w-4" />
               </span>
             </button>
           )
@@ -751,7 +763,7 @@ export function Projects() {
           activeProject && detailLoading ? (
           <div className="flex-1 flex flex-col items-center justify-center">
             <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-            <p className="text-sm text-muted-foreground">Loading project details...</p>
+            <p className="text-sm text-muted-foreground">{t('projectDetail.loadingMessage')}</p>
           </div>
         ) : activeProject ? (
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden animate-in fade-in slide-in-from-right-2 duration-300">
@@ -773,12 +785,12 @@ export function Projects() {
                         }}
                         className="text-2xl font-bold h-auto py-1"
                         autoFocus
-                        aria-label="Project name"
+                        aria-label={t('projectDetail.nameInputAriaLabel')}
                       />
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSaveName} aria-label="Save name" title="Save (Enter)">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSaveName} aria-label={t('projectDetail.saveNameAriaLabel')} title={t('projectDetail.saveNameTitle')}>
                         <Check className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditingName(false)} aria-label="Cancel rename" title="Cancel (Escape)">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditingName(false)} aria-label={t('projectDetail.cancelRenameAriaLabel')} title={t('projectDetail.cancelRenameTitle')}>
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
@@ -788,8 +800,8 @@ export function Projects() {
                       <button
                         onClick={() => { setEditName(activeProject.name); setIsEditingName(true) }}
                         className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                        aria-label="Edit project name"
-                        title="Rename project"
+                        aria-label={t('projectDetail.editNameAriaLabel')}
+                        title={t('projectDetail.renameProjectTitle')}
                       >
                         <Pencil className="h-4 w-4 text-muted-foreground" />
                       </button>
@@ -797,7 +809,7 @@ export function Projects() {
                   )}
                   <div className="flex items-center gap-3 mt-1">
                     <span
-                      title={activeProject.status === 'active' ? 'Active project' : 'Archived project'}
+                      title={activeProject.status === 'active' ? t('projectDetail.statusDotActiveTitle') : t('projectDetail.statusDotArchivedTitle')}
                       className={cn(
                         "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border",
                         activeProject.status === 'active'
@@ -805,9 +817,9 @@ export function Projects() {
                           : "bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/20"
                       )}
                     >
-                      {activeProject.status}
+                      {t(`projectsSidebar.statusFilterLabel.${activeProject.status}`, { defaultValue: activeProject.status })}
                     </span>
-                    <span className="text-xs text-muted-foreground">Created {new Date(activeProject.createdAt).toLocaleDateString()}</span>
+                    <span className="text-xs text-muted-foreground">{t('projectDetail.createdLabel', { date: new Date(activeProject.createdAt).toLocaleDateString() })}</span>
                   </div>
                 </div>
               </div>
@@ -827,12 +839,12 @@ export function Projects() {
                       }
                     } catch (error) {
                       console.error('Failed to update project status:', error)
-                      toast.error('Failed to update project', error instanceof Error ? error.message : 'An unexpected error occurred')
+                      toast.error(t('common:projects.updateFailedFallback'), error instanceof Error ? error.message : t('common:errorBoundary.fallbackMessage'))
                     }
                   }}
                 >
                   <Archive className="h-4 w-4" />
-                  {activeProject.status === 'active' ? 'Archive' : 'Activate'}
+                  {activeProject.status === 'active' ? t('projectDetail.archiveButtonLabel') : t('projectDetail.activateButtonLabel')}
                 </Button>
                 <Button
                   variant="ghost"
@@ -874,13 +886,13 @@ export function Projects() {
                       <Card className="animate-rise-in bg-muted/5">
                         <CardContent className="p-6">
                           <div className="flex items-start gap-3">
-                            <span title="Empty project">
+                            <span title={t('projectDetail.emptyProjectIconTitle')}>
                               <FolderOpen className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
                             </span>
                             <div className="min-w-0 space-y-1">
-                              <h3 className="text-sm font-bold">No items yet</h3>
+                              <h3 className="text-sm font-bold">{t('projectDetail.emptyProjectTitle')}</h3>
                               <p className="text-sm text-muted-foreground">
-                                Add knowledge or link meetings to start building this project&apos;s hub.
+                                {t('projectDetail.emptyProjectMessage')}
                               </p>
                             </div>
                           </div>
@@ -894,15 +906,13 @@ export function Projects() {
                       <Card className="animate-rise-in border-amber-500/30 bg-amber-500/[0.06]">
                         <CardContent className="p-6 space-y-4">
                           <div className="flex items-start gap-3">
-                            <span title="Automatically discovered from a transcript">
+                            <span title={t('projectDetail.discoveredIconTitle')}>
                               <Sparkles className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" aria-hidden="true" />
                             </span>
                             <div className="min-w-0 space-y-1">
-                              <h3 className="text-sm font-bold">Discovered automatically</h3>
+                              <h3 className="text-sm font-bold">{t('projectDetail.discoveredTitle')}</h3>
                               <p className="text-sm text-muted-foreground">
-                                No knowledge items or people are linked yet — this project was inferred from a
-                                mention in a transcript. Review its source, merge it into an existing project, or
-                                dismiss it.
+                                {t('projectDetail.discoveredMessage')}
                               </p>
                             </div>
                           </div>
@@ -910,7 +920,7 @@ export function Projects() {
                           {sourceMeetings.length > 0 && (
                             <div className="space-y-1.5">
                               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                Discovered from
+                                {t('projectDetail.discoveredFromLabel')}
                               </p>
                               <div className="flex flex-wrap gap-1.5">{sourceChips}</div>
                             </div>
@@ -923,20 +933,20 @@ export function Projects() {
                               className="h-8 gap-1.5"
                               onClick={handleDiscover}
                               disabled={discovering}
-                              title="Scan projects for a likely duplicate to merge this into"
+                              title={t('projectDetail.mergeButtonTitle')}
                             >
                               <Sparkles className={cn('h-3.5 w-3.5', discovering && 'animate-pulse')} />
-                              {discovering ? 'Finding duplicates…' : 'Merge into another project'}
+                              {discovering ? t('projectDetail.findingDuplicatesLabel') : t('projectDetail.mergeButtonLabel')}
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
                               onClick={() => { setDismissMode(true); setDeleteDialogOpen(true) }}
-                              title="Dismiss this discovered project (won't be re-created from transcripts)"
+                              title={t('projectDetail.dismissDiscoveredButtonTitle')}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
-                              Dismiss
+                              {t('projectDialogs.dismissActionLabel')}
                             </Button>
                           </div>
                         </CardContent>
@@ -949,11 +959,11 @@ export function Projects() {
                       <Card className="animate-rise-in bg-muted/5">
                         <CardContent className="p-4">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span title="Automatically discovered from a transcript">
+                            <span title={t('projectDetail.discoveredIconTitle')}>
                               <Sparkles className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
                             </span>
                             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                              Discovered from
+                              {t('projectDetail.discoveredFromLabel')}
                             </span>
                             <div className="flex flex-wrap gap-1.5">{sourceChips}</div>
                           </div>
@@ -970,19 +980,19 @@ export function Projects() {
                   <Card className="lift animate-rise-in bg-muted/5" style={{ animationDelay: '0ms' }}>
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Knowledge</p>
-                        <span title="Knowledge items linked to this project"><FileText className="h-4 w-4 text-primary" aria-hidden="true" /></span>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('projectDetail.statsKnowledgeLabel')}</p>
+                        <span title={t('projectDetail.statsKnowledgeIconTitle')}><FileText className="h-4 w-4 text-primary" aria-hidden="true" /></span>
                       </div>
-                      <p className="text-2xl font-bold mt-2">{activeProject.knowledgeIds?.length ?? '\u2014'} {activeProject.knowledgeIds ? 'Items' : ''}</p>
+                      <p className="text-2xl font-bold mt-2">{activeProject.knowledgeIds?.length ?? '\u2014'} {activeProject.knowledgeIds ? t('projectDetail.statsItemsSuffix') : ''}</p>
                     </CardContent>
                   </Card>
                   <Card className="lift animate-rise-in bg-muted/5" style={{ animationDelay: '45ms' }}>
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">People</p>
-                        <span title="People involved in this project"><Users className="h-4 w-4 text-primary" aria-hidden="true" /></span>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('projectDetail.statsPeopleLabel')}</p>
+                        <span title={t('projectDetail.statsPeopleIconTitle')}><Users className="h-4 w-4 text-primary" aria-hidden="true" /></span>
                       </div>
-                      <p className="text-2xl font-bold mt-2">{activeProject.personIds?.length ?? '\u2014'} {activeProject.personIds ? 'Involved' : ''}</p>
+                      <p className="text-2xl font-bold mt-2">{activeProject.personIds?.length ?? '\u2014'} {activeProject.personIds ? t('projectDetail.statsInvolvedSuffix') : ''}</p>
                       {projectMembers.length > 0 && (
                         <div className="mt-3 space-y-1.5">
                           {projectMembers.slice(0, 5).map((member) => (
@@ -998,7 +1008,7 @@ export function Projects() {
                             </div>
                           ))}
                           {projectMembers.length > 5 && (
-                            <p className="text-[10px] text-muted-foreground pl-7">+{projectMembers.length - 5} more</p>
+                            <p className="text-[10px] text-muted-foreground pl-7">{t('projectDetail.moreMembersLabel', { count: projectMembers.length - 5 })}</p>
                           )}
                         </div>
                       )}
@@ -1007,10 +1017,10 @@ export function Projects() {
                   <Card className="lift animate-rise-in bg-muted/5" style={{ animationDelay: '90ms' }}>
                     <CardContent className="pt-6">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</p>
-                        <span title="Action items linked to this project"><CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" /></span>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('projectDetail.statsActionsLabel')}</p>
+                        <span title={t('projectDetail.statsActionsIconTitle')}><CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" /></span>
                       </div>
-                      <p className="text-2xl font-bold mt-2">{actionables.length || '\u2014'} {actionables.length ? 'Items' : ''}</p>
+                      <p className="text-2xl font-bold mt-2">{actionables.length || '\u2014'} {actionables.length ? t('projectDetail.statsItemsSuffix') : ''}</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -1021,8 +1031,8 @@ export function Projects() {
                     <CardContent className="p-6 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span title="Knowledge captured for this project"><BookOpen className="h-4 w-4 text-primary" aria-hidden="true" /></span>
-                          <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Knowledge</h3>
+                          <span title={t('projectDetail.knowledgeCardIconTitle')}><BookOpen className="h-4 w-4 text-primary" aria-hidden="true" /></span>
+                          <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t('projectDetail.statsKnowledgeLabel')}</h3>
                           <span className="text-xs text-muted-foreground">{activeProject.knowledgeIds.length}</span>
                         </div>
                         <Button
@@ -1031,13 +1041,13 @@ export function Projects() {
                           className="h-7 text-xs gap-1"
                           onClick={() => navigate('/library')}
                         >
-                          View all in Library
+                          {t('projectDetail.viewAllInLibraryButton')}
                           <ArrowRight className="h-3 w-3" />
                         </Button>
                       </div>
                       {knowledgeItems.length === 0 ? (
                         <p className="text-sm text-muted-foreground italic">
-                          {activeProject.knowledgeIds.length} linked {activeProject.knowledgeIds.length === 1 ? 'item' : 'items'} \u2014 open Library to browse them.
+                          {t('projectDetail.linkedItemsHint', { count: activeProject.knowledgeIds.length })}
                         </p>
                       ) : (
                         <div className="space-y-1.5">
@@ -1045,12 +1055,12 @@ export function Projects() {
                             <button
                               key={k.id}
                               onClick={() => navigate('/library', { state: { selectedId: k.id } })}
-                              title={`Open "${k.title || 'Untitled'}" in Library`}
+                              title={t('projectDetail.openKnowledgeItemTitle', { title: k.title || t('projectDetail.untitledFallback') })}
                               className="w-full flex items-center gap-3 p-2.5 rounded-lg text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group"
                             >
                               <FileText className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" aria-hidden="true" />
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{k.title || 'Untitled'}</p>
+                                <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{k.title || t('projectDetail.untitledFallback')}</p>
                                 {(k.summary || k.capturedAt) && (
                                   <p className="text-[10px] text-muted-foreground truncate mt-0.5">
                                     {k.summary || new Date(k.capturedAt).toLocaleDateString()}
@@ -1065,7 +1075,7 @@ export function Projects() {
                               onClick={() => navigate('/library')}
                               className="w-full text-center text-xs text-muted-foreground hover:text-primary transition-colors py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                              +{knowledgeItems.length - 5} more in Library
+                              {t('projectDetail.moreKnowledgeLabel', { count: knowledgeItems.length - 5 })}
                             </button>
                           )}
                         </div>
@@ -1077,13 +1087,13 @@ export function Projects() {
                 {/* Location & Links (folder-on-disk + webpage) */}
                 <Card className="animate-rise-in bg-muted/5" style={{ animationDelay: '150ms' }}>
                   <CardContent className="p-6 space-y-5">
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Location & Links</h3>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t('projectDetail.locationLinksHeading')}</h3>
 
                     {/* Folder on disk */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                         <Folder className="h-3.5 w-3.5" />
-                        Folder on disk
+                        {t('projectDetail.folderOnDiskLabel')}
                       </div>
                       {isEditingFolder ? (
                         <div className="flex items-center gap-2">
@@ -1094,17 +1104,17 @@ export function Projects() {
                               if (e.key === 'Enter') handleSaveFolder()
                               if (e.key === 'Escape') { setEditFolder(activeProject.folderPath || ''); setIsEditingFolder(false) }
                             }}
-                            placeholder="C:\\path\\to\\repo"
+                            placeholder={t('projectDetail.folderPathPlaceholder')}
                             className="h-8 text-sm font-mono"
                             autoFocus
                           />
                           <Button variant="outline" size="sm" className="h-8 gap-1 shrink-0" onClick={handleBrowseFolder}>
-                            <FolderOpen className="h-3.5 w-3.5" /> Browse
+                            <FolderOpen className="h-3.5 w-3.5" /> {t('projectDetail.browseButtonLabel')}
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleSaveFolder} aria-label="Save folder">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleSaveFolder} aria-label={t('projectDetail.saveFolderAriaLabel')}>
                             <Check className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => { setEditFolder(activeProject.folderPath || ''); setIsEditingFolder(false) }} aria-label="Cancel">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => { setEditFolder(activeProject.folderPath || ''); setIsEditingFolder(false) }} aria-label={t('projectDetail.cancelAriaLabel')}>
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
@@ -1115,18 +1125,18 @@ export function Projects() {
                               <button
                                 onClick={handleOpenFolder}
                                 className="flex items-center gap-2 min-w-0 flex-1 text-sm font-mono text-left hover:text-primary transition-colors"
-                                title="Open folder in file explorer"
+                                title={t('projectDetail.openFolderTitle')}
                               >
                                 <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
                                 <span className="truncate">{activeProject.folderPath}</span>
                               </button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { setEditFolder(activeProject.folderPath || ''); setIsEditingFolder(true) }} aria-label="Edit folder" title="Edit folder">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { setEditFolder(activeProject.folderPath || ''); setIsEditingFolder(true) }} aria-label={t('projectDetail.editFolderAriaLabel')} title={t('projectDetail.editFolderTitle')}>
                                 <Edit className="h-3.5 w-3.5 text-muted-foreground" />
                               </Button>
                             </>
                           ) : (
                             <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => { setEditFolder(''); setIsEditingFolder(true) }}>
-                              <Plus className="h-3.5 w-3.5" /> Set folder path
+                              <Plus className="h-3.5 w-3.5" /> {t('projectDetail.setFolderPathButton')}
                             </Button>
                           )}
                         </div>
@@ -1137,7 +1147,7 @@ export function Projects() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                         <Globe className="h-3.5 w-3.5" />
-                        Webpage
+                        {t('projectDetail.webpageLabel')}
                       </div>
                       {isEditingUrl ? (
                         <div className="flex items-center gap-2">
@@ -1148,14 +1158,14 @@ export function Projects() {
                               if (e.key === 'Enter') handleSaveUrl()
                               if (e.key === 'Escape') { setEditUrl(activeProject.url || ''); setIsEditingUrl(false) }
                             }}
-                            placeholder="https://example.com"
+                            placeholder={t('projectDetail.webpageUrlPlaceholder')}
                             className="h-8 text-sm"
                             autoFocus
                           />
-                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleSaveUrl} aria-label="Save URL">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleSaveUrl} aria-label={t('projectDetail.saveUrlAriaLabel')}>
                             <Check className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => { setEditUrl(activeProject.url || ''); setIsEditingUrl(false) }} aria-label="Cancel">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => { setEditUrl(activeProject.url || ''); setIsEditingUrl(false) }} aria-label={t('projectDetail.cancelAriaLabel')}>
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
@@ -1173,13 +1183,13 @@ export function Projects() {
                                 <ExternalLink className="h-4 w-4 shrink-0" />
                                 <span className="truncate">{activeProject.url}</span>
                               </a>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { setEditUrl(activeProject.url || ''); setIsEditingUrl(true) }} aria-label="Edit URL" title="Edit URL">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { setEditUrl(activeProject.url || ''); setIsEditingUrl(true) }} aria-label={t('projectDetail.editUrlAriaLabel')} title={t('projectDetail.editUrlTitle')}>
                                 <Edit className="h-3.5 w-3.5 text-muted-foreground" />
                               </Button>
                             </>
                           ) : (
                             <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => { setEditUrl(''); setIsEditingUrl(true) }}>
-                              <Plus className="h-3.5 w-3.5" /> Add webpage URL
+                              <Plus className="h-3.5 w-3.5" /> {t('projectDetail.addWebpageUrlButton')}
                             </Button>
                           )}
                         </div>
@@ -1191,26 +1201,24 @@ export function Projects() {
                 {/* Issues & Risks */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-rise-in" style={{ animationDelay: '210ms' }}>
                   <NoteList
-                    title="Issues"
-                    icon={<span title="Open issues on this project"><AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden="true" /></span>}
+                    kind="issue"
+                    icon={<span title={t('projectDetail.issuesIconTitle')}><AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden="true" /></span>}
                     items={issues}
                     newValue={newIssue}
                     onNewValueChange={setNewIssue}
                     onAdd={() => handleAddNote('issue', newIssue)}
                     onToggle={handleToggleNote}
                     onDelete={handleDeleteNote}
-                    placeholder="Add an issue..."
                   />
                   <NoteList
-                    title="Risks"
-                    icon={<span title="Risks tracked for this project"><ShieldAlert className="h-4 w-4 text-rose-500" aria-hidden="true" /></span>}
+                    kind="risk"
+                    icon={<span title={t('projectDetail.risksIconTitle')}><ShieldAlert className="h-4 w-4 text-rose-500" aria-hidden="true" /></span>}
                     items={risks}
                     newValue={newRisk}
                     onNewValueChange={setNewRisk}
                     onAdd={() => handleAddNote('risk', newRisk)}
                     onToggle={handleToggleNote}
                     onDelete={handleDeleteNote}
-                    placeholder="Add a risk..."
                   />
                 </div>
 
@@ -1219,22 +1227,22 @@ export function Projects() {
                   <CardContent className="p-6 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span title="Action items surfaced from this project's knowledge"><CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" /></span>
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Action Items</h3>
+                        <span title={t('projectDetail.actionItemsIconTitle')}><CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" /></span>
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t('projectDetail.actionItemsHeading')}</h3>
                       </div>
                       {actionables.length > 0 && (
                         <span className="text-xs text-muted-foreground">{actionables.length}</span>
                       )}
                     </div>
                     {actionables.length === 0 ? (
-                      <p className="text-sm text-muted-foreground italic">No action items linked to this project yet.</p>
+                      <p className="text-sm text-muted-foreground italic">{t('projectDetail.noActionItemsMessage')}</p>
                     ) : (
                       <div className="space-y-1.5">
                         {actionables.map((a) => (
                           <button
                             key={a.id}
                             onClick={() => navigate('/actionables')}
-                            title={`Open "${a.title}" in Actionables`}
+                            title={t('projectDetail.openActionableTitle', { title: a.title })}
                             className="w-full flex items-center gap-3 p-2.5 rounded-lg text-left hover:bg-muted transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <div className="min-w-0 flex-1">
@@ -1242,7 +1250,7 @@ export function Projects() {
                               <p className="text-[10px] text-muted-foreground mt-0.5">{new Date(a.createdAt).toLocaleDateString()}</p>
                             </div>
                             <span
-                              title={`Status: ${a.status}`}
+                              title={t('projectDetail.actionableStatusTitle', { status: t(`projectDetail.actionableStatusLabel.${a.status}`, { defaultValue: a.status }) })}
                               className={cn(
                                 "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shrink-0",
                                 a.status === 'shared' || a.status === 'generated'
@@ -1252,7 +1260,7 @@ export function Projects() {
                                     : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20"
                               )}
                             >
-                              {a.status}
+                              {t(`projectDetail.actionableStatusLabel.${a.status}`, { defaultValue: a.status })}
                             </span>
                             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
                           </button>
@@ -1265,7 +1273,7 @@ export function Projects() {
                 {/* Description (inline editable) */}
                 <div className="space-y-3 animate-rise-in" style={{ animationDelay: '240ms' }}>
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Description</h3>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t('projectDetail.descriptionHeading')}</h3>
                     {!isEditingDescription && (
                       <Button
                         variant="ghost"
@@ -1277,7 +1285,7 @@ export function Projects() {
                         }}
                       >
                         <Edit className="h-3 w-3" />
-                        Edit
+                        {t('projectDetail.editDescriptionButton')}
                       </Button>
                     )}
                   </div>
@@ -1287,23 +1295,23 @@ export function Projects() {
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
                         className="w-full text-sm border rounded-xl px-4 py-3 bg-background min-h-[80px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring"
-                        placeholder="Add a project description..."
+                        placeholder={t('projectDetail.descriptionPlaceholder')}
                         autoFocus
                       />
                       <div className="flex items-center gap-2">
                         <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveDescription}>
                           <Check className="h-3 w-3" />
-                          Save
+                          {t('projectDetail.saveDescriptionButton')}
                         </Button>
                         <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => setIsEditingDescription(false)}>
                           <X className="h-3 w-3" />
-                          Cancel
+                          {t('projectDialogs.cancelButton')}
                         </Button>
                       </div>
                     </div>
                   ) : (
                     <p className="text-sm leading-relaxed text-muted-foreground bg-muted/20 p-4 rounded-xl border italic">
-                      {activeProject.description || "No description provided for this project."}
+                      {activeProject.description || t('projectDetail.noDescriptionMessage')}
                     </p>
                   )}
                 </div>
@@ -1312,11 +1320,11 @@ export function Projects() {
                 <Card className="animate-rise-in border-primary/20 bg-primary/5" style={{ animationDelay: '270ms' }}>
                   <CardContent className="p-6">
                     <div className="flex items-center gap-2 mb-4">
-                      <span title="AI-generated project insight"><Bot className="h-5 w-5 text-primary" aria-hidden="true" /></span>
-                      <h3 className="font-bold text-sm uppercase tracking-wider">AI Project Insight</h3>
+                      <span title={t('projectDetail.aiInsightIconTitle')}><Bot className="h-5 w-5 text-primary" aria-hidden="true" /></span>
+                      <h3 className="font-bold text-sm uppercase tracking-wider">{t('projectDetail.aiInsightHeading')}</h3>
                     </div>
                     <p className="text-sm leading-relaxed text-muted-foreground italic">
-                      AI-generated insights for &quot;{activeProject.name}&quot; will appear here once knowledge items are linked to this project.
+                      {t('projectDetail.aiInsightPlaceholder', { name: activeProject.name })}
                     </p>
                     <div className="mt-4 flex gap-2">
                       <Button
@@ -1324,20 +1332,20 @@ export function Projects() {
                         variant="outline"
                         className="h-8 text-xs bg-background"
                         disabled
-                        title="Coming soon"
-                        onClick={() => toast.info('Coming soon', 'Report generation is not yet available.')}
+                        title={t('projectDetail.comingSoonTitle')}
+                        onClick={() => toast.info(t('projectDetail.comingSoonTitle'), t('projectDetail.reportGenerationComingSoonMessage'))}
                       >
-                        Generate Status Report
+                        {t('projectDetail.generateStatusReportButton')}
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         className="h-8 text-xs bg-background"
                         disabled
-                        title="Coming soon"
-                        onClick={() => toast.info('Coming soon', 'Decision summarization is not yet available.')}
+                        title={t('projectDetail.comingSoonTitle')}
+                        onClick={() => toast.info(t('projectDetail.comingSoonTitle'), t('projectDetail.decisionSummarizationComingSoonMessage'))}
                       >
-                        Summarize Decisions
+                        {t('projectDetail.summarizeDecisionsButton')}
                       </Button>
                     </div>
                   </CardContent>
@@ -1346,7 +1354,7 @@ export function Projects() {
                 {/* Placeholder for tabs content */}
                 <div className="pt-4 text-center py-20 border-2 border-dashed rounded-3xl opacity-30">
                   <Folder className="h-12 w-12 mx-auto mb-4" />
-                  <p className="text-sm">Knowledge Timeline and Related People visualization will appear here.</p>
+                  <p className="text-sm">{t('projectDetail.timelinePlaceholderMessage')}</p>
                 </div>
               </div>
             </div>
@@ -1356,13 +1364,13 @@ export function Projects() {
             <div className="w-20 h-20 rounded-3xl bg-muted/20 flex items-center justify-center mb-6">
               <Folder className="h-10 w-10 opacity-20" />
             </div>
-            <h2 className="text-xl font-bold text-foreground mb-2">Select a Project</h2>
+            <h2 className="text-xl font-bold text-foreground mb-2">{t('projectDetail.selectProjectHeading')}</h2>
             <p className="text-sm max-w-xs text-center leading-relaxed">
-              Choose a project from the sidebar to view aggregated knowledge, people, and AI insights.
+              {t('projectDetail.selectProjectMessage')}
             </p>
             <Button onClick={openCreateDialog} variant="outline" className="mt-8 gap-2">
               <Plus className="h-4 w-4" />
-              Create New Project
+              {t('projectDialogs.createNewProjectTitle')}
             </Button>
           </div>
         )
@@ -1373,18 +1381,18 @@ export function Projects() {
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Project</DialogTitle>
+            <DialogTitle>{t('projectDialogs.createNewProjectTitle')}</DialogTitle>
             <DialogDescription>
-              Enter a name for your new project.
+              {t('projectDialogs.createDialogDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <label className="text-sm font-medium mb-1 block">Project Name</label>
+              <label className="text-sm font-medium mb-1 block">{t('projectDialogs.projectNameLabel')}</label>
               <Input
                 value={createName}
                 onChange={(e) => setCreateName(e.target.value)}
-                placeholder="Enter project name..."
+                placeholder={t('projectDialogs.projectNamePlaceholder')}
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && createName.trim()) {
@@ -1394,21 +1402,21 @@ export function Projects() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">Description (optional)</label>
+              <label className="text-sm font-medium mb-1 block">{t('projectDialogs.descriptionOptionalLabel')}</label>
               <textarea
                 value={createDescription}
                 onChange={(e) => setCreateDescription(e.target.value)}
-                placeholder="Brief description..."
+                placeholder={t('projectDialogs.descriptionPlaceholder')}
                 className="w-full text-sm border rounded px-3 py-2 bg-background min-h-[60px]"
               />
             </div>
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{t('projectDialogs.cancelButton')}</Button>
             </DialogClose>
             <Button onClick={handleCreateProject} disabled={!createName.trim()}>
-              Create Project
+              {t('projectDialogs.createProjectButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1422,20 +1430,20 @@ export function Projects() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{dismissMode ? 'Dismiss Discovered Project' : 'Delete Project'}</AlertDialogTitle>
+            <AlertDialogTitle>{dismissMode ? t('projectDialogs.dismissDialogTitle') : t('projectDialogs.deleteDialogTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
               {dismissMode
-                ? `Dismiss "${activeProject?.name}"? It will be deleted and remembered as dismissed, so re-analyzing transcripts won't re-create it. Creating a project with this name manually is still allowed.`
-                : `Are you sure you want to delete "${activeProject?.name}"? This will remove all meeting associations for this project. This action cannot be undone.`}
+                ? t('projectDialogs.dismissConfirmDescription', { name: activeProject?.name })
+                : t('projectDialogs.deleteConfirmDescription', { name: activeProject?.name })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('projectDialogs.cancelButton')}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={handleDeleteProject}
             >
-              {dismissMode ? 'Dismiss' : 'Delete'}
+              {dismissMode ? t('projectDialogs.dismissActionLabel') : t('projectDialogs.deleteActionLabel')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1445,7 +1453,8 @@ export function Projects() {
 }
 /** Compact add/toggle/delete list for a project's issues or risks (R3b). */
 interface NoteListProps {
-  title: string
+  /** Which flavor of note this list renders — drives every string it shows. */
+  kind: 'issue' | 'risk'
   icon: ReactNode
   items: ProjectNote[]
   newValue: string
@@ -1453,19 +1462,19 @@ interface NoteListProps {
   onAdd: () => void
   onToggle: (note: ProjectNote) => void
   onDelete: (id: string) => void
-  placeholder: string
 }
 
-function NoteList({ title, icon, items, newValue, onNewValueChange, onAdd, onToggle, onDelete, placeholder }: NoteListProps) {
+function NoteList({ kind, icon, items, newValue, onNewValueChange, onAdd, onToggle, onDelete }: NoteListProps) {
+  const { t } = useTranslation('projects')
   const openCount = items.filter(i => i.status === 'open').length
   return (
     <Card className="bg-muted/5">
       <CardContent className="p-5 space-y-3">
         <div className="flex items-center gap-2">
           {icon}
-          <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{title}</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t(`noteList.${kind}.heading`)}</h3>
           {openCount > 0 && (
-            <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{openCount} open</span>
+            <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{t('noteList.openCountBadge', { count: openCount })}</span>
           )}
         </div>
 
@@ -1474,16 +1483,16 @@ function NoteList({ title, icon, items, newValue, onNewValueChange, onAdd, onTog
             value={newValue}
             onChange={(e) => onNewValueChange(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') onAdd() }}
-            placeholder={placeholder}
+            placeholder={t(`noteList.${kind}.placeholder`)}
             className="h-8 text-sm"
           />
-          <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={onAdd} disabled={!newValue.trim()} aria-label={`Add ${title}`}>
+          <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={onAdd} disabled={!newValue.trim()} aria-label={t(`noteList.${kind}.addAriaLabel`)}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
 
         {items.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic py-1">No {title.toLowerCase()} yet.</p>
+          <p className="text-xs text-muted-foreground italic py-1">{t(`noteList.${kind}.emptyMessage`)}</p>
         ) : (
           <div className="space-y-1">
             {items.map((item) => (
@@ -1491,8 +1500,8 @@ function NoteList({ title, icon, items, newValue, onNewValueChange, onAdd, onTog
                 <button
                   onClick={() => onToggle(item)}
                   className="shrink-0"
-                  aria-label={item.status === 'open' ? 'Mark resolved' : 'Reopen'}
-                  title={item.status === 'open' ? 'Mark resolved' : 'Reopen'}
+                  aria-label={item.status === 'open' ? t('noteList.markResolvedLabel') : t('noteList.reopenLabel')}
+                  title={item.status === 'open' ? t('noteList.markResolvedLabel') : t('noteList.reopenLabel')}
                 >
                   {item.status === 'resolved' ? (
                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -1509,8 +1518,8 @@ function NoteList({ title, icon, items, newValue, onNewValueChange, onAdd, onTog
                 <button
                   onClick={() => onDelete(item.id)}
                   className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
-                  aria-label={`Delete ${title}`}
-                  title="Delete"
+                  aria-label={t(`noteList.${kind}.deleteAriaLabel`)}
+                  title={t('noteList.deleteButtonTitle')}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

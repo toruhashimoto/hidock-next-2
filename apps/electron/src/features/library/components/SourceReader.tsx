@@ -29,6 +29,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { TranscriptViewer, type StoredSegment, type TranscriptContentUpdate } from './TranscriptViewer'
 import { TranscriptionStatusBadge } from './TranscriptionStatusBadge'
 import { StatusIcon } from './StatusIcon'
@@ -92,25 +94,144 @@ import { useTranscriptionStore } from '@/store/features/useTranscriptionStore'
  */
 const READER_SECTION_ORDER: ReaderSectionId[] = ['player', 'metadata', 'moments', 'summary', 'transcript']
 
-const READER_SECTION_LABELS: Record<ReaderSectionId, string> = {
-  player: 'Player',
-  metadata: 'Metadata',
-  moments: 'Actions & decisions',
-  summary: 'Summary',
-  transcript: 'Full transcript'
+/**
+ * Catalogue KEYS, not finished labels. A module-level `i18n.t(...)` is
+ * evaluated once at import and freezes whichever language happened to be
+ * active then, so what lives here is the key and t() resolves it at render.
+ */
+const READER_SECTION_LABEL_KEYS: Record<ReaderSectionId, string> = {
+  player: 'library:sourceReader.playerSectionLabel',
+  metadata: 'library:sourceReader.metadataSectionLabel',
+  moments: 'library:sourceReader.momentsSectionLabel',
+  summary: 'library:sourceReader.summarySectionLabel',
+  transcript: 'library:sourceReader.fullTranscriptSectionLabel'
 }
 
 /** Reader width (px) below which the docked bar drops to the bare scrubber. */
 const NARROW_WIDTH_BREAKPOINT = 420
 
 const CATEGORY_OPTIONS = [
-  { value: 'meeting', label: 'Meeting' },
-  { value: 'interview', label: 'Interview' },
-  { value: '1:1', label: '1:1' },
-  { value: 'brainstorm', label: 'Brainstorm' },
-  { value: 'note', label: 'Note' },
-  { value: 'other', label: 'Other' },
+  { value: 'meeting', labelKey: 'library:sourceReader.categoryMeeting' },
+  { value: 'interview', labelKey: 'library:sourceReader.categoryInterview' },
+  { value: '1:1', labelKey: 'library:sourceReader.categoryOneOnOne' },
+  { value: 'brainstorm', labelKey: 'library:sourceReader.categoryBrainstorm' },
+  { value: 'note', labelKey: 'library:sourceReader.categoryNote' },
+  { value: 'other', labelKey: 'library:sourceReader.categoryOther' },
 ] as const
+
+/**
+ * Raw enum values this reader used to print straight through — several of
+ * them dressed up by CSS `capitalize`, a JS `.replace('-', ' ')` or a
+ * `charAt(0).toUpperCase()`, none of which does anything for Japanese. Each
+ * one resolves through the catalogue instead. The English values ARE what
+ * those spots rendered before, character for character (`image` really did
+ * reach the DOM lowercase, with `capitalize` doing the visible work), so the
+ * English screen and the suite that runs against it are unchanged.
+ */
+const SOURCE_TYPE_LABEL_KEYS: Record<string, string> = {
+  audio: 'library:sourceReader.sourceTypeAudio',
+  image: 'library:sourceReader.sourceTypeImage',
+  pdf: 'library:sourceReader.sourceTypePdf',
+  note: 'library:sourceReader.sourceTypeNote',
+  unknown: 'library:sourceReader.sourceTypeUnknown'
+}
+
+/** `QualityRating`, minus the 'unrated' the metadata panel hides. */
+const QUALITY_LABEL_KEYS: Record<string, string> = {
+  valuable: 'library:sourceReader.qualityValuable',
+  archived: 'library:sourceReader.qualityArchived',
+  'low-value': 'library:sourceReader.qualityLowValue',
+  garbage: 'library:sourceReader.qualityGarbage'
+}
+
+/** The read-only category line. Same six values CATEGORY_OPTIONS offers. */
+const CATEGORY_VALUE_LABEL_KEYS: Record<string, string> = {
+  meeting: 'library:sourceReader.categoryValueMeeting',
+  interview: 'library:sourceReader.categoryValueInterview',
+  '1:1': 'library:sourceReader.categoryValueOneOnOne',
+  brainstorm: 'library:sourceReader.categoryValueBrainstorm',
+  note: 'library:sourceReader.categoryValueNote',
+  other: 'library:sourceReader.categoryValueOther'
+}
+
+/** Only the two run statuses the chip actually spells out. */
+const RUN_STATUS_LABEL_KEYS: Record<string, string> = {
+  degraded: 'library:sourceReader.runStatusDegraded',
+  failed: 'library:sourceReader.runStatusFailed'
+}
+
+const QUALITY_STATUS_LABEL_KEYS: Record<string, string> = {
+  high: 'library:sourceReader.qualityStatusHigh',
+  degraded: 'library:sourceReader.qualityStatusDegraded',
+  failed: 'library:sourceReader.qualityStatusFailed',
+  unavailable: 'library:sourceReader.qualityStatusUnavailable',
+  blocked: 'library:sourceReader.qualityStatusBlocked',
+  completed: 'library:sourceReader.qualityStatusCompleted',
+  no_speech: 'library:sourceReader.qualityStatusNoSpeech'
+}
+
+const EXECUTION_LABEL_KEYS: Record<string, string> = {
+  local: 'library:sourceReader.executionLocal',
+  cloud: 'library:sourceReader.executionCloud',
+  'provider-managed': 'library:sourceReader.executionProviderManaged'
+}
+
+const PROVIDER_LABEL_KEYS: Record<string, string> = {
+  gemini: 'library:sourceReader.providerGemini',
+  'gemini-api': 'library:sourceReader.providerGeminiApi',
+  'local-asr': 'library:sourceReader.providerLocalAsr',
+  'hidock-next': 'library:sourceReader.providerHidockNext',
+  'hidock-device': 'library:sourceReader.providerHidockDevice',
+  vibevoice: 'library:sourceReader.providerVibevoice',
+  pyannote: 'library:sourceReader.providerPyannote',
+  ollama: 'library:sourceReader.providerOllama',
+  google: 'library:sourceReader.providerGoogle',
+  webgpu: 'library:sourceReader.providerWebgpu'
+}
+
+/** Every `TranscriptionTracePhase`, plus the 'request' used when absent. */
+const PROVIDER_TIMELINE_PHASE_LABEL_KEYS: Record<string, string> = {
+  request: 'library:sourceReader.providerTimelinePhaseRequest',
+  chunk: 'library:sourceReader.providerTimelinePhaseChunk',
+  upload: 'library:sourceReader.providerTimelinePhaseUpload',
+  'provider-transcription': 'library:sourceReader.providerTimelinePhaseProviderTranscription',
+  parse: 'library:sourceReader.providerTimelinePhaseParse',
+  cleanup: 'library:sourceReader.providerTimelinePhaseCleanup'
+}
+
+/**
+ * Every stage VISIBLE_PROCESSING_STAGES lets through. The switch this
+ * replaces ended in `stage.charAt(0).toUpperCase() + stage.slice(1)`, which
+ * silently swallowed transcription/diarization/summary/title/persistence —
+ * five stages whose labels were in the catalogue the whole time and which
+ * therefore stayed English however the app was set.
+ */
+const PROCESSING_STAGE_LABEL_KEYS: Record<string, string> = {
+  transcription: 'library:sourceReader.stageTranscription',
+  diarization: 'library:sourceReader.stageDiarization',
+  summary: 'library:sourceReader.stageSummary',
+  title: 'library:sourceReader.stageTitle',
+  persistence: 'library:sourceReader.stagePersistence',
+  'meeting-resolution': 'library:sourceReader.stageMeetingMatch',
+  'speaker-identity': 'library:sourceReader.stageSpeakerIdentity',
+  'voice-id': 'library:sourceReader.stageVoiceId',
+  'actionable-detection': 'library:sourceReader.stageActionables',
+  'timeline-analysis': 'library:sourceReader.stageTimeline',
+  'org-reconciliation': 'library:sourceReader.stageEntityLinking',
+  'graph-sync': 'library:sourceReader.stageKnowledgeGraph',
+  'wiki-export': 'library:sourceReader.stageWikiExport',
+  'rag-indexing': 'library:sourceReader.stageRagIndexing'
+}
+
+/**
+ * Resolve one raw enum value through a map above. An unmapped value (a
+ * provider or trace phase main adds after this file was written) falls back
+ * to the identifier itself rather than inventing a label for it.
+ */
+function rawValueLabel(t: TFunction, keys: Record<string, string>, value: string): string {
+  const key = keys[value]
+  return key ? t(key) : value
+}
 
 /**
  * Shape returned by the sibling "timeline-data" agent's IPC. Typed here (and the
@@ -339,6 +460,7 @@ export function SourceReader({
   onSplitCompleted,
   onAskAboutSource
 }: SourceReaderProps) {
+  const { t } = useTranslation()
 
   // Title editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -746,11 +868,13 @@ export function SourceReader({
             content: patch.content
           })
           if (!res?.success) {
-            toast.error('Failed to update')
+            toast.error(t('library:sourceReader.updateFailedTitle'))
             return false
           }
           setTxEdits((prev) => ({ ...prev, [refId]: patch.content! }))
-          toast.success(kind === 'action' ? 'Action item updated' : 'Decision updated')
+          toast.success(kind === 'action'
+            ? t('library:sourceReader.actionItemUpdatedTitle')
+            : t('library:sourceReader.decisionUpdatedTitle'))
           return true
         }
 
@@ -761,14 +885,14 @@ export function SourceReader({
             ...(patch.status !== undefined ? { status: patch.status } : {})
           })
           if (!res?.success || !res.data) {
-            toast.error('Failed to update action item')
+            toast.error(t('library:sourceReader.updateActionItemFailedTitle'))
             return false
           }
           const row = res.data as { content: string; status: string }
           setEventRowDetails((prev) =>
             prev[refId] ? { ...prev, [refId]: { ...prev[refId], fullText: row.content, status: row.status } } : prev
           )
-          toast.success('Action item updated')
+          toast.success(t('library:sourceReader.actionItemUpdatedTitle'))
           return true
         }
         const res = await window.electronAPI.decisions.update({
@@ -776,22 +900,22 @@ export function SourceReader({
           ...(patch.content !== undefined ? { content: patch.content } : {})
         })
         if (!res?.success || !res.data) {
-          toast.error('Failed to update decision')
+          toast.error(t('library:sourceReader.updateDecisionFailedTitle'))
           return false
         }
         const row = res.data as { content: string }
         setEventRowDetails((prev) =>
           prev[refId] ? { ...prev, [refId]: { ...prev[refId], fullText: row.content } } : prev
         )
-        toast.success('Decision updated')
+        toast.success(t('library:sourceReader.decisionUpdatedTitle'))
         return true
       } catch (err) {
         console.error('Failed to update event:', err)
-        toast.error('Failed to update')
+        toast.error(t('library:sourceReader.updateFailedTitle'))
         return false
       }
     },
-    [recordingId]
+    [recordingId, t]
   )
 
   // H3: Timeline events for the full-mode event-list. Prefer the sibling agent's
@@ -962,7 +1086,7 @@ export function SourceReader({
     const trimmed = editedTitle.trim()
     if (!trimmed) {
       setEditedTitle(recording.userTitle || '')
-      toast.error('Title cannot be empty')
+      toast.error(t('library:sourceReader.titleCannotBeEmptyTitle'))
       return
     }
     if (trimmed === (recording.userTitle || '')) {
@@ -978,18 +1102,20 @@ export function SourceReader({
       if (result.success) {
         setIsEditingTitle(false)
         setMetadataEdited(true)
-        toast.success(trimmed ? 'Content title updated' : 'Content title cleared')
+        toast.success(trimmed
+          ? t('library:sourceReader.contentTitleUpdatedTitle')
+          : t('library:sourceReader.contentTitleClearedTitle'))
         onMetadataEdited?.()
       } else {
-        toast.error('Failed to save title')
+        toast.error(t('library:sourceReader.saveTitleFailedTitle'))
       }
     } catch (err) {
       console.error('Failed to save title:', err)
-      toast.error('Failed to save title')
+      toast.error(t('library:sourceReader.saveTitleFailedTitle'))
     } finally {
       setIsSavingTitle(false)
     }
-  }, [editedTitle, recording, onMetadataEdited])
+  }, [editedTitle, recording, onMetadataEdited, t])
 
   const handleCancelTitle = useCallback(() => {
     setIsEditingTitle(false)
@@ -1007,18 +1133,18 @@ export function SourceReader({
       )
       if (result.success) {
         setMetadataEdited(true)
-        toast.success('Category updated')
+        toast.success(t('library:sourceReader.categoryUpdatedTitle'))
         onMetadataEdited?.()
       } else {
-        toast.error('Failed to save category')
+        toast.error(t('library:sourceReader.saveCategoryFailedTitle'))
       }
     } catch (err) {
       console.error('Failed to save category:', err)
-      toast.error('Failed to save category')
+      toast.error(t('library:sourceReader.saveCategoryFailedTitle'))
     } finally {
       setIsSavingCategory(false)
     }
-  }, [recording, onMetadataEdited])
+  }, [recording, onMetadataEdited, t])
 
   const handleRemoveMeetingLink = useCallback(async () => {
     if (!recording) return
@@ -1028,16 +1154,16 @@ export function SourceReader({
       // checking it the refresh ran anyway and the unlink looked like a no-op
       // (2026-07-24: "clicking the little x does nothing").
       if (result && result.success === false) {
-        toast.error('Failed to remove meeting link', result.error ?? undefined)
+        toast.error(t('library:sourceReader.removeMeetingLinkFailedTitle'), result.error ?? undefined)
         return
       }
       setMetadataEdited(true)
       onMetadataEdited?.()
     } catch (err) {
       console.error('Failed to remove meeting link:', err)
-      toast.error('Failed to remove meeting link')
+      toast.error(t('library:sourceReader.removeMeetingLinkFailedTitle'))
     }
-  }, [recording, onMetadataEdited])
+  }, [recording, onMetadataEdited, t])
 
   // Run a transcription action, but first warn if the user edited metadata the
   // AI pass could overwrite. The chosen action is stashed and executed on
@@ -1061,15 +1187,18 @@ export function SourceReader({
     try {
       const res = await window.electronAPI.recordings.reprocessWith(recording.id, provider)
       if (!res?.success) {
-        toast.error('Failed to transcribe', res?.error || `Could not start ${label} transcription`)
+        toast.error(
+          t('library:sourceReader.transcribeFailedTitle'),
+          res?.error || t('library:sourceReader.couldNotStartTranscriptionFallback', { label })
+        )
         return
       }
       if (res.queueItemId) addToQueue(res.queueItemId, recording.id, recording.filename)
-      toast.success(`Transcribing with ${label}`, recording.filename)
+      toast.success(t('library:sourceReader.transcribingWithTitle', { label }), recording.filename)
     } catch (err) {
-      toast.error('Failed to transcribe', err instanceof Error ? err.message : undefined)
+      toast.error(t('library:sourceReader.transcribeFailedTitle'), err instanceof Error ? err.message : undefined)
     }
-  }, [recording, addToQueue])
+  }, [recording, addToQueue, t])
 
   // Re-run speaker diarization for this recording via a dedicated IPC (added by a
   // sibling change). Degrades gracefully when the IPC isn't present at runtime.
@@ -1079,24 +1208,30 @@ export function SourceReader({
       | { reDiarize?: (id: string) => Promise<{ success: boolean; queueItemId?: string; error?: string }> }
       | undefined
     if (typeof api?.reDiarize !== 'function') {
-      toast.error('Re-diarize unavailable', 'This build does not support re-diarizing yet.')
+      toast.error(
+        t('library:sourceReader.reDiarizeUnavailableTitle'),
+        t('library:sourceReader.reDiarizeUnavailableMessage')
+      )
       return
     }
     setReDiarizing(true)
     try {
       const res = await api.reDiarize(recording.id)
       if (!res?.success) {
-        toast.error('Failed to re-diarize', res?.error || 'Could not start re-diarization')
+        toast.error(
+          t('library:sourceReader.reDiarizeFailedTitle'),
+          res?.error || t('library:sourceReader.reDiarizeFailedFallback')
+        )
         setReDiarizing(false)
         return
       }
       if (res.queueItemId) addToQueue(res.queueItemId, recording.id, recording.filename)
-      toast.success('Re-diarizing speakers', recording.filename)
+      toast.success(t('library:sourceReader.reDiarizingSpeakersTitle'), recording.filename)
     } catch (err) {
-      toast.error('Failed to re-diarize', err instanceof Error ? err.message : undefined)
+      toast.error(t('library:sourceReader.reDiarizeFailedTitle'), err instanceof Error ? err.message : undefined)
       setReDiarizing(false)
     }
-  }, [recording, addToQueue])
+  }, [recording, addToQueue, t])
 
   // Memoized dialog prop: a fresh object per render would re-fire the dialog's
   // load effect on every background poll (the ~3s list→Loading→list flicker,
@@ -1182,8 +1317,8 @@ export function SourceReader({
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
         <div className="text-center space-y-2">
-          <p className="text-lg font-medium">No source selected</p>
-          <p className="text-sm">Select a source from the list to view its details</p>
+          <p className="text-lg font-medium">{t('library:sourceReader.noSourceSelectedTitle')}</p>
+          <p className="text-sm">{t('library:sourceReader.noSourceSelectedHint')}</p>
         </div>
       </div>
     )
@@ -1217,10 +1352,13 @@ export function SourceReader({
         }]
       : []
   const candidateMeetingLabel = meetingCandidates.length === 1
-    ? `${meetingCandidates[0].subject} (candidate)`
+    ? t('library:sourceReader.candidateMeetingSingle', { subject: meetingCandidates[0].subject })
     : meetingCandidates.length > 1
-      ? `${meetingCandidates[0].subject} + ${meetingCandidates.length - 1} candidate${meetingCandidates.length > 2 ? 's' : ''}`
-      : 'Not assigned'
+      ? t('library:sourceReader.candidateMeetingMultiple', {
+          subject: meetingCandidates[0].subject,
+          count: meetingCandidates.length - 1
+        })
+      : t('library:sourceReader.candidateMeetingNotAssigned')
 
   // Prefer the stored duration; fall back to the live decoded value for the
   // recording whose waveform is currently loaded (computed as a hook above).
@@ -1238,20 +1376,26 @@ export function SourceReader({
   // Re-diarize item only makes sense once a transcript with speakers exists.
   const transcribeMenuItems = (
     <>
-      <DropdownMenuItem onClick={() => requestTranscribe(() => transcribeWith('gemini', 'Gemini'))}>
+      <DropdownMenuItem
+        onClick={() => requestTranscribe(() => transcribeWith('gemini', t('library:sourceReader.geminiProviderLabel')))}
+      >
         <Cloud className="h-4 w-4" aria-hidden="true" />
-        Gemini (cloud)
+        {t('library:sourceReader.geminiCloudMenuItem')}
       </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => requestTranscribe(() => transcribeWith('local-asr', 'Local'))}>
+      <DropdownMenuItem
+        onClick={() => requestTranscribe(() => transcribeWith('local-asr', t('library:sourceReader.localProviderLabel')))}
+      >
         <Cpu className="h-4 w-4" aria-hidden="true" />
-        Local (on-device)
+        {t('library:sourceReader.localOnDeviceMenuItem')}
       </DropdownMenuItem>
       {isTranscribed && (
         <>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={reDiarize} disabled={reDiarizing}>
             <UserCog className="h-4 w-4" aria-hidden="true" />
-            {reDiarizing ? 'Re-diarizing…' : 'Re-diarize this recording'}
+            {reDiarizing
+              ? t('library:sourceReader.reDiarizingEllipsis')
+              : t('library:sourceReader.reDiarizeThisRecordingMenuItem')}
           </DropdownMenuItem>
         </>
       )}
@@ -1274,7 +1418,7 @@ export function SourceReader({
     .filter(([, mode]) => mode === 'hidden')
     .map(([id]) => ({
       id,
-      label: READER_SECTION_LABELS[id]
+      label: t(READER_SECTION_LABEL_KEYS[id])
     }))
 
   return (
@@ -1322,7 +1466,7 @@ export function SourceReader({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-2 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-            {formatSmartDate(recording.dateRecorded, { fallback: 'Unknown' })}
+            {formatSmartDate(recording.dateRecorded, { fallback: t('library:sourceReader.unknownFallback') })}
             {(() => {
               const rel = formatRelativeDate(recording.dateRecorded)
               return rel ? <span className="text-muted-foreground/70">· {rel}</span> : null
@@ -1331,7 +1475,11 @@ export function SourceReader({
           {isAudioSource && (
             <>
               <span aria-hidden="true" className="text-muted-foreground/40">•</span>
-              <span>{durationSeconds > 0 ? formatDuration(durationSeconds) : 'Unknown duration'}</span>
+              <span>
+                {durationSeconds > 0
+                  ? formatDuration(durationSeconds)
+                  : t('library:sourceReader.unknownDurationFallback')}
+              </span>
             </>
           )}
           <span aria-hidden="true" className="text-muted-foreground/40">•</span>
@@ -1341,7 +1489,9 @@ export function SourceReader({
           {isAudioSource ? (
             <TranscriptionStatusBadge status={recording.transcriptionStatus} />
           ) : (
-            <span className="rounded-full bg-muted px-2 py-0.5 font-medium capitalize text-foreground">{sourceType}</span>
+            <span className="rounded-full bg-muted px-2 py-0.5 font-medium capitalize text-foreground">
+              {rawValueLabel(t, SOURCE_TYPE_LABEL_KEYS, sourceType)}
+            </span>
           )}
         </div>
         {/* Primary CTAs */}
@@ -1349,14 +1499,14 @@ export function SourceReader({
           {/* Primary action: Play/Stop for local files, Download for device-only */}
           {canPlay && onPlay ? (
             isPlaying ? (
-              <Button size="sm" onClick={onStop} className="gap-2" title="Stop playback">
+              <Button size="sm" onClick={onStop} className="gap-2" title={t('library:sourceReader.stopPlaybackTitle')}>
                 <Square className="h-4 w-4" />
-                Stop
+                {t('library:sourceReader.stopButton')}
               </Button>
             ) : (
-              <Button size="sm" onClick={onPlay} className="gap-2" title="Play recording">
+              <Button size="sm" onClick={onPlay} className="gap-2" title={t('library:sourceReader.playRecordingTitle')}>
                 <Play className="h-4 w-4" />
-                Play
+                {t('library:sourceReader.playButton')}
               </Button>
             )
           ) : isDeviceOnly(recording) && onDownload ? (
@@ -1365,17 +1515,23 @@ export function SourceReader({
               onClick={onDownload}
               disabled={!deviceConnected || isDownloading}
               className="gap-2"
-              title={!deviceConnected ? 'Device not connected' : 'Download recording from device'}
+              title={!deviceConnected
+                ? t('library:sourceReader.deviceNotConnectedTitle')
+                : t('library:sourceReader.downloadFromDeviceTitle')}
             >
               {isDownloading ? (
                 <>
                   <RefreshCw className="h-4 w-4 animate-spin" />
-                  {(downloadProgress ?? 0) > 0 ? `${downloadProgress}%` : 'Starting…'}
+                  {(downloadProgress ?? 0) > 0
+                    ? `${downloadProgress}%`
+                    : t('library:sourceReader.startingEllipsis')}
                 </>
               ) : (
                 <>
                   <Download className="h-4 w-4" />
-                  {downloadStatus === 'pending' ? 'Start download' : 'Download'}
+                  {downloadStatus === 'pending'
+                    ? t('library:sourceReader.startDownloadButton')
+                    : t('library:sourceReader.downloadButton')}
                 </>
               )}
             </Button>
@@ -1391,10 +1547,10 @@ export function SourceReader({
                   onClick={() => requestTranscribe(() => onTranscribe?.())}
                   disabled={isTranscribeBusy}
                   className="gap-2 rounded-r-none border-r-0"
-                  title="Re-transcribe with the configured default method"
+                  title={t('library:sourceReader.reTranscribeDefaultTitle')}
                 >
                   <Wand2 className="h-4 w-4" />
-                  Re-transcribe
+                  {t('library:sourceReader.reTranscribeButton')}
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1403,8 +1559,8 @@ export function SourceReader({
                       size="sm"
                       disabled={isTranscribeBusy}
                       className="rounded-l-none px-2"
-                      aria-label="Choose re-transcription method"
-                      title="Choose re-transcription or re-diarization method"
+                      aria-label={t('library:sourceReader.chooseReTranscriptionMethodAriaLabel')}
+                      title={t('library:sourceReader.chooseReTranscriptionOrReDiarizationTitle')}
                     >
                       <ChevronDown className="h-4 w-4" />
                     </Button>
@@ -1421,25 +1577,25 @@ export function SourceReader({
                   disabled={isTranscribeBusy}
                   className="gap-2 rounded-r-none border-r-0"
                   title={
-                    recording.transcriptionStatus === 'pending' ? 'Transcription queued' :
-                    recording.transcriptionStatus === 'processing' ? 'Transcription in progress' :
-                    'Start AI transcription (configured default method)'
+                    recording.transcriptionStatus === 'pending' ? t('library:sourceReader.transcriptionQueuedTitle') :
+                    recording.transcriptionStatus === 'processing' ? t('library:sourceReader.transcriptionInProgressTitle') :
+                    t('library:sourceReader.startAiTranscriptionTitle')
                   }
                 >
                   {recording.transcriptionStatus === 'processing' ? (
                     <>
                       <RefreshCw className="h-4 w-4 animate-spin" />
-                      In Progress
+                      {t('library:sourceReader.inProgressLabel')}
                     </>
                   ) : recording.transcriptionStatus === 'pending' ? (
                     <>
                       <RefreshCw className="h-4 w-4" />
-                      Queued
+                      {t('library:sourceReader.queuedLabel')}
                     </>
                   ) : (
                     <>
                       <Wand2 className="h-4 w-4" />
-                      Transcribe
+                      {t('library:sourceReader.transcribeButton')}
                     </>
                   )}
                 </Button>
@@ -1450,8 +1606,8 @@ export function SourceReader({
                       size="sm"
                       disabled={isTranscribeBusy}
                       className="rounded-l-none px-2"
-                      aria-label="Choose transcription method"
-                      title="Choose transcription method"
+                      aria-label={t('library:sourceReader.chooseTranscriptionMethodAriaLabel')}
+                      title={t('library:sourceReader.chooseTranscriptionMethodAriaLabel')}
                     >
                       <ChevronDown className="h-4 w-4" />
                     </Button>
@@ -1469,10 +1625,10 @@ export function SourceReader({
               size="sm"
               onClick={onAskAboutSource}
               className="gap-2"
-              title="Ask the AI assistant about this source"
+              title={t('library:sourceReader.askAboutSourceTitle')}
             >
               <Sparkles className="h-4 w-4" />
-              Ask about this source
+              {t('library:sourceReader.askAboutSourceButton')}
             </Button>
           )}
 
@@ -1483,17 +1639,26 @@ export function SourceReader({
               onClick={toggleSplitMode}
               className="gap-2"
               aria-pressed={splitMode}
-              title={splitMode ? 'Close the split editor' : 'Split this recording into two sessions'}
+              title={splitMode
+                ? t('library:sourceReader.closeSplitEditorTitle')
+                : t('library:sourceReader.splitRecordingTitle')}
             >
               <Scissors className="h-4 w-4" />
-              {splitMode ? 'Splitting' : 'Split'}
+              {splitMode
+                ? t('library:sourceReader.splittingLabel')
+                : t('library:sourceReader.splitLabel')}
             </Button>
           )}
 
           {/* Overflow: file operations + destructive delete (behind a separator) */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" aria-label="More actions" title="More actions">
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label={t('library:sourceReader.moreActionsLabel')}
+                title={t('library:sourceReader.moreActionsLabel')}
+              >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -1502,18 +1667,18 @@ export function SourceReader({
                 <>
                   <DropdownMenuItem onClick={() => window.electronAPI?.storage.openFile(recording.localPath)}>
                     <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                    Open in default app
+                    {t('library:sourceReader.openInDefaultAppMenuItem')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => window.electronAPI?.storage.revealInFolder(recording.localPath)}>
                     <FolderOpen className="h-4 w-4" aria-hidden="true" />
-                    Reveal in folder
+                    {t('library:sourceReader.revealInFolderMenuItem')}
                   </DropdownMenuItem>
                 </>
               )}
               {!meeting && !isDeviceOnly(recording) && (
                 <DropdownMenuItem onClick={() => setLinkDialogOpen(true)}>
                   <Link className="h-4 w-4" aria-hidden="true" />
-                  Link meeting
+                  {t('library:sourceReader.linkMeetingLabel')}
                 </DropdownMenuItem>
               )}
               {onMarkPersonal && !isDeviceOnly(recording) && (
@@ -1521,8 +1686,8 @@ export function SourceReader({
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={onMarkPersonal}>
                     {recording.personal
-                      ? <><Eye className="h-4 w-4" aria-hidden="true" />Unmark personal</>
-                      : <><EyeOff className="h-4 w-4" aria-hidden="true" />Mark personal (ignore)</>}
+                      ? <><Eye className="h-4 w-4" aria-hidden="true" />{t('library:sourceReader.unmarkPersonalMenuItem')}</>
+                      : <><EyeOff className="h-4 w-4" aria-hidden="true" />{t('library:sourceReader.markPersonalMenuItem')}</>}
                   </DropdownMenuItem>
                 </>
               )}
@@ -1598,7 +1763,7 @@ export function SourceReader({
         {canPlay && sectionIsVisible('player') && (
           <ReaderSection
             section="player"
-            label="Player"
+            label={t('library:sourceReader.playerSectionLabel')}
             mode={readerSectionModes.player}
             onModeChange={(mode) => changeSectionMode('player', mode)}
             onMaximize={() => toggleMaximizedSection('player')}
@@ -1612,7 +1777,7 @@ export function SourceReader({
               controls={
                 <ReaderSectionActions
                   section="player"
-                  label="Player"
+                  label={t('library:sourceReader.playerSectionLabel')}
                   mode={readerSectionModes.player}
                   onModeChange={(mode) => changeSectionMode('player', mode)}
                   onMaximize={() => toggleMaximizedSection('player')}
@@ -1663,7 +1828,7 @@ export function SourceReader({
         {sectionIsVisible('metadata') && (
           <ReaderSection
             section="metadata"
-            label="Metadata"
+            label={t('library:sourceReader.metadataSectionLabel')}
             mode={readerSectionModes.metadata}
             onModeChange={(mode) => changeSectionMode('metadata', mode)}
             onMaximize={() => toggleMaximizedSection('metadata')}
@@ -1677,18 +1842,18 @@ export function SourceReader({
             <dl className="grid grid-cols-1 gap-x-6 gap-y-2 pt-2 text-xs @md:grid-cols-2" data-testid="source-identity-fields">
               {displayTitle !== recording.filename && (
                 <div className="min-w-0">
-                  <dt className="font-medium text-muted-foreground">Filename</dt>
+                  <dt className="font-medium text-muted-foreground">{t('library:sourceReader.filenameLabel')}</dt>
                   <dd className="mt-0.5 truncate text-foreground" title={recording.filename}>{recording.filename}</dd>
                 </div>
               )}
               {isAudioSource && !meeting && !recording.meetingSubject && meetingCandidates.length > 0 && (
                 <div className="min-w-0">
-                  <dt className="font-medium text-muted-foreground">Possible meeting</dt>
+                  <dt className="font-medium text-muted-foreground">{t('library:sourceReader.possibleMeetingLabel')}</dt>
                   <dd className="mt-0.5 truncate text-foreground" title={candidateMeetingLabel}>{candidateMeetingLabel}</dd>
                 </div>
               )}
               <div className="min-w-0">
-                <dt className="font-medium text-muted-foreground">Content title</dt>
+                <dt className="font-medium text-muted-foreground">{t('library:sourceReader.contentTitleLabel')}</dt>
                 {isEditingTitle ? (
                   <dd className="mt-0.5 flex min-w-0 items-center gap-1">
                     <Input
@@ -1701,19 +1866,21 @@ export function SourceReader({
                       className="h-6 min-w-0 px-1.5 py-0 text-xs"
                       autoFocus
                       disabled={isSavingTitle}
-                      aria-label="Recording title — content title"
+                      aria-label={t('library:sourceReader.recordingTitleAriaLabel')}
                     />
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveTitle} disabled={isSavingTitle} aria-label="Save title" title="Save (Enter)">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveTitle} disabled={isSavingTitle} aria-label={t('library:sourceReader.saveTitleAriaLabel')} title={t('library:sourceReader.saveTitleShortcutTitle')}>
                       <Check className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelTitle} disabled={isSavingTitle} aria-label="Cancel editing" title="Cancel (Escape)">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCancelTitle} disabled={isSavingTitle} aria-label={t('library:sourceReader.cancelEditingAriaLabel')} title={t('library:sourceReader.cancelEditingShortcutTitle')}>
                       <X className="h-3.5 w-3.5" />
                     </Button>
                   </dd>
                 ) : (
                   <dd className="group mt-0.5 flex min-w-0 items-center gap-1 text-foreground">
                     <span className="truncate" title={recording.userTitle || effectiveTranscript?.title_suggestion || undefined}>
-                      {recording.userTitle || effectiveTranscript?.title_suggestion || 'Not generated'}
+                      {recording.userTitle
+                        || effectiveTranscript?.title_suggestion
+                        || t('library:sourceReader.notGeneratedFallback')}
                     </span>
                     {recording.knowledgeCaptureId && (
                       <button
@@ -1723,8 +1890,8 @@ export function SourceReader({
                           setEditedTitle(recording.userTitle || effectiveTranscript?.title_suggestion || '')
                         }}
                         className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 group-hover:opacity-100 group-focus-within:opacity-100"
-                        aria-label="Edit title"
-                        title="Edit content title"
+                        aria-label={t('library:sourceReader.editTitleAriaLabel')}
+                        title={t('library:sourceReader.editContentTitleTooltip')}
                       >
                         <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
@@ -1734,7 +1901,7 @@ export function SourceReader({
               </div>
               {isAudioSource && (meeting?.organizer_name || meeting?.organizer_email) && (
                 <div className="min-w-0">
-                  <dt className="font-medium text-muted-foreground">Organizer</dt>
+                  <dt className="font-medium text-muted-foreground">{t('library:sourceReader.organizerLabel')}</dt>
                   <dd className="mt-0.5 truncate text-foreground" title={meeting?.organizer_name || meeting?.organizer_email || undefined}>
                     {meeting?.organizer_name || meeting?.organizer_email}
                   </dd>
@@ -1747,13 +1914,15 @@ export function SourceReader({
                 type="button"
                 className="mt-2 flex max-w-full flex-wrap items-center gap-1.5 rounded-md border border-dashed px-2.5 py-1.5 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                 onClick={() => setLinkDialogOpen(true)}
-                aria-label="Link this recording to a meeting"
+                aria-label={t('library:sourceReader.linkToMeetingAriaLabel')}
               >
                 <Link className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                <span className="text-[11px] font-semibold text-primary">Link meeting</span>
+                <span className="text-[11px] font-semibold text-primary">
+                  {t('library:sourceReader.linkMeetingLabel')}
+                </span>
                 {meetingCandidates.length > 0 && (
                   <span className="text-[11px] text-muted-foreground">
-                    {meetingCandidates.length} possible {meetingCandidates.length === 1 ? 'match' : 'matches'}
+                    {t('library:sourceReader.possibleMatches', { count: meetingCandidates.length })}
                   </span>
                 )}
                 {meetingCandidates.slice(0, 4).map((candidate) => (
@@ -1762,7 +1931,9 @@ export function SourceReader({
                     className="rounded-full border border-dashed px-2 py-0.5 text-[11px] hover:border-primary"
                     title={candidate.matchReason || undefined}
                   >
-                    {candidate.subject} · {Math.round(candidate.confidenceScore * 100)}%
+                    {candidate.subject}
+                    {t('library:sourceReader.candidateConfidenceSeparator')}
+                    {Math.round(candidate.confidenceScore * 100)}%
                   </span>
                 ))}
               </button>
@@ -1788,7 +1959,7 @@ export function SourceReader({
                     size="icon"
                     className="h-7 w-7 shrink-0"
                     onClick={(e) => { e.stopPropagation(); setLinkDialogOpen(true) }}
-                    title="Change linked meeting"
+                    title={t('library:sourceReader.changeLinkedMeetingTitle')}
                   >
                     <Edit2 className="h-3.5 w-3.5" />
                   </Button>
@@ -1797,8 +1968,8 @@ export function SourceReader({
                     size="icon"
                     className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
                     onClick={(e) => { e.stopPropagation(); setShowUnlinkConfirmation(true) }}
-                    title="Remove meeting link (meeting is not deleted)"
-                    aria-label="Remove meeting link"
+                    title={t('library:sourceReader.removeMeetingLinkTitle')}
+                    aria-label={t('library:sourceReader.removeMeetingLinkAriaLabel')}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -1833,13 +2004,15 @@ export function SourceReader({
             {mentionedPeople.length > 0 && (
               <div className="px-4 pb-3" data-testid="mentioned-people-section">
                 <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  Mentioned ({mentionedPeople.length})
-                  <span className="font-normal">· not attendance</span>
+                  {t('library:sourceReader.mentionedCount', { count: mentionedPeople.length })}
+                  <span className="font-normal">{t('library:sourceReader.notAttendanceNote')}</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {mentionedPeople.map((person, index) => (
                     <span key={`${person.name}-${index}`} className="rounded-full border px-2 py-0.5 text-xs" title={person.role}>
-                      {person.name}{person.role ? ` · ${person.role}` : ''}
+                      {person.name}
+                      {person.role ? t('library:sourceReader.personRoleSeparator') : ''}
+                      {person.role}
                     </span>
                   ))}
                 </div>
@@ -1855,35 +2028,35 @@ export function SourceReader({
             >
               <summary className="flex cursor-pointer list-none items-center gap-1.5 px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
                 <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-                More metadata
+                {t('library:sourceReader.moreMetadataSummary')}
               </summary>
               <div className="px-4 pb-3 space-y-3">
               <div className="grid grid-cols-2 @md:grid-cols-3 @xl:grid-cols-4 gap-x-4 gap-y-2 text-sm">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-0.5">Size</p>
-                  <p>{recording.size ? formatBytes(recording.size) : 'Unknown'}</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('library:sourceReader.sizeLabel')}</p>
+                  <p>{recording.size ? formatBytes(recording.size) : t('library:sourceReader.unknownFallback')}</p>
                 </div>
                 {recording.quality && recording.quality !== 'unrated' && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Quality</p>
-                    <p className="capitalize">{recording.quality.replace('-', ' ')}</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('library:sourceReader.qualityLabel')}</p>
+                    <p className="capitalize">{rawValueLabel(t, QUALITY_LABEL_KEYS, recording.quality)}</p>
                   </div>
                 )}
                 {recording.knowledgeCaptureId ? (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Category</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('library:sourceReader.categoryLabel')}</p>
                     <Select
                       value={recording.category || ''}
                       onValueChange={handleCategoryChange}
                       disabled={isSavingCategory}
                     >
                       <SelectTrigger className="h-7 text-sm w-[140px]">
-                        <SelectValue placeholder="Select category" />
+                        <SelectValue placeholder={t('library:sourceReader.selectCategoryPlaceholder')} />
                       </SelectTrigger>
                       <SelectContent>
                         {CATEGORY_OPTIONS.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
+                            {t(opt.labelKey)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1891,15 +2064,15 @@ export function SourceReader({
                   </div>
                 ) : recording.category ? (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Category</p>
-                    <p className="capitalize">{recording.category}</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('library:sourceReader.categoryLabel')}</p>
+                    <p className="capitalize">{rawValueLabel(t, CATEGORY_VALUE_LABEL_KEYS, recording.category)}</p>
                   </div>
                 ) : null}
               </div>
 
               {recording.knowledgeCaptureId && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1.5">Projects</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('library:sourceReader.projectsLabel')}</p>
                   <ProjectAssignmentRow knowledgeCaptureId={recording.knowledgeCaptureId} />
                 </div>
               )}
@@ -1913,7 +2086,7 @@ export function SourceReader({
         {isAudioSource && sectionIsVisible('moments') && (
           <ReaderSection
             section="moments"
-            label="Actions & decisions"
+            label={t('library:sourceReader.momentsSectionLabel')}
             mode={readerSectionModes.moments}
             onModeChange={(mode) => changeSectionMode('moments', mode)}
             onMaximize={() => toggleMaximizedSection('moments')}
@@ -1951,13 +2124,13 @@ export function SourceReader({
                   <CloudDownload className="h-4 w-4" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-sm font-medium text-foreground">Stored on HiDock</h3>
+                  <h3 className="text-sm font-medium text-foreground">{t('library:sourceReader.storedOnHidockHeading')}</h3>
                   <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-                    Download to play, transcribe, and ask about the audio.
+                    {t('library:sourceReader.downloadToPlayMessage')}
                   </p>
                   {!deviceConnected && (
                     <p className="mt-1 text-xs font-medium text-orange-600 dark:text-orange-300">
-                      Connect the HiDock to start.
+                      {t('library:sourceReader.connectHidockToStartMessage')}
                     </p>
                   )}
                 </div>
@@ -1968,11 +2141,12 @@ export function SourceReader({
               <div className="mx-auto max-w-xl rounded-lg border border-border/70 bg-muted/30 px-5 py-6 text-center">
                 {tooShortSkip ? (
                   <>
-                    <p className="font-medium text-foreground">Too short to transcribe</p>
+                    <p className="font-medium text-foreground">{t('library:sourceReader.tooShortToTranscribeTitle')}</p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      {tooShortSkip.seconds} {tooShortSkip.seconds === 1 ? 'second' : 'seconds'} of audio.
-                      Recordings under {tooShortSkip.minimumSeconds} seconds are skipped.
-                      To transcribe it anyway, choose Clear rating in its row menu, then re-run transcription.
+                      {t('library:sourceReader.tooShortToTranscribeMessage', {
+                        count: tooShortSkip.seconds,
+                        minimumSeconds: tooShortSkip.minimumSeconds
+                      })}
                       {/* A skipped clip is rated garbage, and the main process keeps
                           garbage-rated audio away from every provider even on an
                           explicit re-run. Clearing the rating is a user rating,
@@ -1981,10 +2155,9 @@ export function SourceReader({
                   </>
                 ) : (
                   <>
-                    <p className="font-medium text-foreground">No intelligible speech detected</p>
+                    <p className="font-medium text-foreground">{t('library:sourceReader.noIntelligibleSpeechTitle')}</p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Automatic transcription, summary, participant inference, and meeting auto-linking were skipped.
-                      Re-run transcription if you believe this recording contains spoken words.
+                      {t('library:sourceReader.noIntelligibleSpeechMessage')}
                     </p>
                   </>
                 )}
@@ -2002,7 +2175,7 @@ export function SourceReader({
                 {sectionIsVisible('summary') && (
                   <ReaderSection
                     section="summary"
-                    label="Summary"
+                    label={t('library:sourceReader.summarySectionLabel')}
                     mode={readerSectionModes.summary}
                     onModeChange={(mode) => changeSectionMode('summary', mode)}
                     onMaximize={() => toggleMaximizedSection('summary')}
@@ -2014,7 +2187,7 @@ export function SourceReader({
                     <div className="max-w-[75ch] text-sm leading-relaxed text-foreground">
                       {effectiveTranscript.summary
                         ? <p className="whitespace-pre-wrap">{effectiveTranscript.summary}</p>
-                        : <p className="text-muted-foreground">No summary generated.</p>}
+                        : <p className="text-muted-foreground">{t('library:sourceReader.noSummaryGenerated')}</p>}
                     </div>
                   </ReaderSection>
                 )}
@@ -2025,7 +2198,7 @@ export function SourceReader({
                 {sectionIsVisible('transcript') && (
                   <ReaderSection
                     section="transcript"
-                    label="Full transcript"
+                    label={t('library:sourceReader.fullTranscriptSectionLabel')}
                     mode={readerSectionModes.transcript}
                     onModeChange={(mode) => changeSectionMode('transcript', mode)}
                     onMaximize={() => toggleMaximizedSection('transcript')}
@@ -2054,18 +2227,18 @@ export function SourceReader({
               </div>
             ) : recording.transcriptionStatus === 'complete' ? (
               <div className="text-center text-muted-foreground py-8">
-                <p>Transcript not available</p>
+                <p>{t('library:sourceReader.transcriptNotAvailable')}</p>
               </div>
             ) : recording.transcriptionStatus === 'pending' || recording.transcriptionStatus === 'processing' ? (
               <div className="text-center text-muted-foreground py-8">
-                <p>Transcription in progress...</p>
+                <p>{t('library:sourceReader.transcriptionInProgressDots')}</p>
               </div>
             ) : (
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-3 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">No transcript</p>
+                <p className="font-medium text-foreground">{t('library:sourceReader.noTranscriptTitle')}</p>
                 {canPlay && (
                   <p>
-                    Use Transcribe above to generate one.
+                    {t('library:sourceReader.useTranscribeAboveMessage')}
                   </p>
                 )}
               </div>
@@ -2092,10 +2265,12 @@ export function SourceReader({
       <ConfirmDialog
         open={showUnlinkConfirmation}
         onOpenChange={setShowUnlinkConfirmation}
-        title="Remove this meeting link?"
-        description={`This recording will no longer be attached to “${meeting?.subject ?? 'this meeting'}”. The calendar meeting itself will not be deleted, and you can link the recording again later.`}
-        actionLabel="Remove link"
-        cancelLabel="Keep linked"
+        title={t('library:sourceReader.removeMeetingLinkDialogTitle')}
+        description={t('library:sourceReader.removeMeetingLinkDialogDescription', {
+          subject: meeting?.subject ?? t('library:sourceReader.thisMeetingFallback')
+        })}
+        actionLabel={t('library:sourceReader.removeLinkActionLabel')}
+        cancelLabel={t('library:sourceReader.keepLinkedActionLabel')}
         variant="destructive"
         onConfirm={() => {
           setShowUnlinkConfirmation(false)
@@ -2110,10 +2285,10 @@ export function SourceReader({
           setShowTranscribeWarning(open)
           if (!open) setPendingTranscribe(null)
         }}
-        title="Reprocess this recording?"
-        description="Your content title and original filename are preserved. Reprocessing replaces AI-generated fields such as the transcript, summary, AI title, speaker turns, and meeting resolution."
-        actionLabel="Continue"
-        cancelLabel="Cancel"
+        title={t('library:sourceReader.reprocessRecordingDialogTitle')}
+        description={t('library:sourceReader.reprocessRecordingDialogDescription')}
+        actionLabel={t('library:sourceReader.continueActionLabel')}
+        cancelLabel={t('library:sourceReader.cancelActionLabel')}
         variant="default"
         onConfirm={() => {
           pendingTranscribe?.()
@@ -2157,36 +2332,28 @@ function findTooShortSkip(runs: ReaderProcessingRun[]): { seconds: number; minim
   }
 }
 
-function processingStageLabel(stage: ReaderProcessingRun['stage']): string {
-  switch (stage) {
-    case 'meeting-resolution': return 'Meeting match'
-    case 'speaker-identity': return 'Speaker identity'
-    case 'voice-id': return 'Voice ID'
-    case 'actionable-detection': return 'Actionables'
-    case 'timeline-analysis': return 'Timeline'
-    case 'org-reconciliation': return 'Entity linking'
-    case 'graph-sync': return 'Knowledge graph'
-    case 'wiki-export': return 'Wiki export'
-    case 'rag-indexing': return 'RAG indexing'
-    default: return stage.charAt(0).toUpperCase() + stage.slice(1)
-  }
+function processingStageLabel(t: TFunction, stage: ReaderProcessingRun['stage']): string {
+  return rawValueLabel(t, PROCESSING_STAGE_LABEL_KEYS, stage)
 }
 
-function formatProcessingDuration(durationMs: number | null | undefined): string | null {
+function formatProcessingDuration(t: TFunction, durationMs: number | null | undefined): string | null {
   if (durationMs == null || !Number.isFinite(durationMs) || durationMs < 0) return null
-  if (durationMs < 1000) return `${Math.round(durationMs)} ms`
-  if (durationMs < 60_000) return `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)} s`
+  if (durationMs < 1000) return t('library:sourceReader.durationMs', { value: Math.round(durationMs) })
+  if (durationMs < 60_000) {
+    return t('library:sourceReader.durationSeconds', {
+      value: (durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)
+    })
+  }
   const minutes = Math.floor(durationMs / 60_000)
   const seconds = Math.round((durationMs % 60_000) / 1000)
-  return `${minutes}m ${seconds}s`
+  return t('library:sourceReader.durationMinutesSeconds', { minutes, seconds })
 }
 
-function processingProviderLabel(run: ReaderProcessingRun): string {
+/** A tool name is a proper noun (`pyannote`) and is never translated. */
+function processingProviderLabel(t: TFunction, run: ReaderProcessingRun): string {
   if (run.stage === 'diarization' && run.tool && run.tool !== run.provider) return run.tool
   if ((run.stage === 'speaker-identity' || run.stage === 'voice-id') && run.tool) return run.tool
-  if (run.provider === 'local-asr') return 'Local ASR'
-  if (run.provider === 'hidock-next') return 'HiDock Next'
-  return run.provider.charAt(0).toUpperCase() + run.provider.slice(1)
+  return rawValueLabel(t, PROVIDER_LABEL_KEYS, run.provider)
 }
 
 interface ProviderTimelineEvent {
@@ -2207,7 +2374,7 @@ function formatAudioOffset(seconds: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
 }
 
-function formatProviderTimeline(usageJson: string | null | undefined): string[] {
+function formatProviderTimeline(t: TFunction, usageJson: string | null | undefined): string[] {
   if (!usageJson) return []
   try {
     const parsed = JSON.parse(usageJson) as { providerTimeline?: ProviderTimelineEvent[] }
@@ -2217,50 +2384,91 @@ function formatProviderTimeline(usageJson: string | null | undefined): string[] 
       .filter((event) => event.status !== 'started')
       .map((event) => {
         const chunk = event.chunkIndex && event.chunkCount
-          ? `Chunk ${event.chunkIndex}/${event.chunkCount}`
-          : 'Provider'
-        const bounds = Number.isFinite(event.audioStartSec) && Number.isFinite(event.audioEndSec)
-          ? ` (${formatAudioOffset(event.audioStartSec!)}-${formatAudioOffset(event.audioEndSec!)})`
-          : ''
-        const phase = (event.phase || 'request').replaceAll('-', ' ')
-        const duration = formatProcessingDuration(event.elapsedMs)
-        const status = event.status === 'failed' ? 'failed' : duration
-        return `${chunk}${bounds} ${phase}: ${status || 'duration not reported'}${event.detail ? ` - ${event.detail}` : ''}`
+          ? t('library:sourceReader.providerTimelineChunk', { index: event.chunkIndex, count: event.chunkCount })
+          : t('library:sourceReader.providerTimelineProviderFallback')
+        // The phase used to be `phase.replaceAll('-', ' ')` — a trick that
+        // turns an identifier into an English phrase and leaves every other
+        // language with the identifier.
+        const phase = rawValueLabel(t, PROVIDER_TIMELINE_PHASE_LABEL_KEYS, event.phase || 'request')
+        const duration = formatProcessingDuration(t, event.elapsedMs)
+        const status = event.status === 'failed'
+          ? t('library:sourceReader.providerTimelineFailedStatus')
+          : duration || t('library:sourceReader.providerTimelineDurationNotReported')
+        const hasBounds = Number.isFinite(event.audioStartSec) && Number.isFinite(event.audioEndSec)
+        const start = hasBounds ? formatAudioOffset(event.audioStartSec!) : ''
+        const end = hasBounds ? formatAudioOffset(event.audioEndSec!) : ''
+        // One COMPLETE line per branch instead of a stem plus optional
+        // fragments: a translator has to be free to move the bracketed range
+        // and the trailing detail, which a `${base}${suffix}` cannot allow.
+        if (hasBounds && event.detail) {
+          return t('library:sourceReader.providerTimelineLineWithBoundsAndDetail',
+            { chunk, start, end, phase, status, detail: event.detail })
+        }
+        if (hasBounds) {
+          return t('library:sourceReader.providerTimelineLineWithBounds', { chunk, start, end, phase, status })
+        }
+        if (event.detail) {
+          return t('library:sourceReader.providerTimelineLineWithDetail', { chunk, phase, status, detail: event.detail })
+        }
+        return t('library:sourceReader.providerTimelineLine', { chunk, phase, status })
       })
   } catch {
-    return ['Provider request timeline: invalid persisted diagnostics']
+    return [t('library:sourceReader.providerTimelineInvalidDiagnostics')]
   }
 }
 
 /** Compact, evidence-backed stage attribution. Every chip is backed by an
  * immutable processing_runs row; absent cost/version stays honestly unknown. */
 function ProcessingRunChips({ runs }: { runs: ReaderProcessingRun[] }) {
+  const { t } = useTranslation()
   const visible = runs.filter((run) => VISIBLE_PROCESSING_STAGES.has(run.stage))
   if (visible.length === 0) return null
+  const notReported = t('library:sourceReader.notReported')
+  const chipSeparator = t('library:sourceReader.processingChipSeparator')
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-4 pt-2" data-testid="processing-provenance">
-      <span className="mr-0.5 text-[11px] font-medium text-muted-foreground">Processing timeline</span>
+      <span className="mr-0.5 text-[11px] font-medium text-muted-foreground">
+        {t('library:sourceReader.processingTimelineHeading')}
+      </span>
       {visible.map((run) => {
-        const provider = processingProviderLabel(run)
-        const duration = formatProcessingDuration(run.duration_ms)
-        const providerTimeline = run.stage === 'transcription' ? formatProviderTimeline(run.usage_json) : []
+        const stage = processingStageLabel(t, run.stage)
+        const provider = processingProviderLabel(t, run)
+        const duration = formatProcessingDuration(t, run.duration_ms)
+        const providerTimeline = run.stage === 'transcription' ? formatProviderTimeline(t, run.usage_json) : []
         const blocked = run.quality_status === 'blocked'
-        const statusSuffix = !blocked && (run.status === 'degraded' || run.status === 'failed')
-          ? ` · ${run.status}`
-          : ''
+        const outcome = blocked ? t('library:sourceReader.processingBlockedStatus') : provider
+        const runStatus = !blocked && (run.status === 'degraded' || run.status === 'failed')
+          ? rawValueLabel(t, RUN_STATUS_LABEL_KEYS, run.status)
+          : null
+        // A DELIMITED LIST joined with the catalogue's own separator, not a
+        // sentence glued together from translated fragments.
+        const chipLabel = [stage, outcome, duration, runStatus].filter(Boolean).join(chipSeparator)
         const detail = [
-          `${processingStageLabel(run.stage)}: ${blocked ? 'blocked' : provider}`,
-          blocked ? `Attempted tool: ${provider}` : null,
-          run.model ? `Model: ${run.model}` : 'Model: not reported',
-          run.version ? `Version: ${run.version}` : 'Version: not reported',
-          `Execution: ${run.execution || 'not reported'}`,
-          run.quality_status ? `Quality: ${run.quality_status}` : null,
-          duration ? `Duration: ${duration}` : 'Duration: not reported',
-          run.started_at ? `Started: ${run.started_at}` : null,
-          providerTimeline.length > 0 ? `Provider request timeline:\n${providerTimeline.join('\n')}` : null,
+          t('library:sourceReader.processingStageStatusLine', { stage, status: outcome }),
+          blocked ? t('library:sourceReader.processingAttemptedToolLabel', { value: provider }) : null,
+          t('library:sourceReader.processingModelLabel', { value: run.model || notReported }),
+          t('library:sourceReader.processingVersionLabel', { value: run.version || notReported }),
+          t('library:sourceReader.processingExecutionLabel', {
+            value: run.execution ? rawValueLabel(t, EXECUTION_LABEL_KEYS, run.execution) : notReported
+          }),
+          run.quality_status
+            ? t('library:sourceReader.processingQualityLabel', {
+                value: rawValueLabel(t, QUALITY_STATUS_LABEL_KEYS, run.quality_status)
+              })
+            : null,
+          t('library:sourceReader.processingDurationLabel', { value: duration || notReported }),
+          run.started_at ? t('library:sourceReader.processingStartedLabel', { value: run.started_at }) : null,
+          providerTimeline.length > 0
+            ? [t('library:sourceReader.processingProviderTimelineLabel'), ...providerTimeline].join('\n')
+            : null,
           run.estimated_cost_amount != null
-            ? `Estimated cost: ${run.estimated_cost_currency || ''} ${run.estimated_cost_amount}`.trim()
-            : 'Cost: not reported'
+            // No trim: a missing currency leaves the double space this line
+            // has always rendered in English, and squeezing it out here
+            // would be a change to the English screen.
+            ? t('library:sourceReader.processingCostLabel', {
+                value: `${run.estimated_cost_currency || ''} ${run.estimated_cost_amount}`
+              })
+            : t('library:sourceReader.processingCostNotReported')
         ].filter(Boolean).join('\n')
         return (
           <span
@@ -2275,7 +2483,7 @@ function ProcessingRunChips({ runs }: { runs: ReaderProcessingRun[] }) {
             data-provider={run.provider}
           >
             {run.execution === 'local' ? <Cpu className="h-3 w-3" /> : <Cloud className="h-3 w-3" />}
-            {processingStageLabel(run.stage)} · {blocked ? 'blocked' : provider}{duration ? ` · ${duration}` : ''}{statusSuffix}
+            {chipLabel}
           </span>
         )
       })}
@@ -2342,6 +2550,7 @@ function ReaderPlayer({
   activeEventId = null,
   controls,
 }: ReaderPlayerProps) {
+  const { t } = useTranslation()
   const regionRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState<number | null>(null)
@@ -2424,7 +2633,7 @@ function ReaderPlayer({
             role="status"
           >
             <RefreshCw className="h-3 w-3 animate-spin" aria-hidden="true" />
-            Analyzing timeline…
+            {t('library:readerPlayer.analyzingTimeline')}
           </div>
         )}
 
@@ -2440,15 +2649,17 @@ function ReaderPlayer({
             role="status"
           >
             {analysisFailure === 'permanent'
-              ? 'Timeline analysis needs attention'
-              : 'Timeline analysis failed — will retry when you reopen'}
+              ? t('library:readerPlayer.needsAttentionMessage')
+              : t('library:readerPlayer.willRetryMessage')}
             <button
               type="button"
               onClick={onRetryAnalysis}
               className="rounded font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               data-testid="timeline-analysis-retry"
             >
-              {analysisFailure === 'permanent' ? 'Retry' : 'Retry now'}
+              {analysisFailure === 'permanent'
+                ? t('library:readerPlayer.retryButton')
+                : t('library:readerPlayer.retryNowButton')}
             </button>
           </div>
         )}
@@ -2476,6 +2687,7 @@ function ReaderPlayer({
  * isolated from SourceReader's conditional early return.
  */
 function ProjectAssignmentRow({ knowledgeCaptureId }: { knowledgeCaptureId: string }) {
+  const { t } = useTranslation()
   const [assigned, setAssigned] = useState<PickerProject[]>([])
   const [allProjects, setAllProjects] = useState<PickerProject[]>([])
   const [open, setOpen] = useState(false)
@@ -2521,15 +2733,15 @@ function ProjectAssignmentRow({ knowledgeCaptureId }: { knowledgeCaptureId: stri
       if (res.success) {
         setAssigned(allProjects.filter((p) => nextIds.has(p.id)))
       } else {
-        toast.error('Failed to update projects')
+        toast.error(t('library:projectAssignmentRow.updateFailedTitle'))
       }
     } catch (err) {
       console.error('Failed to set projects:', err)
-      toast.error('Failed to update projects')
+      toast.error(t('library:projectAssignmentRow.updateFailedTitle'))
     } finally {
       setSaving(false)
     }
-  }, [assignedIds, allProjects, knowledgeCaptureId])
+  }, [assignedIds, allProjects, knowledgeCaptureId, t])
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -2550,16 +2762,27 @@ function ProjectAssignmentRow({ knowledgeCaptureId }: { knowledgeCaptureId: stri
         }}
       >
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-6 gap-1 text-xs" title="Assign to projects">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 gap-1 text-xs"
+            title={t('library:projectAssignmentRow.assignToProjectsTitle')}
+          >
             <Plus className="h-3 w-3" />
-            {assigned.length === 0 ? 'Assign project' : 'Edit'}
+            {assigned.length === 0
+              ? t('library:projectAssignmentRow.assignProjectButton')
+              : t('library:projectAssignmentRow.editButton')}
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-64 p-2">
-          <p className="text-xs font-semibold text-muted-foreground px-2 py-1">Assign to projects</p>
+          <p className="text-xs font-semibold text-muted-foreground px-2 py-1">
+            {t('library:projectAssignmentRow.assignToProjectsTitle')}
+          </p>
           <div className="max-h-64 overflow-auto">
             {allProjects.length === 0 ? (
-              <p className="text-xs text-muted-foreground px-2 py-2">No projects yet.</p>
+              <p className="text-xs text-muted-foreground px-2 py-2">
+                {t('library:projectAssignmentRow.noProjectsYet')}
+              </p>
             ) : (
               allProjects.map((p) => (
                 <button
@@ -2615,17 +2838,21 @@ function ParticipantsChips({
   onAssign: (effectiveLabel: string, turnIndex: number, scope: AssignScope, payload: { contactId?: string; newName?: string }) => void
   onUnassign: (effectiveLabel: string, turnIndex: number) => void
 }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   return (
     <div>
       <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
         <Users className="h-3.5 w-3.5" aria-hidden="true" />
-        Speakers ({participants.length})
-        <span className="font-normal text-muted-foreground/70">From transcripts</span>
+        {t('library:participantsChips.speakersHeading', { count: participants.length })}
+        <span className="font-normal text-muted-foreground/70">
+          {t('library:participantsChips.fromTranscriptsLabel')}
+        </span>
       </p>
       <div className="flex flex-wrap gap-1.5">
         {participants.map((p) => {
-          const turnHint = p.turnCount > 0 ? ` · ${p.turnCount} turn${p.turnCount === 1 ? '' : 's'}` : ''
+          // Each branch is its own finished sentence in the catalogue — the
+          // turn count cannot be a suffix bolted onto a translated stem.
           const swatch = colorByKey?.get(p.key)
           if (p.contactId) {
             // Resolved to a known person → link to their page, hover for details.
@@ -2636,7 +2863,9 @@ function ParticipantsChips({
                     type="button"
                     onClick={() => navigate(`/person/${p.contactId}`)}
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground text-xs hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                    title={`View ${p.name}${turnHint}`}
+                    title={p.turnCount > 0
+                      ? t('library:participantsChips.viewPersonWithTurnsTitle', { name: p.name, count: p.turnCount })
+                      : t('library:participantsChips.viewPersonTitle', { name: p.name })}
                   >
                     {swatch && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: swatch }} aria-hidden="true" />}
                     {p.name}
@@ -2653,7 +2882,9 @@ function ParticipantsChips({
             <span
               key={p.key}
               className="inline-flex items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5 text-xs"
-              title={`${p.name}${turnHint} — click to identify`}
+              title={p.turnCount > 0
+                ? t('library:participantsChips.identifyPersonWithTurnsTitle', { name: p.name, count: p.turnCount })
+                : t('library:participantsChips.identifyPersonTitle', { name: p.name })}
             >
               {swatch && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: swatch }} aria-hidden="true" />}
               <SpeakerAssignPopover
@@ -2695,23 +2926,29 @@ function InvitedChips({
   resolveAttendee: (a: MeetingAttendee) => import('@/types').Contact | undefined
   spokeKey: (a: MeetingAttendee, contactId?: string) => boolean
 }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   return (
     <div>
       <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
         <Mail className="h-3.5 w-3.5" aria-hidden="true" />
-        Invited ({invited.length})
-        <span className="font-normal text-muted-foreground/70">From calendar</span>
+        {t('library:invitedChips.invitedHeading', { count: invited.length })}
+        <span className="font-normal text-muted-foreground/70">
+          {t('library:invitedChips.fromCalendarLabel')}
+        </span>
       </p>
       {invited.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {invited.map((a, i) => {
             const contact = resolveAttendee(a)
-            const label = a.name || a.email || 'Unknown'
+            const label = a.name || a.email || t('library:invitedChips.unknownFallback')
             const spoke = spokeKey(a, contact?.id)
             const spokeTag = spoke ? (
-              <span className="ml-1 rounded bg-primary/15 px-1 text-[10px] font-medium text-primary" title="Mapped to a transcript speaker">
-                spoke
+              <span
+                className="ml-1 rounded bg-primary/15 px-1 text-[10px] font-medium text-primary"
+                title={t('library:invitedChips.mappedToSpeakerTitle')}
+              >
+                {t('library:invitedChips.spokeTagLabel')}
               </span>
             ) : null
             return contact ? (
@@ -2720,7 +2957,7 @@ function InvitedChips({
                 type="button"
                 onClick={() => navigate(`/person/${contact.id}`)}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground text-xs hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                title={`View ${label}`}
+                title={t('library:invitedChips.viewPersonTitle', { label })}
               >
                 {label}
                 {spokeTag}
@@ -2739,7 +2976,7 @@ function InvitedChips({
         </div>
       ) : (
         <p className="text-xs text-muted-foreground/70 italic">
-          No invite list captured for this meeting.
+          {t('library:invitedChips.noInviteListMessage')}
         </p>
       )}
     </div>

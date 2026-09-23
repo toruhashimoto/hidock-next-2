@@ -37,6 +37,8 @@
  */
 
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Play, Pause, Square, SkipBack, SkipForward, Volume2, Scissors } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -150,6 +152,13 @@ function scoreSentimentToSegments(points: SentimentScorePoint[]): SentimentSegme
 }
 
 
+/** Display word per event kind — resolved via `t()` at render/format time (not module scope). */
+const EVENT_KIND_LABEL_KEYS: Record<NonNullable<TimelineEvent['kind']>, string> = {
+  action: 'waveformPlayer.eventKindAction',
+  decision: 'waveformPlayer.eventKindDecision',
+  note: 'waveformPlayer.eventKindNote'
+}
+
 /** Full-mode stage dimensions + the subtle gradient panel (theme-aware). */
 const SENTIMENT_H = 68 // px — sentiment curve panel
 const WAVE_H = 58 // px — waveform band
@@ -210,9 +219,10 @@ function useScopedWaveform(recordingId?: string) {
 
 /** The "1×" speed control as a compact pill-friendly Select. */
 function SpeedPill({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+  const { t } = useTranslation('library')
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className={cn('h-7 w-[58px] rounded-full px-2.5 text-xs', className)} aria-label="Playback speed">
+      <SelectTrigger className={cn('h-7 w-[58px] rounded-full px-2.5 text-xs', className)} aria-label={t('waveformPlayer.playbackSpeedAriaLabel')}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -255,6 +265,7 @@ export function WaveformPlayer({
   activeEventId,
   className
 }: WaveformPlayerProps) {
+  const { t } = useTranslation('library')
   const pb = usePlayback(recordingId, filePath)
   const wf = useScopedWaveform(recordingId)
   const [playbackRate, setPlaybackRate] = useState('1')
@@ -371,8 +382,8 @@ export function WaveformPlayer({
           size="icon"
           onClick={pb.togglePlay}
           disabled={!pb.canPlayThis}
-          title={pb.canPlayThis ? (pb.isPlaying ? 'Pause' : 'Play') : 'Download to play'}
-          aria-label={pb.isPlaying ? 'Pause' : 'Play'}
+          title={pb.canPlayThis ? (pb.isPlaying ? t('waveformPlayer.pauseTitle') : t('waveformPlayer.playTitle')) : t('waveformPlayer.downloadToPlayTitle')}
+          aria-label={pb.isPlaying ? t('waveformPlayer.pauseTitle') : t('waveformPlayer.playTitle')}
           className="h-7 w-7 shrink-0 rounded-full"
         >
           {pb.isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
@@ -407,8 +418,8 @@ export function WaveformPlayer({
           size="icon"
           onClick={pb.togglePlay}
           disabled={!pb.canPlayThis}
-          title={pb.canPlayThis ? (pb.isPlaying ? 'Pause' : 'Play') : 'Download to play'}
-          aria-label={pb.isPlaying ? 'Pause' : 'Play'}
+          title={pb.canPlayThis ? (pb.isPlaying ? t('waveformPlayer.pauseTitle') : t('waveformPlayer.playTitle')) : t('waveformPlayer.downloadToPlayTitle')}
+          aria-label={pb.isPlaying ? t('waveformPlayer.pauseTitle') : t('waveformPlayer.playTitle')}
           className="h-8 w-8 shrink-0"
         >
           {pb.isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
@@ -418,7 +429,7 @@ export function WaveformPlayer({
           onClick={trackSeek}
           onKeyDown={trackKeyDown}
           role="slider"
-          aria-label="Seek"
+          aria-label={t('waveformPlayer.seekAriaLabel')}
           aria-valuemin={0}
           aria-valuemax={Math.round(pb.liveDuration)}
           aria-valuenow={Math.round(pb.liveTime)}
@@ -515,6 +526,7 @@ function FullTimeline({
   activeEvent,
   setInternalActiveEvent
 }: FullTimelineProps) {
+  const { t } = useTranslation('library')
   // Event-list detail interaction: expanded row + inline edit state.
 
   // The time axis uses the REAL duration so the rich timeline renders on a silent
@@ -651,13 +663,14 @@ function FullTimeline({
                 </>
               )}
             </svg>
-            <span className="pointer-events-none absolute left-2 top-1 text-[10px] leading-none text-muted-foreground/80">＋ positive</span>
-            <span className="pointer-events-none absolute bottom-1 left-2 text-[10px] leading-none text-muted-foreground/80">－ negative</span>
+            <span className="pointer-events-none absolute left-2 top-1 text-[10px] leading-none text-muted-foreground/80">{t('waveformPlayer.positiveAxisLabel')}</span>
+            <span className="pointer-events-none absolute bottom-1 left-2 text-[10px] leading-none text-muted-foreground/80">{t('waveformPlayer.negativeAxisLabel')}</span>
 
             {/* Numbered event markers ON the curve — colored ring per kind. */}
             {markers.map((m) => {
               const kind = m.kind ?? 'note'
               const color = EVENT_KIND_COLOR[kind]
+              const kindLabel = t(EVENT_KIND_LABEL_KEYS[kind])
               const isActive = activeEvent === m.id
               const topPct = curveYAt(m.leftPct / 100) * 100
               return (
@@ -665,8 +678,16 @@ function FullTimeline({
                   key={m.id}
                   type="button"
                   onClick={() => activateEvent(m)}
-                  title={`${kind}${m.label ? `: ${m.label}` : ''} (${formatTimestamp(m.timeSec)})`}
-                  aria-label={`Jump to marker ${m.index ?? ''} (${kind})${m.label ? `: ${m.label}` : ''}`.trim()}
+                  title={
+                    m.label
+                      ? t('waveformPlayer.markerTitleWithLabel', { kind: kindLabel, label: m.label, time: formatTimestamp(m.timeSec) })
+                      : t('waveformPlayer.markerTitleNoLabel', { kind: kindLabel, time: formatTimestamp(m.timeSec) })
+                  }
+                  aria-label={(
+                    m.label
+                      ? t('waveformPlayer.jumpToMarkerAriaLabelWithLabel', { index: m.index ?? '', kind: kindLabel, label: m.label })
+                      : t('waveformPlayer.jumpToMarkerAriaLabelNoLabel', { index: m.index ?? '', kind: kindLabel })
+                  ).trim()}
                   aria-pressed={isActive}
                   className={cn(
                     'absolute z-10 flex h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 bg-background text-[9px] font-bold leading-none shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
@@ -695,7 +716,7 @@ function FullTimeline({
               />
             ) : wf.waveformLoadingError ? (
               <div className="flex h-full items-center justify-center text-xs text-destructive">
-                Waveform unavailable
+                {t('waveformPlayer.waveformUnavailableMessage')}
               </div>
             ) : hasAudio ? (
               // H5: clean, centered placeholder while (rarely) computing — never a
@@ -704,13 +725,13 @@ function FullTimeline({
                 className="flex h-full items-center justify-center"
                 data-testid="waveform-preparing"
                 role="status"
-                aria-label="Preparing waveform"
+                aria-label={t('waveformPlayer.preparingWaveformAriaLabel')}
               >
-                <span className="text-xs text-muted-foreground motion-safe:animate-pulse">Preparing waveform…</span>
+                <span className="text-xs text-muted-foreground motion-safe:animate-pulse">{t('waveformPlayer.preparingWaveformMessage')}</span>
               </div>
             ) : (
               <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                No audio to load
+                {t('waveformPlayer.noAudioToLoadMessage')}
               </div>
             )}
           </div>
@@ -763,14 +784,14 @@ function FullTimeline({
           so the waveform is never split from its controls by a legend. */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1">
-          {PlayButtonFull(pb)}
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={skipBackward} disabled={!pb.showLiveTime || pb.rawCurrentTime <= 0} title="Back 10s" aria-label="Skip back 10 seconds">
+          {PlayButtonFull(pb, t)}
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={skipBackward} disabled={!pb.showLiveTime || pb.rawCurrentTime <= 0} title={t('waveformPlayer.back10sTitle')} aria-label={t('waveformPlayer.skipBack10SecondsAriaLabel')}>
             <SkipBack className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={skipForward} disabled={!pb.showLiveTime || pb.rawCurrentTime >= pb.rawDuration} title="Forward 10s" aria-label="Skip forward 10 seconds">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={skipForward} disabled={!pb.showLiveTime || pb.rawCurrentTime >= pb.rawDuration} title={t('waveformPlayer.forward10sTitle')} aria-label={t('waveformPlayer.skipForward10SecondsAriaLabel')}>
             <SkipForward className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => pb.audioControls.stop()} title="Stop" aria-label="Stop playback">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => pb.audioControls.stop()} title={t('waveformPlayer.stopTitle')} aria-label={t('waveformPlayer.stopPlaybackAriaLabel')}>
             <Square className="h-4 w-4" />
           </Button>
         </div>
@@ -792,16 +813,23 @@ function FullTimeline({
   )
 }
 
-/** The full-mode primary transport button (kept out of JSX for icon clarity). */
-function PlayButtonFull(pb: ReturnType<typeof usePlayback>) {
+/**
+ * The full-mode primary transport button (kept out of JSX for icon clarity).
+ *
+ * i18n note (Task 11c): called as a plain function (`PlayButtonFull(pb)`,
+ * not JSX) from within FullTimeline's render, so `t` is passed in as a
+ * parameter from the caller's own `useTranslation()` call rather than
+ * calling the hook again in here.
+ */
+function PlayButtonFull(pb: ReturnType<typeof usePlayback>, t: TFunction) {
   return (
     <Button
       variant="outline"
       size="icon"
       onClick={pb.togglePlay}
       disabled={!pb.canPlayThis}
-      title={pb.canPlayThis ? (pb.isPlaying ? 'Pause' : 'Play') : 'Download to play'}
-      aria-label={pb.isPlaying ? 'Pause' : 'Play'}
+      title={pb.canPlayThis ? (pb.isPlaying ? t('waveformPlayer.pauseTitle') : t('waveformPlayer.playTitle')) : t('waveformPlayer.downloadToPlayTitle')}
+      aria-label={pb.isPlaying ? t('waveformPlayer.pauseTitle') : t('waveformPlayer.playTitle')}
       className="h-9 w-9 shrink-0"
     >
       {pb.isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}

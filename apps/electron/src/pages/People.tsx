@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation, Trans } from 'react-i18next'
+import { personTypeBadgeLabel } from '@/lib/person-type'
 import {
   Users,
   Search,
@@ -53,6 +55,7 @@ const PAGE_SIZE = 40
 type PeopleSort = 'name' | 'lastSeen' | 'interactions'
 
 export function People() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
 
   const [people, setPeople] = useState<Person[]>([])
@@ -122,7 +125,7 @@ export function People() {
     } catch (error) {
       if (requestId !== requestIdRef.current) return
       console.error('Failed to load people:', error)
-      toast.error('Failed to load people', error instanceof Error ? error.message : 'An unexpected error occurred')
+      toast.error(t('people:peopleList.toast.loadFailedTitle'), error instanceof Error ? error.message : t('people:errors.unexpectedErrorFallback'))
     } finally {
       if (requestId === requestIdRef.current) {
         setLoading(false)
@@ -155,14 +158,14 @@ export function People() {
     try {
       const result = await window.electronAPI.contacts.delete(deleteTarget.id)
       if (result.success) {
-        toast.success('Contact deleted', `${deleteTarget.name} has been removed`)
+        toast.success(t('people:sharedToast.contactDeletedTitle'), t('people:peopleList.toast.contactDeletedMessage', { name: deleteTarget.name }))
         await loadPeople('reset')
       } else {
-        toast.error('Failed to delete contact', (result as any).error?.message || 'Unknown error')
+        toast.error(t('common:contacts.deleteFailedFallback'), (result as any).error?.message || t('common:errors.unknown'))
       }
     } catch (error) {
       console.error('Failed to delete contact:', error)
-      toast.error('Failed to delete contact', error instanceof Error ? error.message : 'An unexpected error occurred')
+      toast.error(t('common:contacts.deleteFailedFallback'), error instanceof Error ? error.message : t('people:errors.unexpectedErrorFallback'))
     }
     setDeleteDialogOpen(false)
     setDeleteTarget(null)
@@ -246,17 +249,17 @@ export function People() {
     try {
       const result = await window.electronAPI.contacts.merge({ keeperId: keeper.id, loserId: loser.id })
       if (result.success) {
-        toast.success('Contacts merged', `${loser.name} was merged into ${keeper.name}.`)
+        toast.success(t('people:sharedToast.contactsMergedTitle'), t('people:sharedToast.contactsMergedMessage', { loserName: loser.name, keeperName: keeper.name }))
         setMergeMode(false)
         setSelectedForMerge([])
         setKeeperId(null)
         await loadPeople('reset')
       } else {
-        toast.error('Failed to merge contacts', (result as any).error?.message || 'Unknown error')
+        toast.error(t('people:sharedToast.mergeFailedTitle'), (result as any).error?.message || t('common:errors.unknown'))
       }
     } catch (error) {
       console.error('Failed to merge contacts:', error)
-      toast.error('Failed to merge contacts', error instanceof Error ? error.message : 'An unexpected error occurred')
+      toast.error(t('people:sharedToast.mergeFailedTitle'), error instanceof Error ? error.message : t('people:errors.unexpectedErrorFallback'))
     } finally {
       setMerging(false)
     }
@@ -269,16 +272,20 @@ export function People() {
       if (result.success && result.data) {
         const { candidatePairs, suggestionsCreated, autoMergeable } = result.data
         toast.success(
-          'Discovery complete',
-          `${candidatePairs} candidate pairs analyzed, ${suggestionsCreated} new ${suggestionsCreated === 1 ? 'suggestion' : 'suggestions'}, ${autoMergeable} high-confidence`
+          t('people:peopleList.toast.discoveryCompleteTitle'),
+          t('people:peopleList.toast.discoveryCompleteMessage', {
+            pairs: candidatePairs,
+            count: suggestionsCreated,
+            autoMergeable
+          })
         )
         suggestionsRef.current?.reload()
       } else {
-        toast.error('Discovery failed', result.error || 'Unknown error')
+        toast.error(t('people:peopleList.toast.discoveryFailedTitle'), result.error || t('common:errors.unknown'))
       }
     } catch (error) {
       console.error('Failed to discover contacts:', error)
-      toast.error('Discovery failed', error instanceof Error ? error.message : 'An unexpected error occurred')
+      toast.error(t('people:peopleList.toast.discoveryFailedTitle'), error instanceof Error ? error.message : t('people:errors.unexpectedErrorFallback'))
     } finally {
       setDiscovering(false)
     }
@@ -286,15 +293,15 @@ export function People() {
 
   /** Safely format a date string, returning fallback for invalid dates */
   const formatDate = (dateStr: string | null | undefined): string => {
-    if (!dateStr) return 'Unknown'
+    if (!dateStr) return t('people:peopleList.unknownDateFallback')
     const date = new Date(dateStr)
-    if (isNaN(date.getTime())) return 'Unknown'
+    if (isNaN(date.getTime())) return t('people:peopleList.unknownDateFallback')
     return date.toLocaleDateString()
   }
 
   /** Return "interaction" (singular) or "interactions" (plural) */
   const interactionLabel = (count: number): string => {
-    return count === 1 ? '1 interaction' : `${count} interactions`
+    return t('people:peopleList.interactionCount', { count })
   }
 
   const getTypeColor = (type: PersonType) => {
@@ -310,11 +317,11 @@ export function People() {
   /** Human phrase describing a person's type, for the colored-glyph tooltips. */
   const getTypeLabel = (type: PersonType): string => {
     switch (type) {
-      case 'team': return 'Team member'
-      case 'candidate': return 'Candidate'
-      case 'customer': return 'Customer'
-      case 'external': return 'External contact'
-      default: return 'Unclassified contact'
+      case 'team': return t('people:personType.team')
+      case 'candidate': return t('people:personType.candidate')
+      case 'customer': return t('people:personType.customer')
+      case 'external': return t('people:personType.external')
+      default: return t('people:personType.unclassified')
     }
   }
 
@@ -324,42 +331,42 @@ export function People() {
       <header className="border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">People</h1>
-            <p className="text-sm text-muted-foreground">Everyone mentioned in your knowledge base</p>
+            <h1 className="text-2xl font-bold">{t('people:peopleList.header.title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('people:peopleList.header.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => loadPeople('reset')}>
               <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
-              Refresh
+              {t('people:shared.refreshButton')}
             </Button>
             <Button
               size="sm"
               variant="outline"
               onClick={handleDiscover}
               disabled={discovering}
-              title="Analyze contacts for possible duplicates"
+              title={t('people:peopleList.header.discoverTitle')}
             >
               <Sparkles className={cn("h-4 w-4 mr-2", discovering && "animate-pulse")} />
-              {discovering ? 'Discovering…' : 'Discover'}
+              {discovering ? t('people:peopleList.header.discoveringButton') : t('people:peopleList.header.discoverButton')}
             </Button>
             <Button
               size="sm"
               variant={mergeMode ? 'default' : 'outline'}
               onClick={toggleMergeMode}
-              title="Select two people to merge"
+              title={t('people:peopleList.header.mergeToggleTitle')}
               aria-pressed={mergeMode}
             >
               <GitMerge className="h-4 w-4 mr-2" />
-              {mergeMode ? 'Cancel merge' : 'Merge'}
+              {mergeMode ? t('people:peopleList.header.cancelMergeButton') : t('people:shared.mergeButton')}
             </Button>
             <Button
               size="sm"
               variant="default"
-              title="Add a person by hand"
+              title={t('people:peopleList.header.addPersonTitle')}
               onClick={() => setAddDialogOpen(true)}
             >
               <UserPlus className="h-4 w-4 mr-2" />
-              Add Person
+              {t('people:peopleList.header.addPersonButton')}
             </Button>
           </div>
         </div>
@@ -369,7 +376,7 @@ export function People() {
           <div className="relative flex-1 max-w-sm w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search people..."
+              placeholder={t('people:peopleList.filters.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 h-9"
@@ -380,34 +387,34 @@ export function People() {
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <div className="flex gap-1">
-                {(['all', 'team', 'candidate', 'customer', 'external'] as const).map((t) => (
+                {(['all', 'team', 'candidate', 'customer', 'external'] as const).map((ft) => (
                   <button
-                    key={t}
-                    onClick={() => setTypeFilter(t)}
+                    key={ft}
+                    onClick={() => setTypeFilter(ft)}
                     className={cn(
                       "px-3 py-1 rounded-full text-xs font-medium border transition-all whitespace-nowrap",
-                      typeFilter === t
+                      typeFilter === ft
                         ? "bg-primary border-primary text-primary-foreground"
                         : "bg-background border-border text-muted-foreground hover:bg-muted"
                     )}
                   >
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                    {t(`people:personTypeOption.${ft}`)}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="flex items-center gap-2 border-l pl-4">
-              <span className="text-xs text-muted-foreground whitespace-nowrap">Sort by</span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">{t('people:peopleList.filters.sortByLabel')}</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'name' | 'lastSeen' | 'interactions')}
                 className="text-xs rounded-md border border-input bg-background px-2 py-1 ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                aria-label="Sort contacts"
+                aria-label={t('people:peopleList.filters.sortAriaLabel')}
               >
-                <option value="name">Name</option>
-                <option value="lastSeen">Last Seen</option>
-                <option value="interactions">Interactions</option>
+                <option value="name">{t('people:peopleList.filters.sortName')}</option>
+                <option value="lastSeen">{t('people:peopleList.filters.sortLastSeen')}</option>
+                <option value="interactions">{t('people:peopleList.filters.sortInteractions')}</option>
               </select>
             </div>
           </div>
@@ -423,20 +430,20 @@ export function People() {
           {/* Merge-mode instruction banner */}
           {mergeMode && (
             <div className="mb-4 rounded-lg border border-primary/30 bg-primary/[0.04] px-4 py-3 text-sm">
-              <span className="font-medium">Merge mode:</span> pick two people to combine into one.
+              <span className="font-medium">{t('people:peopleList.mergeBanner.label')}</span> {t('people:peopleList.mergeBanner.instruction')}
               {' '}
               {selectedForMerge.length === 0
-                ? 'Select the first person.'
+                ? t('people:peopleList.mergeBanner.selectFirst')
                 : selectedForMerge.length === 1
-                ? 'Select one more.'
-                : 'Review the direction below, then confirm.'}
+                ? t('people:peopleList.mergeBanner.selectOneMore')
+                : t('people:peopleList.mergeBanner.reviewDirection')}
             </div>
           )}
 
           {/* Result count indicator */}
           {!loading && totalCount > 0 && (
             <p className="text-xs text-muted-foreground mb-4">
-              Showing {people.length} of {totalCount} {totalCount === 1 ? 'person' : 'people'}
+              {t('people:peopleList.resultCount', { shown: people.length, count: totalCount })}
             </p>
           )}
           {loading && people.length === 0 ? (
@@ -447,11 +454,11 @@ export function People() {
             <Card>
               <CardContent className="py-16 text-center">
                 <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <h3 className="text-lg font-medium mb-2">No People Found</h3>
+                <h3 className="text-lg font-medium mb-2">{t('people:peopleList.emptyTitle')}</h3>
                 <p className="text-muted-foreground">
                   {searchQuery || typeFilter !== 'all'
-                    ? 'Try changing your search or filter settings.'
-                    : 'No contacts yet. Contacts are automatically created when recordings are transcribed.'}
+                    ? t('people:peopleList.emptyMessageFiltered')
+                    : t('people:peopleList.emptyMessageNoContacts')}
                 </p>
               </CardContent>
             </Card>
@@ -493,7 +500,7 @@ export function People() {
                             )}
                             title={typeLabel}
                           >
-                            {person.type}
+                            {personTypeBadgeLabel(t, person.type)}
                           </span>
                         </div>
                       </div>
@@ -502,7 +509,7 @@ export function People() {
                           <Checkbox
                             checked={isSelected}
                             tabIndex={-1}
-                            aria-label={`Select ${person.name} to merge`}
+                            aria-label={t('people:peopleList.card.selectToMergeAriaLabel', { name: person.name })}
                             className="pointer-events-none"
                           />
                         ) : (
@@ -512,7 +519,7 @@ export function People() {
                               size="sm"
                               className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                               onClick={(e) => handleDeleteClick(person.id, person.name, e)}
-                              title="Delete contact"
+                              title={t('people:peopleList.card.deleteTitle')}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -562,7 +569,7 @@ export function People() {
                           </div>
                         ))}
                         {(person.tags?.length ?? 0) > 3 && (
-                          <span className="text-[10px] text-muted-foreground">+{(person.tags?.length ?? 0) - 3} more</span>
+                          <span className="text-[10px] text-muted-foreground">{t('people:peopleList.card.moreTagsLabel', { count: (person.tags?.length ?? 0) - 3 })}</span>
                         )}
                       </div>
                     )}
@@ -604,7 +611,7 @@ export function People() {
                   {loadingMore ? (
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                   ) : null}
-                  {loadingMore ? 'Loading…' : 'Load more'}
+                  {loadingMore ? t('people:peopleList.loadingMoreButton') : t('people:peopleList.loadMoreButton')}
                 </Button>
               </div>
             )}
@@ -620,19 +627,19 @@ export function People() {
             <div className="flex flex-col sm:flex-row items-center gap-3">
               <div className="flex items-center gap-2 text-sm min-w-0 flex-1">
                 <GitMerge className="h-4 w-4 text-primary flex-shrink-0" />
-                <span className="text-muted-foreground">Keep</span>
+                <span className="text-muted-foreground">{t('people:peopleList.mergeBar.keepLabel')}</span>
                 <span className="font-semibold truncate max-w-[120px]" title={keeper.name}>{keeper.name}</span>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-7 w-7 p-0 flex-shrink-0"
                   onClick={swapKeeper}
-                  title="Swap merge direction"
-                  aria-label="Swap merge direction"
+                  title={t('people:peopleList.mergeBar.swapTitle')}
+                  aria-label={t('people:peopleList.mergeBar.swapTitle')}
                 >
                   <ArrowLeftRight className="h-4 w-4" />
                 </Button>
-                <span className="text-muted-foreground">absorb</span>
+                <span className="text-muted-foreground">{t('people:peopleList.mergeBar.absorbLabel')}</span>
                 <span className="font-semibold truncate max-w-[120px] line-through decoration-muted-foreground/50" title={loser.name}>
                   {loser.name}
                 </span>
@@ -640,7 +647,7 @@ export function People() {
               <div className="flex items-center gap-2 flex-shrink-0">
                 <Button variant="outline" size="sm" onClick={toggleMergeMode} disabled={merging}>
                   <X className="h-4 w-4 mr-1" />
-                  Cancel
+                  {t('people:shared.cancelButton')}
                 </Button>
                 <Button size="sm" onClick={handleConfirmMerge} disabled={merging || !mergeConfirmed}>
                   {merging ? (
@@ -648,21 +655,30 @@ export function People() {
                   ) : (
                     <GitMerge className="h-4 w-4 mr-1" />
                   )}
-                  Confirm merge
+                  {t('people:peopleList.mergeBar.confirmButton')}
                 </Button>
               </div>
             </div>
             {highStakesMerge && (
               <div className="rounded-lg border border-amber-500/40 bg-amber-500/[0.06] px-3 py-2 text-xs">
                 <p className="text-amber-700 dark:text-amber-400 font-medium">
-                  High-stakes merge: {keeper.name} has {mergeImpact!.keeper} links and {loser.name} has{' '}
-                  {mergeImpact!.loser}. To confirm, type <span className="font-semibold">{loser.name}</span>.
+                  <Trans
+                    i18nKey="people:shared.highStakesMergeWarning"
+                    values={{
+                      keeperName: keeper.name,
+                      keeperCount: mergeImpact!.keeper,
+                      loserName: loser.name,
+                      loserCount: mergeImpact!.loser
+                    }}
+                  >
+                    High-stakes merge: {{ keeperName: keeper.name } as unknown as string} has {{ keeperCount: mergeImpact!.keeper } as unknown as string} links and {{ loserName: loser.name } as unknown as string} has {{ loserCount: mergeImpact!.loser } as unknown as string}. To confirm, type <span className="font-semibold">{{ loserName: loser.name } as unknown as string}</span>.
+                  </Trans>
                 </p>
                 <Input
                   value={mergeConfirmText}
                   onChange={(e) => setMergeConfirmText(e.target.value)}
                   placeholder={loser.name}
-                  aria-label={`Type ${loser.name} to confirm merge`}
+                  aria-label={t('people:shared.typeToConfirmAriaLabel', { name: loser.name })}
                   className="mt-2 h-8"
                 />
               </div>
@@ -686,18 +702,18 @@ export function People() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+            <AlertDialogTitle>{t('people:shared.deleteContactTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {deleteTarget?.name}? This will permanently remove this contact and all their meeting associations. This action cannot be undone.
+              {t('people:shared.deleteContactDescription', { name: deleteTarget?.name })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('people:shared.cancelButton')}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={handleConfirmDelete}
             >
-              Delete
+              {t('people:shared.deleteButton')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

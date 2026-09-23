@@ -8,6 +8,7 @@
  * the same way a Library "Download" click is.
  */
 
+import i18n from '@/i18n'
 import { toast } from '@/components/ui/toaster'
 import { requestScopedDownloads, drainDownloadQueue } from '@/hooks/useDownloadOrchestrator'
 
@@ -17,20 +18,25 @@ export async function recoverTruncated(): Promise<number> {
     const queued = result?.queued ?? []
     if (queued.length === 0) {
       toast.info(
-        'Nothing queued',
-        result?.skipped?.[0]?.reason ?? 'The HiDock no longer lists a larger copy of these recordings.'
+        i18n.t('library:truncatedRecovery.nothingQueuedTitle'),
+        // The main process's own reason wins when it gave one; it is already a
+        // sentence and this renderer has no key for whatever it says.
+        result?.skipped?.[0]?.reason ?? i18n.t('library:truncatedRecovery.nothingQueuedMessage')
       )
       return 0
     }
     requestScopedDownloads(queued)
     drainDownloadQueue()
     toast.success(
-      `${queued.length} recover${queued.length === 1 ? 'y' : 'ies'} queued`,
-      'Each file on disk is replaced only after the complete copy has downloaded and measured longer.'
+      i18n.t('library:truncatedRecovery.queuedTitle', { count: queued.length }),
+      i18n.t('library:truncatedRecovery.queuedMessage')
     )
     return queued.length
   } catch (e) {
-    toast.error('Recovery not queued', e instanceof Error ? e.message : 'Unknown error')
+    toast.error(
+      i18n.t('library:truncatedRecovery.errorTitle'),
+      e instanceof Error ? e.message : i18n.t('common:errors.unknown')
+    )
     return 0
   }
 }

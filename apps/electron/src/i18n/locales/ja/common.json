@@ -1,0 +1,70 @@
+{
+  "date.unknown": "日付不明",
+  "date.justNow": "たった今",
+  "date.dateTimeJoiner": " · ",
+
+  "duration.hoursMinutes": "{{hours}}時間{{minutes}}分",
+  "duration.minutesSeconds": "{{minutes}}分{{seconds}}秒",
+  "duration.seconds": "{{seconds}}秒",
+
+  "errors.unknown": "不明なエラー",
+
+  "relativeTime.justNow": "たった今",
+  "relativeTime.minutesAgo": "{{n}}分前",
+  "relativeTime.hoursAgo": "{{n}}時間前",
+  "relativeTime.daysAgo": "{{n}}日前",
+
+  "meetingTiming.startingNow": "まもなく開始",
+  "meetingTiming.inMinutes": "あと{{n}}分",
+  "meetingTiming.inHours": "あと{{n}}時間",
+  "meetingTiming.inHoursMinutes": "あと{{h}}時間{{m}}分",
+  "meetingTiming.bareMinutes": "{{n}}分",
+  "meetingTiming.bareHours": "{{n}}時間",
+  "meetingTiming.bareHoursMinutes": "{{h}}時間{{m}}分",
+  "meetingTiming.justEnded": "たった今終了",
+  "meetingTiming.endedMinutesAgo": "{{n}}分前に終了",
+  "meetingTiming.endedHoursAgo": "{{n}}時間前に終了",
+  "meetingTiming.endedHoursMinutesAgo": "{{h}}時間{{m}}分前に終了",
+  "meetingTiming.nowWrappingUp": "現在 · まもなく終了",
+  "meetingTiming.nowMinutesLeft": "現在 · 残り{{n}}分",
+  "meetingTiming.nowHoursLeft": "現在 · 残り{{n}}時間",
+  "meetingTiming.nowHoursMinutesLeft": "現在 · 残り{{h}}時間{{m}}分",
+  "meetingTiming.dayPartMorning": "朝",
+  "meetingTiming.dayPartAfternoon": "午後",
+  "meetingTiming.dayPartEvening": "夜",
+  "meetingTiming.categoryRecurring": "定例 / チーム",
+  "meetingTiming.categoryOneOnOne": "1:1",
+  "meetingTiming.categoryExternal": "顧客 / 社外",
+  "meetingTiming.categoryPersonal": "個人",
+  "meetingTiming.categoryGeneral": "会議",
+
+  "contacts.loadFailedFallback": "連絡先の読み込みに失敗しました",
+  "contacts.notFound": "連絡先が見つかりません",
+  "contacts.loadOneFailedFallback": "連絡先の読み込みに失敗しました",
+  "contacts.updateFailedFallback": "連絡先の更新に失敗しました",
+  "contacts.deleteFailedFallback": "連絡先の削除に失敗しました",
+
+  "projects.loadFailedFallback": "プロジェクトの読み込みに失敗しました",
+  "projects.notFound": "プロジェクトが見つかりません",
+  "projects.loadOneFailedFallback": "プロジェクトの読み込みに失敗しました",
+  "projects.createFailedFallback": "プロジェクトの作成に失敗しました",
+  "projects.updateFailedFallback": "プロジェクトの更新に失敗しました",
+  "projects.deleteFailedFallback": "プロジェクトの削除に失敗しました",
+
+  "features.disabledByUser": "設定でオフにされています",
+  "features.disabledByPreset": "現在のプリセットに含まれていません",
+  "features.disabledRequires": "{{label}}が必要です",
+
+  "featureDisabledPage.defaultReason": "この機能はオフになっています。",
+  "featureDisabledPage.title": "{{label}}はオフになっています",
+  "featureDisabledPage.enableButton": "設定で有効にする",
+  "featureDisabledPage.restartHint": "{{label}}を有効にすると、再起動後に反映されます。",
+
+  "playback.errorTitle": "エラー",
+  "playback.loadFailedDescription": "音声ファイルの読み込みに失敗しました",
+  "playback.playbackErrorTitle": "再生エラー",
+
+  "errorBoundary.title": "問題が発生しました",
+  "errorBoundary.fallbackMessage": "予期しないエラーが発生しました",
+  "errorBoundary.retry": "再試行"
+}

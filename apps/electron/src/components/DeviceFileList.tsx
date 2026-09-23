@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useTranslation, Trans } from 'react-i18next'
 import { Download, Trash2, AlertCircle, CheckCircle, HardDrive, Volume2, ChevronUp, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -89,13 +90,14 @@ function DeviceFileRow({
   onDownload,
   onDeleteClick,
 }: DeviceFileRowProps) {
+  const { t } = useTranslation()
   const filename = recording.deviceFilename
   const isDownloading = useIsDownloading(recording.id)
   const downloadProgress = useDownloadProgress(recording.id)
 
   // FL-002: Show "—" for unknown/zero duration instead of "0:00"
   const durationDisplay = (!recording.duration || recording.duration === 0)
-    ? '—'
+    ? t('device:fileList.unknownDuration')
     : formatDuration(recording.duration)
 
   const hasError = downloadErrors.has(recording.id) && !isDownloading
@@ -113,7 +115,7 @@ function DeviceFileRow({
         type="checkbox"
         checked={selected}
         onChange={() => onToggleSelect(recording.id)}
-        aria-label={`Select ${filename}`}
+        aria-label={t('device:fileList.selectFileAriaLabel', { filename })}
         className="h-4 w-4 rounded border-border"
       />
 
@@ -124,10 +126,10 @@ function DeviceFileRow({
           {purged && (
             <span
               className="flex items-center gap-1 text-xs text-destructive"
-              title="Permanently deleted from the Library — the hardware copy is all that remains. Re-download brings it back as a new recording; the trash button erases it from the device."
+              title={t('device:fileList.purgedTitle')}
             >
               <Trash2 className="h-3 w-3" />
-              Deleted
+              {t('device:fileList.deletedBadge')}
             </span>
           )}
           {isDownloading ? (
@@ -139,30 +141,30 @@ function DeviceFileRow({
             recording.location === 'device-only' ? (
               <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
                 <HardDrive className="h-3 w-3" />
-                On Device
+                {t('device:fileList.onDeviceBadge')}
               </span>
             ) : recording.location === 'both' ? (
               <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                 <CheckCircle className="h-3 w-3" />
-                Downloaded
+                {t('device:fileList.downloadedBadge')}
               </span>
             ) : (
               <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
                 <CheckCircle className="h-3 w-3" />
-                Synced
+                {t('device:fileList.syncedBadge')}
               </span>
             )
           )}
           {hasError && (
             <span className="flex items-center gap-1 text-xs text-destructive">
               <AlertCircle className="h-3 w-3" />
-              Error
+              {t('device:fileList.errorBadge')}
             </span>
           )}
           {isCurrentlyPlaying && (
             <span className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400">
               <Volume2 className="h-3 w-3" />
-              Playing
+              {t('device:fileList.playingBadge')}
             </span>
           )}
         </div>
@@ -183,12 +185,12 @@ function DeviceFileRow({
           <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
             onClick={() => onDownload(filename, recording.size)}>
             <Download className="h-3 w-3 mr-1" />
-            DL
+            {t('device:fileList.downloadButton')}
           </Button>
         )}
         <Button size="sm" variant="outline" className="h-7 w-7 p-0"
           onClick={() => onDeleteClick(filename)}
-          title="Delete from device">
+          title={t('device:fileList.deleteTitle')}>
           <Trash2 className="h-3 w-3 text-destructive" />
         </Button>
       </div>
@@ -197,6 +199,7 @@ function DeviceFileRow({
 }
 
 export function DeviceFileList({ recordings, syncedFilenames: _syncedFilenames, purgedFilenames, onRefresh, onRecordingsRefresh }: DeviceFileListProps) {
+  const { t } = useTranslation()
   const deviceService = getHiDockDeviceService()
   const [downloadErrors, setDownloadErrors] = useState<Map<string, string>>(new Map())
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -297,17 +300,17 @@ export function DeviceFileList({ recordings, syncedFilenames: _syncedFilenames, 
         }
       )
       if (success) {
-        toast.success(`Downloaded ${filename}`)
+        toast.success(t('device:fileList.downloadedToast', { filename }))
         onRefresh?.()
         onRecordingsRefresh?.()
       } else {
-        toast.error(`Failed to download ${filename}`)
-        if (recordingId) setDownloadErrors(prev => new Map(prev).set(recordingId, 'Download failed'))
+        toast.error(t('device:fileList.downloadFailedToast', { filename }))
+        if (recordingId) setDownloadErrors(prev => new Map(prev).set(recordingId, t('device:fileList.downloadFailedShort')))
       }
     } catch (error: any) {
       console.error('[DeviceFileList] Download error:', error)
-      toast.error(error?.message || `Failed to download ${filename}`)
-      if (recordingId) setDownloadErrors(prev => new Map(prev).set(recordingId, error?.message || 'Download failed'))
+      toast.error(error?.message || t('device:fileList.downloadFailedToast', { filename }))
+      if (recordingId) setDownloadErrors(prev => new Map(prev).set(recordingId, error?.message || t('device:fileList.downloadFailedShort')))
     } finally {
       // Re-enable the DL button (and clear progress) whether it succeeded or failed.
       if (recordingId) useAppStore.getState().removeFromDownloadQueue(recordingId)
@@ -325,15 +328,15 @@ export function DeviceFileList({ recordings, syncedFilenames: _syncedFilenames, 
     try {
       const success = await deviceService.deleteRecording(fileToDelete)
       if (success) {
-        toast.success(`Deleted ${fileToDelete} from device`)
+        toast.success(t('device:fileList.deletedToast', { filename: fileToDelete }))
         onRefresh?.()
         onRecordingsRefresh?.()
       } else {
-        toast.error(`Failed to delete ${fileToDelete}`)
+        toast.error(t('device:fileList.deleteFailedToast', { filename: fileToDelete }))
       }
     } catch (error: any) {
       console.error('[DeviceFileList] Delete error:', error)
-      toast.error(error?.message || `Failed to delete ${fileToDelete}`)
+      toast.error(error?.message || t('device:fileList.deleteFailedToast', { filename: fileToDelete }))
     } finally {
       setDeleting(false)
       setDeleteDialogOpen(false)
@@ -377,11 +380,11 @@ export function DeviceFileList({ recordings, syncedFilenames: _syncedFilenames, 
         <CardHeader>
           <div className="flex items-start justify-between gap-2">
             <div>
-              <CardTitle>Device Files ({deviceRecordings.length})</CardTitle>
+              <CardTitle>{t('device:fileList.title', { count: deviceRecordings.length })}</CardTitle>
               <CardDescription>
                 {selectedIds.size > 0
-                  ? `${selectedIds.size} of ${sortedRecordings.length} selected`
-                  : 'Manage individual recordings on your HiDock device'}
+                  ? t('device:fileList.selectedCount', { selected: selectedIds.size, total: sortedRecordings.length })
+                  : t('device:fileList.description')}
               </CardDescription>
             </div>
             {selectedIds.size > 0 && (
@@ -395,8 +398,8 @@ export function DeviceFileList({ recordings, syncedFilenames: _syncedFilenames, 
               >
                 <Download className="h-4 w-4 mr-1" />
                 {allSelectedSynced
-                  ? 'All selected synced'
-                  : `Download ${selectedUndownloaded.length} file${selectedUndownloaded.length !== 1 ? 's' : ''}`}
+                  ? t('device:fileList.allSelectedSynced')
+                  : t('device:fileList.downloadSelected', { count: selectedUndownloaded.length })}
               </Button>
             )}
           </div>
@@ -410,14 +413,14 @@ export function DeviceFileList({ recordings, syncedFilenames: _syncedFilenames, 
               checked={sortedRecordings.length > 0 && selectedIds.size === sortedRecordings.length}
               ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < sortedRecordings.length }}
               onChange={handleSelectAll}
-              aria-label="Select all recordings"
+              aria-label={t('device:fileList.selectAllAriaLabel')}
               className="h-4 w-4 rounded border-border"
             />
-            {headerCell('filename', 'Filename')}
-            {headerCell('size', 'Size')}
-            {headerCell('duration', 'Duration')}
-            {headerCell('dateRecorded', 'Date')}
-            <span className="text-xs text-muted-foreground font-medium">Actions</span>
+            {headerCell('filename', t('device:fileList.filenameHeader'))}
+            {headerCell('size', t('device:fileList.sizeHeader'))}
+            {headerCell('duration', t('device:fileList.durationHeader'))}
+            {headerCell('dateRecorded', t('device:fileList.dateHeader'))}
+            <span className="text-xs text-muted-foreground font-medium">{t('device:fileList.actionsHeader')}</span>
           </div>
 
           {/* Scrollable rows */}
@@ -445,29 +448,31 @@ export function DeviceFileList({ recordings, syncedFilenames: _syncedFilenames, 
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-destructive" />
-              Delete File from Device?
+              {t('device:fileList.deleteDialogTitle')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <strong>{fileToDelete}</strong> from your HiDock device?
+              <Trans i18nKey="device:fileList.deleteDialogConfirmMessage" values={{ filename: fileToDelete }}>
+                Are you sure you want to delete <strong>{{ filename: fileToDelete } as unknown as string}</strong> from your HiDock device?
+              </Trans>
               <br /><br />
               <span className="text-destructive font-medium">
-                This action cannot be undone. The file will be permanently removed from the device.
+                {t('device:fileList.deleteDialogIrreversibleWarning')}
               </span>
               {hasLocalCopy && (
                 <span className="block mt-2 text-green-600 dark:text-green-400">
-                  Note: A local copy exists in your library.
+                  {t('device:fileList.deleteDialogLocalCopyNote')}
                 </span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>{t('device:fileList.cancelButton')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => { e.preventDefault(); handleConfirmDelete() }}
               disabled={deleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleting ? 'Deleting...' : 'Delete File'}
+              {deleting ? t('device:fileList.deletingButton') : t('device:fileList.deleteFileButton')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
