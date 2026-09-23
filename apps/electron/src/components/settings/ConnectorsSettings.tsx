@@ -41,6 +41,13 @@ import type {
  * id-keyed lookup would: a string that changes on the main side (or a future
  * connector's field that happens not to be catalogued) simply falls back to
  * rendering that raw English, never a blank or a raw i18n key.
+ *
+ * Task 17-E adds the Slack entries below the same way, sourced from
+ * packages/connectors-slack/src/slack-connector.ts's `slackDescriptor` (no
+ * main-process duplicate exists for Slack, unlike m365 — the renderer gets
+ * these strings from the package as-is via electron/main/services/connectors
+ * /index.ts). Neither `packages/` nor `electron/main/` is touched; only this
+ * lookup map and the `domain` catalogue gain the new keys.
  */
 const CONNECTOR_TEXT_KEYS: Record<string, string> = {
   'Microsoft 365': 'connector.m365.displayName',
@@ -52,7 +59,15 @@ const CONNECTOR_TEXT_KEYS: Record<string, string> = {
     'connector.m365.field.clientId.helpDefault',
   'From your Entra app registration → Overview.': 'connector.m365.field.clientId.helpNoDefault',
   "Use 'common' for personal + work/school accounts, or your tenant ID / domain (e.g. contoso.onmicrosoft.com).":
-    'connector.m365.field.tenant.help'
+    'connector.m365.field.tenant.help',
+  'Slack': 'connector.slack.displayName',
+  'Sync selected Slack channels as living message logs (+ image attachments), map users to contacts for identity resolution, and send messages from a person surface.':
+    'connector.slack.description',
+  'Slack token': 'connector.slack.field.token.label',
+  'Channels to sync': 'connector.slack.field.channelAllowlist.label',
+  'Bot or user token. Stored encrypted; never written to the database.': 'connector.slack.field.token.help',
+  'Comma-separated channel IDs to sync. Leave empty to sync none until you opt channels in.':
+    'connector.slack.field.channelAllowlist.help'
 }
 
 function translateConnectorText(t: TFunction, raw: string): string {

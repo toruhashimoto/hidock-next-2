@@ -31,6 +31,13 @@
   "connector.m365.field.clientId.helpNoDefault": "From your Entra app registration → Overview.",
   "connector.m365.field.tenant.help": "Use 'common' for personal + work/school accounts, or your tenant ID / domain (e.g. contoso.onmicrosoft.com).",
 
+  "connector.slack.displayName": "Slack",
+  "connector.slack.description": "Sync selected Slack channels as living message logs (+ image attachments), map users to contacts for identity resolution, and send messages from a person surface.",
+  "connector.slack.field.token.label": "Slack token",
+  "connector.slack.field.channelAllowlist.label": "Channels to sync",
+  "connector.slack.field.token.help": "Bot or user token. Stored encrypted; never written to the database.",
+  "connector.slack.field.channelAllowlist.help": "Comma-separated channel IDs to sync. Leave empty to sync none until you opt channels in.",
+
   "actionableType.meeting_minutes.label": "Meeting minutes",
   "actionableType.interview_feedback.label": "Interview feedback",
   "actionableType.status_report.label": "Status report",

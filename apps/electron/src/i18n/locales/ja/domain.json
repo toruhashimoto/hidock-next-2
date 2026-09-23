@@ -31,6 +31,13 @@
   "connector.m365.field.clientId.helpNoDefault": "Entra のアプリ登録の Overview で確認できます。",
   "connector.m365.field.tenant.help": "個人アカウントと職場/学校アカウントの両方に対応するには 'common' を使用してください。それ以外の場合はテナント ID またはドメイン(例: contoso.onmicrosoft.com)を入力してください。",
 
+  "connector.slack.displayName": "Slack",
+  "connector.slack.description": "選択した Slack チャンネルを、画像添付を含むメッセージログとして同期します。ユーザーを連絡先に対応付けて名寄せに利用するほか、人物画面からメッセージを送信できるようにします。",
+  "connector.slack.field.token.label": "Slack トークン",
+  "connector.slack.field.channelAllowlist.label": "同期するチャンネル",
+  "connector.slack.field.token.help": "Bot トークンまたはユーザートークン。暗号化して保存され、データベースには書き込まれません。",
+  "connector.slack.field.channelAllowlist.help": "同期したいチャンネルの ID をカンマ区切りで入力してください。空欄のままにすると、チャンネルを追加するまで何も同期されません。",
+
   "actionableType.meeting_minutes.label": "議事録",
   "actionableType.interview_feedback.label": "面接フィードバック",
   "actionableType.status_report.label": "状況報告",
