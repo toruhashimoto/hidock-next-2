@@ -1,0 +1,47 @@
+{
+  "notesPage.searchPlaceholder": "Search notes",
+  "notesPage.searchAriaLabel": "Search notes",
+  "notesPage.newNoteAriaLabel": "New note",
+  "notesPage.newNoteTitle": "New note (Ctrl+N). A note started during a meeting is attached to it.",
+  "notesPage.emptySearchMessage": "No note matches that.",
+  "notesPage.emptyMessage": "No notes yet. The plus button, or Ctrl+N, opens one with the cursor already in it.",
+  "notesPage.noSelectionMessage": "Pick a note, or start a new one.",
+
+  "notesPage.titlePlaceholder": "Title (optional)",
+  "notesPage.titleAriaLabel": "Note title",
+  "notesPage.savingLabel": "Saving…",
+  "notesPage.savedLabel": "Saved",
+  "notesPage.analyseButtonLabel": "Categorise and summarise",
+  "notesPage.analyseFailedTitle": "Could not analyse this note",
+  "notesPage.findRelatedButtonLabel": "Find related",
+  "notesPage.findRelatedFailedTitle": "Could not look for related items",
+  "notesPage.suggestMeetingButtonLabel": "Suggest a meeting",
+  "notesPage.suggestMeetingFailedTitle": "Could not suggest a meeting",
+  "notesPage.deleteNoteAriaLabel": "Delete note",
+
+  "notesPage.editorAriaLabel": "Note",
+  "notesPage.editorPlaceholder": "Write. Everything else happens afterwards.",
+
+  "notesPage.analysisFailedMessage": "The last analysis did not work: {{error}}",
+  "notesPage.summaryHeading": "Summary",
+  "notesPage.categoryHeading": "Category",
+  "notesPage.categoryAriaLabel": "Category",
+  "notesPage.categoryUserSetHint": "You set this, so re-analysing will not change it.",
+
+  "notesPage.meetingHeading": "Meeting",
+  "notesPage.linkSourceLiveMessage": "Attached while that meeting was happening.",
+  "notesPage.linkSourceUserMessage": "You chose this one.",
+  "notesPage.linkSourceSuggestedMessage": "You accepted a suggestion.",
+  "notesPage.unlinkButtonLabel": "Unlink",
+  "notesPage.suggestionsHeading": "Meetings this could belong to",
+  "notesPage.linkToMeetingButtonLabel": "Link to this meeting",
+  "notesPage.relatedHeading": "Related",
+
+  "noteTitle.newNoteFallback": "New note",
+  "noteTitle.writtenDuringMeeting": "written during a meeting",
+  "noteTitle.unknownTime": "unknown",
+
+  "notesPage.suggestionReason.covering": "You wrote this while that meeting was happening.",
+  "notesPage.suggestionReason.similar": "This note says the same things as that meeting’s transcript.",
+  "notesPage.suggestionReason.sameDay": "Happened the same day. Pick it if it is the right one."
+}

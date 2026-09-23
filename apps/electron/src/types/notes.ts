@@ -40,11 +40,16 @@ export interface NoteRelatedItem {
   recordingId: string | null
 }
 
+/** Mirrors MeetingSuggestionReason in electron/main/services/note-intelligence.ts. */
+export type NoteMeetingSuggestionReason = 'covering' | 'similar' | 'sameDay'
+
 export interface NoteMeetingSuggestion {
   meetingId: string
   subject: string
   startTime: string
   /** Why this meeting, written out, because a score is not a reason. */
   reason: string
+  /** Stable name for `reason`; the UI translates from this and falls back to `reason`. */
+  reasonKey?: NoteMeetingSuggestionReason
   score: number
 }

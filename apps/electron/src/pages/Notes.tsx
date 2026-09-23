@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, Sparkles, Trash2, Link2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +17,7 @@ import { useNotes } from '@/features/notes/useNotes'
 import { noteDisplayTitle, noteSubtitle } from '@/features/notes/noteTitle'
 
 export default function Notes(): React.ReactElement {
+  const { t } = useTranslation('notes')
   const {
     notes,
     selected,
@@ -92,14 +94,14 @@ export default function Notes(): React.ReactElement {
         <div className="flex items-center gap-2 border-b border-border p-3">
           <Input
             value={search}
-            placeholder="Search notes"
-            aria-label="Search notes"
+            placeholder={t('notesPage.searchPlaceholder')}
+            aria-label={t('notesPage.searchAriaLabel')}
             onChange={(event) => setSearch(event.target.value)}
           />
           <Button
             size="icon"
-            aria-label="New note"
-            title="New note (Ctrl+N). A note started during a meeting is attached to it."
+            aria-label={t('notesPage.newNoteAriaLabel')}
+            title={t('notesPage.newNoteTitle')}
             onClick={() => void startNote()}
           >
             <Plus className="h-4 w-4" />
@@ -109,8 +111,8 @@ export default function Notes(): React.ReactElement {
           {notes.length === 0 && (
             <li className="p-4 text-sm text-muted-foreground">
               {search
-                ? 'No note matches that.'
-                : 'No notes yet. The plus button, or Ctrl+N, opens one with the cursor already in it.'}
+                ? t('notesPage.emptySearchMessage')
+                : t('notesPage.emptyMessage')}
             </li>
           )}
           {notes.map((note) => (
@@ -133,55 +135,59 @@ export default function Notes(): React.ReactElement {
 
       {!selected ? (
         <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-          Pick a note, or start a new one.
+          {t('notesPage.noSelectionMessage')}
         </div>
       ) : (
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex flex-wrap items-center gap-2 border-b border-border p-3">
             <Input
               value={selected.title ?? ''}
-              placeholder={selected.suggestedTitle || 'Title (optional)'}
-              aria-label="Note title"
+              placeholder={selected.suggestedTitle || t('notesPage.titlePlaceholder')}
+              aria-label={t('notesPage.titleAriaLabel')}
               className="max-w-md"
               onChange={(event) => void patch(selected.id, { title: event.target.value })}
             />
-            <span className="text-xs text-muted-foreground">{saving ? 'Saving…' : 'Saved'}</span>
+            <span className="text-xs text-muted-foreground">
+              {saving ? t('notesPage.savingLabel') : t('notesPage.savedLabel')}
+            </span>
             <div className="ml-auto flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 disabled={busy}
                 onClick={() =>
-                  void withBusy(() => analyzeNow(selected.id), 'Could not analyse this note')
+                  void withBusy(() => analyzeNow(selected.id), t('notesPage.analyseFailedTitle'))
                 }
               >
                 <Sparkles className="mr-2 h-4 w-4" />
-                Categorise and summarise
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={busy}
-                onClick={() => void withBusy(() => loadRelated(selected.id), 'Could not look for related items')}
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Find related
+                {t('notesPage.analyseButtonLabel')}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 disabled={busy}
                 onClick={() =>
-                  void withBusy(() => loadSuggestions(selected.id), 'Could not suggest a meeting')
+                  void withBusy(() => loadRelated(selected.id), t('notesPage.findRelatedFailedTitle'))
                 }
               >
-                <Link2 className="mr-2 h-4 w-4" />
-                Suggest a meeting
+                <RefreshCw className="mr-2 h-4 w-4" />
+                {t('notesPage.findRelatedButtonLabel')}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                aria-label="Delete note"
+                disabled={busy}
+                onClick={() =>
+                  void withBusy(() => loadSuggestions(selected.id), t('notesPage.suggestMeetingFailedTitle'))
+                }
+              >
+                <Link2 className="mr-2 h-4 w-4" />
+                {t('notesPage.suggestMeetingButtonLabel')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label={t('notesPage.deleteNoteAriaLabel')}
                 onClick={() => void remove(selected.id)}
               >
                 <Trash2 className="h-4 w-4" />
@@ -192,10 +198,10 @@ export default function Notes(): React.ReactElement {
           <div className="flex min-h-0 flex-1">
             <textarea
               value={draft}
-              aria-label="Note"
+              aria-label={t('notesPage.editorAriaLabel')}
               spellCheck
               autoFocus
-              placeholder="Write. Everything else happens afterwards."
+              placeholder={t('notesPage.editorPlaceholder')}
               className="min-h-0 flex-1 resize-none bg-transparent p-4 font-mono text-sm outline-none"
               onChange={(event) => edit(event.target.value)}
             />
@@ -203,28 +209,30 @@ export default function Notes(): React.ReactElement {
             <aside className="w-80 shrink-0 space-y-4 overflow-y-auto border-l border-border p-3 text-sm">
               {selected.aiStatus === 'failed' && (
                 <p className="text-muted-foreground">
-                  The last analysis did not work: {selected.aiError}
+                  {t('notesPage.analysisFailedMessage', { error: selected.aiError ?? '' })}
                 </p>
               )}
               {selected.summary && (
                 <section>
-                  <h2 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Summary</h2>
+                  <h2 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+                    {t('notesPage.summaryHeading')}
+                  </h2>
                   <p>{selected.summary}</p>
                 </section>
               )}
               {(selected.category || selected.tags.length > 0) && (
                 <section>
                   <h2 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-                    Category
+                    {t('notesPage.categoryHeading')}
                   </h2>
                   <Input
                     value={selected.category ?? ''}
-                    aria-label="Category"
+                    aria-label={t('notesPage.categoryAriaLabel')}
                     onChange={(event) => void patch(selected.id, { category: event.target.value })}
                   />
                   {selected.categorySource === 'user' && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      You set this, so re-analysing will not change it.
+                      {t('notesPage.categoryUserSetHint')}
                     </p>
                   )}
                   {selected.tags.length > 0 && (
@@ -236,14 +244,14 @@ export default function Notes(): React.ReactElement {
               {selected.meetingId && (
                 <section>
                   <h2 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-                    Meeting
+                    {t('notesPage.meetingHeading')}
                   </h2>
                   <p className="text-xs text-muted-foreground">
                     {selected.linkSource === 'live'
-                      ? 'Attached while that meeting was happening.'
+                      ? t('notesPage.linkSourceLiveMessage')
                       : selected.linkSource === 'user'
-                        ? 'You chose this one.'
-                        : 'You accepted a suggestion.'}
+                        ? t('notesPage.linkSourceUserMessage')
+                        : t('notesPage.linkSourceSuggestedMessage')}
                   </p>
                   <Button
                     size="sm"
@@ -253,7 +261,7 @@ export default function Notes(): React.ReactElement {
                       void patch(selected.id, { meetingId: null, linkSource: null })
                     }
                   >
-                    Unlink
+                    {t('notesPage.unlinkButtonLabel')}
                   </Button>
                 </section>
               )}
@@ -261,13 +269,17 @@ export default function Notes(): React.ReactElement {
               {suggestions.length > 0 && (
                 <section>
                   <h2 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-                    Meetings this could belong to
+                    {t('notesPage.suggestionsHeading')}
                   </h2>
                   <ul className="space-y-2">
                     {suggestions.map((suggestion) => (
                       <li key={suggestion.meetingId} className="rounded border border-border p-2">
                         <p className="font-medium">{suggestion.subject}</p>
-                        <p className="text-xs text-muted-foreground">{suggestion.reason}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {suggestion.reasonKey
+                            ? t(`notesPage.suggestionReason.${suggestion.reasonKey}`)
+                            : suggestion.reason}
+                        </p>
                         <Button
                           size="sm"
                           variant="outline"
@@ -282,7 +294,7 @@ export default function Notes(): React.ReactElement {
                             })
                           }
                         >
-                          Link to this meeting
+                          {t('notesPage.linkToMeetingButtonLabel')}
                         </Button>
                       </li>
                     ))}
@@ -293,7 +305,7 @@ export default function Notes(): React.ReactElement {
               {related.length > 0 && (
                 <section>
                   <h2 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-                    Related
+                    {t('notesPage.relatedHeading')}
                   </h2>
                   <ul className="space-y-2">
                     {related.map((item) => (

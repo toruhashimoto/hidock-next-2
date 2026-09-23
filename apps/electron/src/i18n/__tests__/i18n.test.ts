@@ -30,10 +30,12 @@ describe('initI18n', () => {
 
   it('exposes the supported languages and namespaces', () => {
     expect(SUPPORTED_LANGUAGES).toEqual(['en', 'ja'])
-    // Phase 2 (Task 17) is registering one namespace per surface in parallel;
-    // this list is kept in sync with src/i18n/index.ts's NAMESPACES as each
-    // lands, not owned by any single task.
-    expect(NAMESPACES).toEqual(['common', 'layout', 'library', 'device', 'settings', 'today', 'domain', 'people', 'calendar', 'chat', 'projects'])
+    // Spelled out on purpose. catalogue-parity.test.ts already checks that
+    // NAMESPACES matches the catalogues on disk and the resources map, so what
+    // is left uncovered is intent: adding a namespace should be a deliberate
+    // edit here too, not something that rides along with a file being created.
+    // 'notes' arrived with the upstream Notes page in the 2026-09-23 merge.
+    expect(NAMESPACES).toEqual(['common', 'layout', 'library', 'device', 'settings', 'today', 'domain', 'people', 'calendar', 'chat', 'projects', 'notes'])
   })
 
   it('warns via console.warn when a key is missing from every catalogue (DEV only)', () => {
