@@ -3,74 +3,79 @@
  * do. A missing key silently renders English (fallbackLng), which is easy to
  * ship without noticing; a surplus key is dead weight or a typo.
  *
- * This test is expected to FAIL for every namespace until Task 14 writes the
- * Japanese translations. That is the point: it is the checklist.
+ * The catalogues are discovered from disk rather than listed by hand. An
+ * earlier version imported each one explicitly and kept a literal CATALOGUES
+ * map, which meant every new namespace needed the same edit in three places
+ * (index.ts, this file, catalogue-integrity.test.ts). During Phase 2 four
+ * namespaces landed in parallel and one of them lost its registration in a
+ * merge, so the suite was asserting over a stale list. Deriving the map from
+ * the files removes that whole failure mode: a namespace cannot be half
+ * registered here, and `covers every declared namespace` still catches the
+ * case where a catalogue exists on disk but was never added to NAMESPACES (or
+ * vice versa).
  */
 
 import { describe, it, expect } from 'vitest'
 import { NAMESPACES } from '../index'
 
-import enCommon from '../locales/en/common.json'
-import jaCommon from '../locales/ja/common.json'
-import enLayout from '../locales/en/layout.json'
-import jaLayout from '../locales/ja/layout.json'
-import enLibrary from '../locales/en/library.json'
-import jaLibrary from '../locales/ja/library.json'
-import enDevice from '../locales/en/device.json'
-import jaDevice from '../locales/ja/device.json'
-import enSettings from '../locales/en/settings.json'
-import jaSettings from '../locales/ja/settings.json'
-import enToday from '../locales/en/today.json'
-import jaToday from '../locales/ja/today.json'
-import enDomain from '../locales/en/domain.json'
-import jaDomain from '../locales/ja/domain.json'
-import enPeople from '../locales/en/people.json'
-import jaPeople from '../locales/ja/people.json'
+type Catalogue = Record<string, string>
 
-const CATALOGUES: Record<string, { en: object; ja: object }> = {
-  common: { en: enCommon, ja: jaCommon },
-  layout: { en: enLayout, ja: jaLayout },
-  library: { en: enLibrary, ja: jaLibrary },
-  device: { en: enDevice, ja: jaDevice },
-  settings: { en: enSettings, ja: jaSettings },
-  today: { en: enToday, ja: jaToday },
-  domain: { en: enDomain, ja: jaDomain },
-  people: { en: enPeople, ja: jaPeople }
+/** Eagerly load every catalogue JSON so the map is available synchronously. */
+const enModules = import.meta.glob<Catalogue>('../locales/en/*.json', { eager: true, import: 'default' })
+const jaModules = import.meta.glob<Catalogue>('../locales/ja/*.json', { eager: true, import: 'default' })
+
+/** `../locales/en/library.json` → `library` */
+function namespaceOf(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1, -'.json'.length)
 }
+
+function byNamespace(modules: Record<string, Catalogue>): Record<string, Catalogue> {
+  return Object.fromEntries(Object.entries(modules).map(([path, cat]) => [namespaceOf(path), cat]))
+}
+
+const EN = byNamespace(enModules)
+const JA = byNamespace(jaModules)
+
+const CATALOGUE_NAMES = Object.keys(EN).sort()
 
 /**
  * i18next appends a plural suffix to the key (`_one`, `_other`). English has two
  * forms, Japanese only `other`, so comparing raw keys would report a false
  * mismatch on every counted string. Compare the base keys instead.
  */
-function baseKeys(catalogue: object): Set<string> {
+function baseKeys(catalogue: Catalogue): Set<string> {
   return new Set(Object.keys(catalogue).map((k) => k.replace(/_(one|other|zero|two|few|many)$/, '')))
 }
 
 describe('catalogue parity', () => {
   it('covers every declared namespace', () => {
-    expect(Object.keys(CATALOGUES).sort()).toEqual([...NAMESPACES].sort())
+    expect(CATALOGUE_NAMES).toEqual([...NAMESPACES].sort())
   })
 
-  for (const ns of Object.keys(CATALOGUES)) {
+  it('has a Japanese catalogue for every English one', () => {
+    const missing = CATALOGUE_NAMES.filter((ns) => !JA[ns]).sort()
+    expect(missing).toEqual([])
+  })
+
+  for (const ns of CATALOGUE_NAMES) {
     it(`${ns}: ja has no missing keys`, () => {
-      const en = baseKeys(CATALOGUES[ns].en)
-      const ja = baseKeys(CATALOGUES[ns].ja)
+      const en = baseKeys(EN[ns])
+      const ja = baseKeys(JA[ns] ?? {})
       const missing = [...en].filter((k) => !ja.has(k)).sort()
       expect(missing).toEqual([])
     })
 
     it(`${ns}: ja has no surplus keys`, () => {
-      const en = baseKeys(CATALOGUES[ns].en)
-      const ja = baseKeys(CATALOGUES[ns].ja)
+      const en = baseKeys(EN[ns])
+      const ja = baseKeys(JA[ns] ?? {})
       const surplus = [...ja].filter((k) => !en.has(k)).sort()
       expect(surplus).toEqual([])
     })
   }
 
   it("every Japanese plural key uses only the 'other' form", () => {
-    for (const ns of Object.keys(CATALOGUES)) {
-      const badForms = Object.keys(CATALOGUES[ns].ja).filter((k) => /_(one|zero|two|few|many)$/.test(k))
+    for (const ns of CATALOGUE_NAMES) {
+      const badForms = Object.keys(JA[ns] ?? {}).filter((k) => /_(one|zero|two|few|many)$/.test(k))
       expect(badForms, `${ns} has non-'other' plural forms`).toEqual([])
     }
   })

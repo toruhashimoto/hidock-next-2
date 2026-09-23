@@ -30,30 +30,50 @@
 
 import { describe, it, expect } from 'vitest'
 
-import enCommon from '../locales/en/common.json'
-import jaCommon from '../locales/ja/common.json'
-import enLayout from '../locales/en/layout.json'
-import jaLayout from '../locales/ja/layout.json'
-import enLibrary from '../locales/en/library.json'
-import jaLibrary from '../locales/ja/library.json'
-import enDevice from '../locales/en/device.json'
-import jaDevice from '../locales/ja/device.json'
-import enSettings from '../locales/en/settings.json'
-import jaSettings from '../locales/ja/settings.json'
-import enToday from '../locales/en/today.json'
-import jaToday from '../locales/ja/today.json'
-import enDomain from '../locales/en/domain.json'
-import jaDomain from '../locales/ja/domain.json'
+type Catalogue = Record<string, string>
 
-const CATALOGUES: Record<string, { en: Record<string, string>; ja: Record<string, string> }> = {
-  common: { en: enCommon, ja: jaCommon },
-  layout: { en: enLayout, ja: jaLayout },
-  library: { en: enLibrary, ja: jaLibrary },
-  device: { en: enDevice, ja: jaDevice },
-  settings: { en: enSettings, ja: jaSettings },
-  today: { en: enToday, ja: jaToday },
-  domain: { en: enDomain, ja: jaDomain }
+/**
+ * Catalogues are discovered from disk, not listed by hand. The explicit-import
+ * version of this file had to be edited for every new namespace, and during
+ * Phase 2 four landed in parallel — the list fell behind and these checks were
+ * silently running over a subset. Globbing keeps the coverage automatic.
+ */
+const enModules = import.meta.glob<Catalogue>('../locales/en/*.json', { eager: true, import: 'default' })
+const jaModules = import.meta.glob<Catalogue>('../locales/ja/*.json', { eager: true, import: 'default' })
+
+/** `../locales/en/library.json` → `library` */
+function namespaceOf(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1, -'.json'.length)
 }
+
+const CATALOGUES: Record<string, { en: Catalogue; ja: Catalogue }> = Object.fromEntries(
+  Object.entries(enModules).map(([path, en]) => {
+    const ns = namespaceOf(path)
+    const jaEntry = Object.entries(jaModules).find(([p]) => namespaceOf(p) === ns)
+    return [ns, { en, ja: jaEntry?.[1] ?? {} }]
+  })
+)
+
+/**
+ * `<namespace>:<key>` entries where the two locales deliberately interpolate
+ * DIFFERENT placeholders, so the "ja must use every placeholder en uses" rule
+ * does not apply.
+ *
+ * Only the clock-hour labels qualify today. English renders a 12-hour clock
+ * ("{{hour}} AM") and Japanese a 24-hour one ("{{hour24}}時"); Calendar.tsx
+ * passes `{ hour: hour - 12, hour24: hour }` on every call, because no single
+ * number can read as both "3 PM" and "15時". Both values are always supplied,
+ * so neither locale can render an unfilled placeholder.
+ *
+ * Add to this list only when a caller demonstrably passes every placeholder
+ * both locales use — otherwise you are hiding a real bug, not describing an
+ * intentional divergence.
+ */
+const LOCALE_SPECIFIC_PLACEHOLDERS = new Set([
+  'calendar:weekView.hourAm',
+  'calendar:weekView.hourPm',
+  'calendar:weekView.hourNoon'
+])
 
 /** The set of `{{name}}` interpolation placeholders used in an i18next value. */
 function placeholderSet(value: string): Set<string> {
@@ -93,11 +113,25 @@ describe('catalogue placeholder & <Trans> tag integrity', () => {
     // left to collapse.
     const sharedKeys = Object.keys(ja).filter((k) => k in en)
 
-    it(`${ns}: every ja value's {{placeholders}} match its en counterpart`, () => {
-      const mismatches = sharedKeys
-        .filter((k) => !setsEqual(placeholderSet(en[k]), placeholderSet(ja[k])))
+    // Asymmetric on purpose. Dropping a placeholder the English value uses is
+    // normally a bug: the interpolated value simply vanishes from the Japanese
+    // string. Using one English does NOT use is legitimate — a caller may pass
+    // several and let each locale pick whichever it needs.
+    //
+    // An extra placeholder the caller never passes would render literally, so
+    // that IS worth catching — but deciding it needs the call site, which this
+    // file cannot see. So the rule here is the one-sided one, with named
+    // exceptions for the keys where the divergence is the whole point.
+    it(`${ns}: no ja value drops a {{placeholder}} its en counterpart uses`, () => {
+      const dropped = sharedKeys
+        .filter((k) => !LOCALE_SPECIFIC_PLACEHOLDERS.has(`${ns}:${k}`))
+        .filter((k) => {
+          const enPh = placeholderSet(en[k])
+          const jaPh = placeholderSet(ja[k])
+          return [...enPh].some((p) => !jaPh.has(p))
+        })
         .map((k) => `${k}: en={${describeSet(placeholderSet(en[k]))}} ja={${describeSet(placeholderSet(ja[k]))}}`)
-      expect(mismatches).toEqual([])
+      expect(dropped).toEqual([])
     })
 
     it(`${ns}: every ja value's <Trans> tag indices match its en counterpart`, () => {
@@ -147,6 +181,7 @@ describe('Library.tsx composite key existence', () => {
   ]
 
   it('all 12 keys Library.tsx can construct at runtime exist in en/library.json', () => {
+    const enLibrary = CATALOGUES.library?.en ?? {}
     const missing = COMPOSITE_KEYS.filter((k) => !(k in enLibrary))
     expect(missing).toEqual([])
   })
