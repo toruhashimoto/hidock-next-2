@@ -658,8 +658,12 @@ export function recordingCategory(recording: CalendarRecording): MeetingCategory
   return categorizeMeeting({ subject: recording.linkedMeeting.subject })
 }
 
-/** The honest, specific state name for a recording with no linked meeting. */
-export const UNLINKED_STATE_LABEL = 'Not linked to a meeting'
+// The honest, specific state name for a recording with no linked meeting now
+// lives in the catalogue as `calendar:tooltips.unlinkedLabel`. It used to be an
+// exported English constant here, which Today.tsx rendered directly — so that
+// one line stayed English on a fully translated page. A module-scope string
+// constant cannot follow a language switch; read it through `t()` at the render
+// site instead of reintroducing a constant.
 
 /**
  * Primary block label. A linked recording shows its meeting's subject; an unlinked

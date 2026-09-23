@@ -54,7 +54,6 @@ import {
   type RecordingSpan
 } from '@/lib/meeting-timing'
 import { CATEGORY_DOT, CATEGORY_CHIP, CATEGORY_ORDER } from '@/lib/meeting-category-colors'
-import { UNLINKED_STATE_LABEL } from '@/lib/calendar-utils'
 import type { Contact } from '@/types'
 
 const TODAY_PARTICIPANT_LIMIT = 4
@@ -878,7 +877,7 @@ export function Today() {
       return (
         <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/55">
           <Link2Off className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-          {UNLINKED_STATE_LABEL}
+          {t('calendar:tooltips.unlinkedLabel')}
         </div>
       )
     }
