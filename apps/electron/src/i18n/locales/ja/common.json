@@ -55,6 +55,11 @@
   "features.disabledByPreset": "現在のプリセットに含まれていません",
   "features.disabledRequires": "{{label}}が必要です",
 
+  "featureDisabledPage.defaultReason": "この機能はオフになっています。",
+  "featureDisabledPage.title": "{{label}}はオフになっています",
+  "featureDisabledPage.enableButton": "設定で有効にする",
+  "featureDisabledPage.restartHint": "{{label}}を有効にすると、再起動後に反映されます。",
+
   "playback.errorTitle": "エラー",
   "playback.loadFailedDescription": "音声ファイルの読み込みに失敗しました",
   "playback.playbackErrorTitle": "再生エラー",
