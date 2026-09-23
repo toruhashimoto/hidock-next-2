@@ -250,26 +250,25 @@ export function AIBrainsSettings() {
         )}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
           <div className="min-w-0">
-            <p className="text-sm font-medium">Local embedding CPU budget</p>
+            <p className="text-sm font-medium">{t('settings:aiBrains.cpuBudgetLabel')}</p>
             <p className="text-xs text-muted-foreground">
-              Share of available logical CPUs. Applies to local semantic search and indexing after restart.
-              Transcription has separate resource limits.
+              {t('settings:aiBrains.cpuBudgetDescription')}
             </p>
           </div>
           <Select value={String(cpuPercent)} disabled={savingBudget} onValueChange={async value => {
             setSavingBudget(true)
             try {
               await updateConfig('embeddings', { localCpuPercent: Number(value) })
-              toast.success('CPU budget saved. Restart HiDock to apply it.')
+              toast.success(t('settings:aiBrains.cpuBudgetSavedMessage'))
             } catch (error) {
-              toast.error(`Could not save CPU budget: ${String(error)}`)
+              toast.error(t('settings:aiBrains.cpuBudgetSaveFailedMessage', { error: String(error) }))
             } finally { setSavingBudget(false) }
           }}>
-            <SelectTrigger className="w-64" aria-label="Local embedding CPU budget"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-64" aria-label={t('settings:aiBrains.cpuBudgetLabel')}><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="25">25% — more room for other apps</SelectItem>
-              <SelectItem value="50">50% — balanced</SelectItem>
-              <SelectItem value="75">75% — faster processing</SelectItem>
+              <SelectItem value="25">{t('settings:aiBrains.cpuBudgetOption25')}</SelectItem>
+              <SelectItem value="50">{t('settings:aiBrains.cpuBudgetOption50')}</SelectItem>
+              <SelectItem value="75">{t('settings:aiBrains.cpuBudgetOption75')}</SelectItem>
             </SelectContent>
           </Select>
         </div>

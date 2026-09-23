@@ -1328,10 +1328,9 @@ export function Settings() {
               */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">Title for unassigned recordings</p>
+                  <p className="text-sm font-medium">{t('settings:transcription.unassignedTitleLabel')}</p>
                   <p className="text-xs text-muted-foreground">
-                    What the library shows for a recording with no calendar event. A title you
-                    type always wins; this chooses what fills in when you have not.
+                    {t('settings:transcription.unassignedTitleDescription')}
                   </p>
                 </div>
                 <Select
@@ -1341,18 +1340,21 @@ export function Settings() {
                     try {
                       await updateConfig('ui', { unassignedTitleSource: value as 'suggested' | 'filename' })
                       setUnassignedTitleSource(value)
-                      toast.success('Saved', 'The library updates right away.')
+                      toast.success(
+                        t('settings:transcription.saved'),
+                        t('settings:transcription.unassignedTitleSavedDescription')
+                      )
                     } catch (error) {
-                      toast.error('Could not save', String(error))
+                      toast.error(t('settings:transcription.couldNotSaveTitle'), String(error))
                     }
                   }}
                 >
-                  <SelectTrigger className="w-56" aria-label="Title for unassigned recordings">
+                  <SelectTrigger className="w-56" aria-label={t('settings:transcription.unassignedTitleLabel')}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="suggested">Suggested title</SelectItem>
-                    <SelectItem value="filename">File name</SelectItem>
+                    <SelectItem value="suggested">{t('settings:transcription.unassignedTitleOptionSuggested')}</SelectItem>
+                    <SelectItem value="filename">{t('settings:transcription.unassignedTitleOptionFilename')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1368,11 +1370,9 @@ export function Settings() {
               */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">Live microphone channel</p>
+                  <p className="text-sm font-medium">{t('settings:transcription.liveMicChannelLabel')}</p>
                   <p className="text-xs text-muted-foreground">
-                    Which of the device&apos;s two channels is your microphone, used to label live
-                    turns as you or them. Measured automatically; pin it if the labels come out
-                    swapped.
+                    {t('settings:transcription.liveMicChannelDescription')}
                   </p>
                 </div>
                 <Select
@@ -1390,19 +1390,22 @@ export function Settings() {
                         ...(value === 'auto' ? { liveMicChannelMeasured: null } : {}),
                       })
                       setLiveMicChannelSetting(value)
-                      toast.success('Saved', 'Applies to the next live session.')
+                      toast.success(
+                        t('settings:transcription.saved'),
+                        t('settings:transcription.liveMicChannelSavedDescription')
+                      )
                     } catch (error) {
-                      toast.error('Could not save', String(error))
+                      toast.error(t('settings:transcription.couldNotSaveTitle'), String(error))
                     }
                   }}
                 >
-                  <SelectTrigger className="w-56" aria-label="Live microphone channel">
+                  <SelectTrigger className="w-56" aria-label={t('settings:transcription.liveMicChannelLabel')}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Measure automatically</SelectItem>
-                    <SelectItem value="0">Left channel</SelectItem>
-                    <SelectItem value="1">Right channel</SelectItem>
+                    <SelectItem value="auto">{t('settings:transcription.liveMicChannelOptionAuto')}</SelectItem>
+                    <SelectItem value="0">{t('settings:transcription.liveMicChannelOptionLeft')}</SelectItem>
+                    <SelectItem value="1">{t('settings:transcription.liveMicChannelOptionRight')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
