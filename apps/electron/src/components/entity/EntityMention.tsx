@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { User, Folder, CalendarDays } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { badgeVariants } from '@/components/ui/badge'
@@ -42,6 +43,7 @@ const ICONS: Record<EntityType, React.ElementType> = {
  * subtly-styled non-interactive chip so the text is still visually marked.
  */
 export function EntityMention({ type, id, name, date, showIcon = false, className, visibleFields }: EntityMentionProps) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const Icon = ICONS[type]
   const label = name?.trim() || ''
@@ -61,8 +63,16 @@ export function EntityMention({ type, id, name, date, showIcon = false, classNam
     )
   }
 
+  const TYPE_WORD: Record<Exclude<EntityType, 'date'>, string> = {
+    person: t('people:entityMention.typeWord.person'),
+    project: t('people:entityMention.typeWord.project'),
+    meeting: t('people:entityMention.typeWord.meeting')
+  }
+
   const ariaLabel =
-    type === 'date' ? `Open calendar on ${label}` : `Open ${type} ${label}`
+    type === 'date'
+      ? t('people:entityMention.ariaLabel.dateOpen', { label })
+      : t('people:entityMention.ariaLabel.typedOpen', { type: TYPE_WORD[type], label })
 
   const handleClick = () => {
     switch (type) {

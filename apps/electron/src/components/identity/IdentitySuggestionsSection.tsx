@@ -1,5 +1,7 @@
 import { forwardRef, useImperativeHandle, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation, Trans } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   ChevronDown,
   ChevronRight,
@@ -48,13 +50,13 @@ import { useAmbiguousBuckets } from './useAmbiguousBuckets'
 import { ResolvePerMeetingCard } from './ResolvePerMeetingCard'
 
 /** Confidence → badge styling. ≥80 emerald, 50–79 amber. */
-function confidenceBadge(confidence: number | null): { label: string; className: string } {
+function confidenceBadge(confidence: number | null, t: TFunction): { label: string; className: string } {
   const pct = Math.round((confidence ?? 0) * 100)
   const className =
     pct >= 80
       ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
       : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-  return { label: `${pct}%`, className }
+  return { label: t('people:identitySuggestions.confidenceBadge', { pct }), className }
 }
 
 /** Quoted transcript excerpts where a name literally occurs — the primary source. */
@@ -65,6 +67,7 @@ function SnippetList({
   mentions?: MentionResult
   onOpenRecording: (recordingId: string) => void
 }) {
+  const { t } = useTranslation()
   const snippets = mentions?.snippets ?? []
   if (snippets.length === 0) return null
   return (
@@ -75,9 +78,9 @@ function SnippetList({
           type="button"
           onClick={() => onOpenRecording(s.recordingId)}
           className="block w-full text-left rounded-md border-l-2 border-muted-foreground/30 bg-muted/30 px-2 py-1 hover:bg-muted/60 transition-colors"
-          aria-label={`Open transcript: ${s.title}`}
+          aria-label={t('people:identitySuggestions.snippetOpenAriaLabel', { title: s.title })}
         >
-          <span className="text-xs italic text-muted-foreground">&ldquo;{s.snippet}&rdquo;</span>
+          <span className="text-xs italic text-muted-foreground">{t('people:identitySuggestions.snippetQuote', { snippet: s.snippet })}</span>
           <span className="mt-0.5 block text-[10px] text-muted-foreground/80 truncate">
             {s.title}
             {s.date ? ` · ${formatDate(s.date)}` : ''}
@@ -95,10 +98,11 @@ function SnippetList({
  * primary-tinted as corroborating evidence that the two records are one person.
  */
 function ContextChips({ context }: { context?: SideContext }) {
+  const { t } = useTranslation()
   const chips = context ? [...context.people, ...context.topics] : []
   if (chips.length === 0) return null
   return (
-    <div className="mt-1.5 flex flex-wrap gap-1" aria-label="Related context">
+    <div className="mt-1.5 flex flex-wrap gap-1" aria-label={t('people:identitySuggestions.contextChips.ariaLabel')}>
       {chips.map((c, i) => (
         <span
           key={`${c.label}-${i}`}
@@ -108,7 +112,7 @@ function ContextChips({ context }: { context?: SideContext }) {
               ? 'border-primary/40 bg-primary/10 text-primary font-medium'
               : 'border-border bg-muted/40 text-muted-foreground'
           )}
-          title={c.shared ? 'Shared by both — merge evidence' : undefined}
+          title={c.shared ? t('people:identitySuggestions.contextChips.sharedTitle') : undefined}
         >
           {c.label}
         </span>
@@ -119,6 +123,7 @@ function ContextChips({ context }: { context?: SideContext }) {
 
 /** Identity/meeting facts + transcript-evidence status shared by keeper and candidate blocks. */
 function ProfileFacts({ profile, mentions }: { profile?: MiniProfile; mentions?: MentionResult }) {
+  const { t } = useTranslation()
   const roleCompany = [cleanRole(profile?.role), profile?.company].filter(Boolean).join(' · ')
   const status = mentionStatus(mentions)
   return (
@@ -139,7 +144,7 @@ function ProfileFacts({ profile, mentions }: { profile?: MiniProfile; mentions?:
         <div className="flex items-center gap-1">
           <CalendarDays className="h-3 w-3 flex-shrink-0" />
           <span>
-            {profile.meetingCount} meeting{profile.meetingCount === 1 ? '' : 's'}
+            {t('people:entityHoverCard.meetingsCount', { count: profile.meetingCount })}
           </span>
         </div>
       )}
@@ -181,12 +186,13 @@ function KeeperPanel({
   context?: SideContext
   onOpenRecording: (recordingId: string) => void
 }) {
+  const { t } = useTranslation()
   const displayName = profile?.name || name
   return (
     <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/[0.04] p-2.5">
       <div className="flex items-center gap-1.5 mb-1">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-          Keeps
+          {t('people:identitySuggestions.keeperPanel.keepsLabel')}
         </span>
       </div>
       <EntityMention type={kind} id={id} name={displayName} showIcon />
@@ -212,20 +218,26 @@ function ImpactPreview({
   movedRecordings: number
   keeperName: string
 }) {
+  const { t } = useTranslation()
   if (!impact) return null
   const total = impact.keeper + impact.loser
   const highStakes = impact.keeper > MERGE_LINK_THRESHOLD || impact.loser > MERGE_LINK_THRESHOLD
   const parts: string[] = []
-  if (movedRecordings > 0) parts.push(`${movedRecordings} recording${movedRecordings === 1 ? '' : 's'}`)
-  parts.push(`${impact.loser} link${impact.loser === 1 ? '' : 's'}`)
+  if (movedRecordings > 0) parts.push(t('people:identitySuggestions.impactPreview.recordingsCount', { count: movedRecordings }))
+  parts.push(t('people:identitySuggestions.impactPreview.linksCount', { count: impact.loser }))
+  const items = parts.join(t('people:identitySuggestions.impactPreview.itemSeparator'))
   return (
     <p className="text-[11px] text-muted-foreground">
-      Merging moves {parts.join(' + ')} onto <span className="font-medium">{keeperName}</span> ({total} total
-      afterward).
+      <Trans
+        i18nKey="people:identitySuggestions.impactPreview.sentence"
+        values={{ items, keeperName, total }}
+      >
+        Merging moves {{ items } as unknown as string} onto <span className="font-medium">{{ keeperName } as unknown as string}</span> ({{ total } as unknown as string} total afterward).
+      </Trans>
       {highStakes && (
         <span className="text-amber-600 dark:text-amber-400">
           {' '}
-          High-impact — you&rsquo;ll confirm by typing the name.
+          {t('people:identitySuggestions.impactPreview.highStakesNote')}
         </span>
       )}
     </p>
@@ -267,11 +279,12 @@ function CandidateRow({
   onOpenRecording: (recordingId: string) => void
   onOpenProfile: (id: string) => void
 }) {
+  const { t } = useTranslation()
   const ev = parseEvidence(suggestion.evidence)
   const loserName = suggestion.candidate_name
   const phrases = evidenceToPhrases(ev, loserName, keeperName)
   const topics = topicChips(ev)
-  const badge = confidenceBadge(suggestion.confidence)
+  const badge = confidenceBadge(suggestion.confidence, t)
   // Co-presence is decisive negative evidence — never lead with a filled "merge".
   const strong = (suggestion.confidence ?? 0) >= 0.8 && !coMention
   const movedRecordings = candidateMentions?.recordingIds.length ?? 0
@@ -297,7 +310,10 @@ function CandidateRow({
     if (suggestion.kind !== 'person') return
     onOpenProfile(suggestion.target_id)
     if (loserId) {
-      toast.info(`Opened ${keeperName}`, `Also review '${loserName}' to compare in full.`)
+      toast.info(
+        t('people:identitySuggestions.candidateRow.openedToastTitle', { name: keeperName }),
+        t('people:identitySuggestions.candidateRow.openedToastMessage', { name: loserName })
+      )
     }
   }
 
@@ -320,7 +336,7 @@ function CandidateRow({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 mb-1">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {suggestion.kind === 'person' ? 'Duplicate' : 'Alias'}
+                {suggestion.kind === 'person' ? t('people:identitySuggestions.candidateRow.duplicateLabel') : t('people:identitySuggestions.candidateRow.aliasLabel')}
               </span>
             </div>
             <EntityMention type={suggestion.kind} id={loserId} name={candidateProfile?.name || loserName} showIcon />
@@ -344,21 +360,21 @@ function CandidateRow({
       {candidateContext && candidateContext.topics.some((c) => c.shared) && (
         <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/[0.06] px-2.5 py-1.5 text-[11px] text-primary">
           <Link2 className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" aria-hidden />
-          <span>Related topics — the two discuss the same subjects (same circle).</span>
+          <span>{t('people:identitySuggestions.candidateRow.relatedTopicsNote')}</span>
         </div>
       )}
 
       {candidateContext && isDisjoint(candidateContext) && (
         <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/[0.06] px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
           <Network className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" aria-hidden />
-          <span>Different circles — no shared people or topics between the two.</span>
+          <span>{t('people:identitySuggestions.candidateRow.differentCirclesNote')}</span>
         </div>
       )}
 
       {isCommonName && (
         <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/[0.06] px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
           <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" aria-hidden />
-          <span>Common name — verify carefully; the name alone is weak evidence.</span>
+          <span>{t('people:identitySuggestions.candidateRow.commonNameNote')}</span>
         </div>
       )}
 
@@ -369,14 +385,20 @@ function CandidateRow({
         >
           <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
           <span>
-            Both names appear in the same conversation — <span className="font-semibold">likely different people</span>.
+            <Trans i18nKey="people:identitySuggestions.candidateRow.coMentionAlert">
+              Both names appear in the same conversation — <span className="font-semibold">likely different people</span>.
+            </Trans>
           </span>
         </div>
       )}
 
       <p className="text-xs">
-        Keeps <span className="font-semibold">{survivorName}</span> —{' '}
-        <span className="font-medium">&lsquo;{absorbedName}&rsquo;</span> becomes an alias
+        <Trans
+          i18nKey="people:identitySuggestions.candidateRow.survivorLine"
+          values={{ survivorName, absorbedName }}
+        >
+          Keeps <span className="font-semibold">{{ survivorName } as unknown as string}</span> — <span className="font-medium">‘{{ absorbedName } as unknown as string}’</span> becomes an alias
+        </Trans>
       </p>
 
       {phrases.length > 0 && (
@@ -389,12 +411,12 @@ function CandidateRow({
 
       {topics.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {topics.map((t) => (
+          {topics.map((topic) => (
             <span
-              key={t}
+              key={topic}
               className="inline-flex items-center rounded-full border bg-muted/50 px-2 py-0.5 text-[10px] text-muted-foreground"
             >
-              {t}
+              {topic}
             </span>
           ))}
         </div>
@@ -411,24 +433,29 @@ function CandidateRow({
             setConfirmText('')
           }}
           className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-          aria-label={swapped ? `Keep '${keeperName}' instead` : `Keep '${loserName}' instead`}
+          aria-label={t('people:identitySuggestions.candidateRow.keepInsteadAriaLabel', { name: swapped ? keeperName : loserName })}
         >
           <ArrowLeftRight className="h-3 w-3" />
-          Keep &lsquo;{swapped ? keeperName : loserName}&rsquo; instead
+          {t('people:identitySuggestions.candidateRow.keepInsteadText', { name: swapped ? keeperName : loserName })}
         </button>
       )}
 
       {confirming && !swapped && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 space-y-1.5">
           <label className="block text-[11px] text-amber-700 dark:text-amber-300">
-            High-impact merge. Type <span className="font-semibold">{loserName}</span> to confirm.
+            <Trans
+              i18nKey="people:identitySuggestions.candidateRow.confirmingLabel"
+              values={{ loserName }}
+            >
+              High-impact merge. Type <span className="font-semibold">{{ loserName } as unknown as string}</span> to confirm.
+            </Trans>
           </label>
           <input
             autoFocus
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
             placeholder={loserName}
-            aria-label={`Type ${loserName} to confirm merge`}
+            aria-label={t('people:shared.typeToConfirmAriaLabel', { name: loserName })}
             className="w-full rounded-md border bg-background px-2 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
@@ -446,7 +473,7 @@ function CandidateRow({
               setConfirmText('')
             }}
           >
-            Cancel
+            {t('people:shared.cancelButton')}
           </Button>
         )}
         <Button
@@ -457,29 +484,33 @@ function CandidateRow({
           onClick={handleAccept}
           aria-label={
             swapped
-              ? `Keep '${loserName}' and merge ${keeperName} in`
+              ? t('people:identitySuggestions.candidateRow.acceptAriaLabelSwapped', { loserName, keeperName })
               : confirming
-                ? `Confirm merge of '${loserName}' into ${keeperName}`
-                : `Merge '${loserName}' into ${keeperName}`
+                ? t('people:identitySuggestions.candidateRow.acceptAriaLabelConfirming', { loserName, keeperName })
+                : t('people:identitySuggestions.candidateRow.acceptAriaLabelDefault', { loserName, keeperName })
           }
         >
           <Check className="h-3.5 w-3.5 mr-1" />
-          {swapped ? `Yes, keep ${loserName}` : confirming ? 'Confirm merge' : 'Yes, merge'}
+          {swapped
+            ? t('people:identitySuggestions.candidateRow.acceptButtonSwapped', { loserName })
+            : confirming
+              ? t('people:identitySuggestions.candidateRow.acceptButtonConfirming')
+              : t('people:identitySuggestions.candidateRow.acceptButtonDefault')}
         </Button>
         <Button
           size="sm"
           variant="outline"
           className={cn('h-7', coMention && 'ring-2 ring-red-500/40')}
           onClick={() => onReject(suggestion.id)}
-          aria-label={`Keep '${loserName}' separate from ${keeperName}`}
+          aria-label={t('people:identitySuggestions.candidateRow.rejectAriaLabel', { loserName, keeperName })}
         >
           <X className="h-3.5 w-3.5 mr-1" />
-          No
+          {t('people:identitySuggestions.candidateRow.rejectButton')}
         </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" aria-label={`More options for '${loserName}'`}>
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" aria-label={t('people:identitySuggestions.candidateRow.moreOptionsAriaLabel', { loserName })}>
               <MoreVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -487,19 +518,19 @@ function CandidateRow({
             {canReroute && (
               <DropdownMenuItem onSelect={() => setPickerOpen(true)}>
                 <UserSearch className="h-4 w-4 mr-2 text-muted-foreground" />
-                Merge into someone else…
+                {t('people:identitySuggestions.candidateRow.mergeIntoSomeoneElseItem')}
               </DropdownMenuItem>
             )}
             {suggestion.kind === 'person' && (
               <DropdownMenuItem onSelect={openBothProfiles}>
                 <ExternalLink className="h-4 w-4 mr-2 text-muted-foreground" />
-                Open both profiles
+                {t('people:identitySuggestions.candidateRow.openBothProfilesItem')}
               </DropdownMenuItem>
             )}
             {(canReroute || suggestion.kind === 'person') && <DropdownMenuSeparator />}
             <DropdownMenuItem onSelect={() => onReject(suggestion.id)}>
               <Ban className="h-4 w-4 mr-2 text-muted-foreground" />
-              Reject and don&rsquo;t ask again
+              {t('people:identitySuggestions.candidateRow.rejectDontAskAgainItem')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -539,6 +570,7 @@ function GroupCanonicalChooser({
   onConfirm: (finalName: string) => void
   onCancel: () => void
 }) {
+  const { t } = useTranslation()
   const [selected, setSelected] = useState<string>(names[0] ?? '')
   const [custom, setCustom] = useState('')
   const useCustom = selected === '__custom__'
@@ -547,7 +579,7 @@ function GroupCanonicalChooser({
 
   return (
     <div className="rounded-lg border border-primary/30 bg-primary/[0.04] p-3 space-y-2">
-      <p className="text-xs font-medium">All of these are the same person. Which spelling is correct?</p>
+      <p className="text-xs font-medium">{t('people:identitySuggestions.canonicalChooser.prompt')}</p>
       <div className="space-y-1">
         {names.map((n) => (
           <label key={n} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -569,32 +601,32 @@ function GroupCanonicalChooser({
             onChange={() => setSelected('__custom__')}
             className="h-3.5 w-3.5"
           />
-          <span className="text-muted-foreground">The correct name is different:</span>
+          <span className="text-muted-foreground">{t('people:identitySuggestions.canonicalChooser.differentNameLabel')}</span>
         </label>
         {useCustom && (
           <input
             autoFocus
             value={custom}
             onChange={(e) => setCustom(e.target.value)}
-            placeholder="Correct name"
-            aria-label="Correct canonical name"
+            placeholder={t('people:identitySuggestions.canonicalChooser.customPlaceholder')}
+            aria-label={t('people:identitySuggestions.canonicalChooser.customAriaLabel')}
             className="ml-6 w-[calc(100%-1.5rem)] rounded-md border bg-background px-2 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         )}
       </div>
       <div className="flex items-center justify-end gap-2 pt-1">
         <Button size="sm" variant="ghost" className="h-7" onClick={onCancel}>
-          Cancel
+          {t('people:shared.cancelButton')}
         </Button>
         <Button
           size="sm"
           className="h-7"
           disabled={!canConfirm}
           onClick={() => onConfirm(finalName)}
-          aria-label="Merge all into the chosen name"
+          aria-label={t('people:identitySuggestions.canonicalChooser.confirmAriaLabel')}
         >
           <Check className="h-3.5 w-3.5 mr-1" />
-          Merge all as &lsquo;{finalName || '…'}&rsquo;
+          {t('people:identitySuggestions.canonicalChooser.confirmButton', { name: finalName || '…' })}
         </Button>
       </div>
     </div>
@@ -634,6 +666,7 @@ export const IdentitySuggestionsSection = forwardRef<
   IdentitySuggestionsSectionHandle,
   IdentitySuggestionsSectionProps
 >(function IdentitySuggestionsSection({ kind }, ref) {
+  const { t } = useTranslation()
   const {
     suggestions,
     loading,
@@ -689,7 +722,13 @@ export const IdentitySuggestionsSection = forwardRef<
 
   const nameFor = (s: IdentitySuggestion): string => {
     const ev = parseEvidence(s.evidence)
-    return targetNames[s.target_id] || ev.keeperName || (s.kind === 'person' ? 'this person' : 'this project')
+    return (
+      targetNames[s.target_id] ||
+      ev.keeperName ||
+      (s.kind === 'person'
+        ? t('people:identitySuggestions.fallbackPersonName')
+        : t('people:identitySuggestions.fallbackProjectName'))
+    )
   }
 
   const hasBuckets = showBuckets && buckets.length > 0
@@ -701,7 +740,7 @@ export const IdentitySuggestionsSection = forwardRef<
   let lastTier: SuggestionTier | null = null
 
   return (
-    <section className="mb-6" aria-label="Identity suggestions">
+    <section className="mb-6" aria-label={t('people:identitySuggestions.sectionAriaLabel')}>
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
@@ -714,9 +753,9 @@ export const IdentitySuggestionsSection = forwardRef<
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         )}
         <Sparkles className="h-4 w-4 text-amber-500" />
-        <span className="text-sm font-semibold">Identity suggestions ({totalCount})</span>
+        <span className="text-sm font-semibold">{t('people:identitySuggestions.header.title', { count: totalCount })}</span>
         <span className="text-xs text-muted-foreground hidden sm:inline">
-          — names to confirm or resolve
+          {t('people:identitySuggestions.header.subtitle')}
         </span>
       </button>
 
@@ -726,7 +765,7 @@ export const IdentitySuggestionsSection = forwardRef<
             <div className="space-y-2">
               <div className="flex items-center gap-2 pt-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Shared first names — resolve per meeting
+                  {t('people:identitySuggestions.bucketsHeading')}
                 </span>
                 <div className="h-px flex-1 bg-border" />
               </div>
@@ -855,7 +894,17 @@ function GroupCard({
   onOpenRecording: (recordingId: string) => void
   onOpenProfile: (id: string) => void
 }) {
+  const { t } = useTranslation()
   const [choosing, setChoosing] = useState(false)
+
+  const candidateListText = candidates
+    .map((c) =>
+      t('people:identitySuggestions.groupIntro.candidateItem', {
+        name: c.candidate_name,
+        pct: Math.round((c.confidence ?? 0) * 100)
+      })
+    )
+    .join(t('people:identitySuggestions.groupIntro.itemSeparator'))
 
   return (
     <div className="space-y-2">
@@ -876,12 +925,12 @@ function GroupCard({
                 <Users className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
               )}
               <p className="text-sm leading-snug">
-                {candidates.length} names may be <span className="font-semibold">{keeperName}</span>:{' '}
-                <span className="text-muted-foreground">
-                  {candidates
-                    .map((c) => `${c.candidate_name} (${Math.round((c.confidence ?? 0) * 100)}%)`)
-                    .join(' · ')}
-                </span>
+                <Trans
+                  i18nKey="people:identitySuggestions.groupIntro.summary"
+                  values={{ count: candidates.length, keeperName, candidateList: candidateListText }}
+                >
+                  {{ count: candidates.length } as unknown as string} names may be <span className="font-semibold">{{ keeperName } as unknown as string}</span>: <span className="text-muted-foreground">{{ candidateList: candidateListText } as unknown as string}</span>
+                </Trans>
               </p>
             </div>
           )}
@@ -917,10 +966,10 @@ function GroupCard({
                 variant="outline"
                 className="h-8 w-full border-primary/40 text-primary hover:bg-primary/10"
                 onClick={() => setChoosing(true)}
-                aria-label="All the same person"
+                aria-label={t('people:identitySuggestions.allSamePersonAriaLabel')}
               >
                 <Users className="h-3.5 w-3.5 mr-1.5" />
-                All the same person…
+                {t('people:identitySuggestions.allSamePersonButton')}
               </Button>
             ))}
 

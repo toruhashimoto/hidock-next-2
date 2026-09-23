@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { useTranslation, Trans } from 'react-i18next'
 import { Sparkles, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,6 +11,7 @@ import { useIdentitySuggestions } from './useIdentitySuggestions'
  * and a "Review all" affordance that deep-links to the People page.
  */
 export function TodayIdentitySuggestions() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { suggestions, loading, targetNames } = useIdentitySuggestions()
 
@@ -23,32 +25,43 @@ export function TodayIdentitySuggestions() {
         <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-amber-500" />
-            Identity suggestions
-            <span className="text-xs font-normal text-muted-foreground">({suggestions.length})</span>
+            {t('people:todayIdentitySuggestions.title')}
+            <span className="text-xs font-normal text-muted-foreground">{t('people:todayIdentitySuggestions.count', { count: suggestions.length })}</span>
           </span>
           <Button variant="ghost" size="sm" onClick={() => navigate('/people')}>
-            Review all
+            {t('people:todayIdentitySuggestions.reviewAllButton')}
             <ArrowRight className="h-4 w-4 ml-1" />
           </Button>
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {top.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => navigate('/people')}
-              className="w-full flex items-center gap-2 rounded-lg border p-3 text-left hover:bg-muted/50 transition-colors"
-            >
-              <span className="text-sm truncate flex-1">
-                Is <span className="font-semibold">&lsquo;{s.candidate_name}&rsquo;</span> the same as{' '}
-                <span className="font-semibold">{targetNames[s.target_id] ?? 'a known ' + s.kind}</span>?
-              </span>
-              <span className="text-xs text-muted-foreground flex-shrink-0">
-                {Math.round((s.confidence ?? 0) * 100)}%
-              </span>
-            </button>
-          ))}
+          {top.map((s) => {
+            const targetName =
+              targetNames[s.target_id] ??
+              (s.kind === 'person'
+                ? t('people:todayIdentitySuggestions.knownPerson')
+                : t('people:todayIdentitySuggestions.knownProject'))
+            return (
+              <button
+                key={s.id}
+                onClick={() => navigate('/people')}
+                className="w-full flex items-center gap-2 rounded-lg border p-3 text-left hover:bg-muted/50 transition-colors"
+              >
+                <span className="text-sm truncate flex-1">
+                  <Trans
+                    i18nKey="people:todayIdentitySuggestions.question"
+                    values={{ candidateName: s.candidate_name, targetName }}
+                  >
+                    Is <span className="font-semibold">&lsquo;{{ candidateName: s.candidate_name } as unknown as string}&rsquo;</span> the same as <span className="font-semibold">{{ targetName } as unknown as string}</span>?
+                  </Trans>
+                </span>
+                <span className="text-xs text-muted-foreground flex-shrink-0">
+                  {t('people:identitySuggestions.confidenceBadge', { pct: Math.round((s.confidence ?? 0) * 100) })}
+                </span>
+              </button>
+            )
+          })}
         </div>
       </CardContent>
     </Card>

@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, Search } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { cleanRole } from '@/lib/roleHygiene'
@@ -34,6 +35,7 @@ function secondaryLine(c: PickerContact): string {
 }
 
 function ContactRow({ contact, onSelect }: { contact: PickerContact; onSelect: () => void }) {
+  const { t } = useTranslation()
   const secondary = secondaryLine(contact)
   const count = contact.meeting_count ?? 0
   return (
@@ -54,7 +56,7 @@ function ContactRow({ contact, onSelect }: { contact: PickerContact; onSelect: (
       </span>
       {count > 0 && (
         <span className="shrink-0 text-xs text-muted-foreground">
-          {count} meeting{count === 1 ? '' : 's'}
+          {t('people:entityHoverCard.meetingsCount', { count })}
         </span>
       )}
       <Check className="h-4 w-4 shrink-0 text-transparent" aria-hidden="true" />
@@ -78,6 +80,7 @@ interface MergeIntoDialogProps {
  * filters out the excluded ids, and calls `onPick` with the chosen keeper.
  */
 export function MergeIntoDialog({ open, onOpenChange, loserName, excludeIds, onPick }: MergeIntoDialogProps) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [contacts, setContacts] = useState<PickerContact[]>([])
   const [loading, setLoading] = useState(false)
@@ -115,9 +118,9 @@ export function MergeIntoDialog({ open, onOpenChange, loserName, excludeIds, onP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Merge into someone else</DialogTitle>
+          <DialogTitle>{t('people:mergeIntoDialog.title')}</DialogTitle>
           <DialogDescription>
-            Fold &lsquo;{loserName}&rsquo; into the person it really is. Pick the correct keeper.
+            {t('people:mergeIntoDialog.description', { loserName })}
           </DialogDescription>
         </DialogHeader>
 
@@ -127,8 +130,8 @@ export function MergeIntoDialog({ open, onOpenChange, loserName, excludeIds, onP
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search people…"
-            aria-label="Search people"
+            placeholder={t('people:mergeIntoDialog.searchPlaceholder')}
+            aria-label={t('people:mergeIntoDialog.searchAriaLabel')}
             autoFocus
             className="w-full rounded-md border bg-background py-1.5 pl-8 pr-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
@@ -136,9 +139,9 @@ export function MergeIntoDialog({ open, onOpenChange, loserName, excludeIds, onP
 
         <div className="max-h-72 overflow-y-auto -mx-1 px-1">
           {loading ? (
-            <p className="px-2 py-4 text-center text-xs text-muted-foreground">Loading…</p>
+            <p className="px-2 py-4 text-center text-xs text-muted-foreground">{t('people:mergeIntoDialog.loadingText')}</p>
           ) : visible.length === 0 ? (
-            <p className="px-2 py-4 text-center text-xs text-muted-foreground">No matching people</p>
+            <p className="px-2 py-4 text-center text-xs text-muted-foreground">{t('people:mergeIntoDialog.noMatchingPeople')}</p>
           ) : (
             visible.map((c) => (
               <ContactRow
