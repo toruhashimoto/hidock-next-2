@@ -744,6 +744,41 @@ describe('Transcription Service', () => {
       }
     })
 
+    it('asks the local ASR runner for Japanese when no language is configured', { timeout: 20000 }, async () => {
+      mockConfig.transcription.provider = 'local-asr'
+      mockConfig.transcription.geminiApiKey = ''
+      mockConfig.transcription.language = ''
+      mockGetQueueItems.mockImplementation((status?: string) =>
+        status === 'pending'
+          ? [{ id: 'queue-lang', recording_id: 'rec-lang', filename: 'lang.wav', status: 'pending', attempts: 0 }]
+          : []
+      )
+      mockGetRecordingById.mockReturnValue({
+        id: 'rec-lang',
+        filename: 'lang.wav',
+        file_path: 'G:\\Recordings\\lang.wav',
+        status: 'complete'
+      })
+      mockExecFile.mockImplementation(() =>
+        makeFakeChildProcess(JSON.stringify({ text: '確認します。', language: 'ja', segments: [] }))
+      )
+
+      const { startTranscriptionProcessor, stopTranscriptionProcessor } = await import('../transcription')
+      startTranscriptionProcessor()
+      try {
+        await vi.waitFor(() => {
+          expect(mockExecFile).toHaveBeenCalled()
+        }, { timeout: 15000, interval: 25 })
+      } finally {
+        stopTranscriptionProcessor()
+      }
+
+      // A forced wrong language is what turned Japanese meetings into Spanish
+      // text, so the fallback is what the runner must actually receive.
+      const args = mockExecFile.mock.calls[0][1] as string[]
+      expect(args[args.indexOf('--language') + 1]).toBe('ja')
+    })
+
     it('records the model the local ASR runner reports, not the default label', { timeout: 20000 }, async () => {
       mockConfig.transcription.provider = 'local-asr'
       mockConfig.transcription.geminiApiKey = ''

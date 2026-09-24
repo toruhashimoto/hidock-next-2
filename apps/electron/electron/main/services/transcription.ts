@@ -1003,7 +1003,8 @@ async function transcribeWithLocalAsr(
     throw new Error(`Local ASR runner not found: ${runnerPath}`)
   }
 
-  const language = (config.transcription.language || 'es').slice(0, 2).toLowerCase()
+  // Same default as DEFAULT_CONFIG.transcription.language (config.ts).
+  const language = (config.transcription.language || 'ja').slice(0, 2).toLowerCase()
   const vocabularyPath = config.transcription.localAsrVocabularyFile
     ? (isAbsolute(config.transcription.localAsrVocabularyFile)
         ? config.transcription.localAsrVocabularyFile
