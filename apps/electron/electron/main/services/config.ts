@@ -271,7 +271,10 @@ const DEFAULT_CONFIG: AppConfig = {
     vibevoiceDevice: process.env.ASR_DEVICE || 'cuda:0',
     vibevoiceAttn: process.env.VIBEVOICE_ATTN || 'sdpa', // VibeVoice-ASR supports neither flash_attention_2 (not built on Windows) nor flex_attention (unsupported arch); both silently fall back to sdpa, so use it directly
     autoTranscribe: true,
-    language: 'es',
+    // Settings has no control for this, so profiles rarely save it and this
+    // default decides the local ASR language. Keep in step with the fallback in
+    // transcribeWithLocalAsr (transcription.ts).
+    language: 'ja',
     valueClassificationEnabled: true,
     valueClassificationMinConfidence: 0.6
   },

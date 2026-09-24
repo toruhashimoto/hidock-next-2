@@ -158,7 +158,9 @@ export function isSpeakerLinkingUnavailableDetail(detail: string): boolean {
     /ModuleNotFoundError|No module named/i,
     /ImportError:|is required for a normal functioning/i,
     /FFmpeg is required .* not found/i,
-    /GatedRepo|401|403|not authorized|cannot access gated/i
+    /GatedRepo|401|403|not authorized|cannot access gated/i,
+    // Windows py launcher: the interpreter it was asked for (-3.11) is not installed.
+    /No suitable Python runtime found/i
   ]
   return unavailablePatterns.some((pattern) => pattern.test(detail))
 }

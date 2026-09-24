@@ -73,6 +73,18 @@ describe('persistent acoustic speaker linking', () => {
     expect(isSpeakerLinkingUnavailableDetail('speaker-linking failed: CUDA out of memory')).toBe(false)
   })
 
+  it('degrades when the Python launcher cannot find the interpreter the worker asks for', () => {
+    // 2026-09-24: `py -3.11` on a PC with only 3.12 and 3.14 installed failed
+    // every retry at this stage, so local ASR never ran. This is the launcher's
+    // exact stderr (exit code 103), CRLF included as the worker captured it.
+    expect(isSpeakerLinkingUnavailableDetail(
+      'No suitable Python runtime found\r\n' +
+      'Pass --list (-0) to see all detected environments on your machine\r\n' +
+      'or set environment variable PYLAUNCHER_ALLOW_INSTALL to use winget\r\n' +
+      'or open the Microsoft Store to the requested version.'
+    )).toBe(true)
+  })
+
   it('budgets the acoustic worker by audio length, never below the configured floor', () => {
     // 2026-09-15: a flat 600 s cap failed the 19 imported recordings longer than ~34 min.
     expect(speakerLinkingTimeoutMs(600, 300)).toBe(600_000)
