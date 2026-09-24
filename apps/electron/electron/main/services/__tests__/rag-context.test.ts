@@ -161,6 +161,7 @@ describe('RAGService Context Injection', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers() // undoes vi.setSystemTime
     if (dbInstance) dbInstance.close()
   })
 
@@ -230,6 +231,40 @@ describe('RAGService Context Injection', () => {
     // and the retrieval-failure notes must NOT fire — structured content exists
     expect(userMessage).not.toContain('No relevant meeting transcripts found')
     expect(userMessage).not.toContain('semantic search is temporarily unavailable')
+  })
+
+  it('defaults a topics question to the last 14 local days, early in the morning too', async () => {
+    // 00:30 on 24 September. In Japan the UTC date is still the 23rd, so the
+    // default window ended yesterday and reached back to the 9th: this
+    // morning's meeting was left out and one from 15 days ago was let in.
+    vi.setSystemTime(new Date(2026, 8, 24, 0, 30))
+    dbInstance.run(`
+      ALTER TABLE knowledge_captures ADD COLUMN summary TEXT;
+      ALTER TABLE knowledge_captures ADD COLUMN captured_at TEXT;
+      ALTER TABLE knowledge_captures ADD COLUMN meeting_id TEXT;
+      CREATE TABLE meetings (id TEXT, subject TEXT);
+    `)
+    dbInstance.run(
+      `INSERT INTO knowledge_captures (id, title, summary, captured_at) VALUES
+        ('kc-today', 'Midnight incident review', 'Just now.', ?),
+        ('kc-oldest', 'Fourteen days back', 'First day of the window.', ?),
+        ('kc-older', 'Fifteen days back', 'Before the window.', ?)`,
+      [
+        new Date(2026, 8, 24, 0, 10).toISOString(),
+        new Date(2026, 8, 10, 8, 0).toISOString(),
+        new Date(2026, 8, 9, 12, 0).toISOString(),
+      ]
+    )
+    const rag = getRAGService()
+
+    await rag.chat('session-no-pins', 'give me an overview of recent discussions')
+
+    const messages = vi.mocked(mockChatLLMService.generate).mock.calls[0][0]
+    const userMessage = messages[messages.length - 1].content
+    expect(userMessage).toContain('MEETING DIGESTS for the last 14 days')
+    expect(userMessage).toContain('2026-09-24: Midnight incident review')
+    expect(userMessage).toContain('2026-09-10: Fourteen days back')
+    expect(userMessage).not.toContain('Fifteen days back')
   })
 
   // 2026-07-21 regression: a pinned ARTIFACT capture (pdf/image — no

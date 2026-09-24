@@ -14,6 +14,7 @@ import {
   detectIntent,
   inRange,
   localIsoDate,
+  recentRange,
   resolveTemporalRange,
   type TemporalRange,
 } from './retrieval-orchestrator'
@@ -1191,13 +1192,9 @@ ${text}` })
     if (intent === 'topics' || intent === 'report') {
       // No explicit range in the question ⇒ default to recent history
       // (topics: 14 days; report: 30 days).
-      const DAY_MS = 24 * 60 * 60 * 1000
       const digestRange: TemporalRange =
-        temporalRange ?? {
-          start: new Date(now.getTime() - (intent === 'report' ? 30 : 14) * DAY_MS).toISOString().slice(0, 10),
-          end: now.toISOString().slice(0, 10),
-          label: intent === 'report' ? 'the last 30 days' : 'the last 14 days',
-        }
+        temporalRange ??
+        (intent === 'report' ? recentRange(30, 'the last 30 days', now) : recentRange(14, 'the last 14 days', now))
       const digests = buildDigestsContext(digestRange, intent === 'report' ? 20 : 12)
       for (const id of digests.recordingIds) provRecordingIds.add(id)
       for (const id of digests.captureIds) provCaptureIds.add(id)

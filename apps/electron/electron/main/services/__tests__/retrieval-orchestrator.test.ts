@@ -4,7 +4,7 @@
  *
  * @vitest-environment node
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from 'vitest'
 import initSqlJs from 'sql.js'
 
 const deps = vi.hoisted(() => ({
@@ -59,6 +59,31 @@ import {
   inRange,
   resolveTemporalRange,
 } from '../retrieval-orchestrator'
+
+/**
+ * `hours:minutes` on `date` in this machine's zone, stored the way the app
+ * stores timestamps (ISO UTC). Ranges are local calendar days, so a fixture
+ * near a range edge has to be local too: in Japan anything before 09:00 carries
+ * the previous day's UTC date, and a UTC literal would hide exactly that.
+ */
+const localTime = (date: string, hours: number, minutes = 0): string => {
+  const [year, month, day] = date.split('-').map(Number)
+  return new Date(year, month - 1, day, hours, minutes).toISOString()
+}
+
+/** Run the rest of the current test in `zone`, restoring the zone in effect before. */
+function pinZone(zone: string): void {
+  const originalTz = process.env.TZ
+  // The zone in effect now — the system zone when TZ is unset.
+  const originalZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  process.env.TZ = zone
+  onTestFinished(() => {
+    // Assign before deleting: Node on Windows only switches zones when TZ is
+    // assigned, so a bare delete would leave later tests in `zone`.
+    process.env.TZ = originalTz ?? originalZone
+    if (originalTz === undefined) delete process.env.TZ
+  })
+}
 
 // ── Intent ──────────────────────────────────────────────────────────────────
 
@@ -163,6 +188,36 @@ describe('inRange / dateGroundingPart', () => {
     expect(inRange('2026-07-15', null)).toBe(false)
   })
 
+  it('matches a stored timestamp by the local day it falls on', () => {
+    // Stored timestamps are ISO UTC; the range is local days. Read by its first
+    // ten characters, 08:30 on the range's first day fell out of it in Japan
+    // (the UTC date is still the day before) and 08:30 on the day after fell in.
+    expect(inRange(localTime('2026-07-13', 8, 30), range)).toBe(true)
+    expect(inRange(localTime('2026-07-19', 23, 30), range)).toBe(true)
+    expect(inRange(localTime('2026-07-12', 23, 30), range)).toBe(false)
+    expect(inRange(localTime('2026-07-20', 8, 30), range)).toBe(false)
+  })
+
+  it("reads SQLite's zone-less timestamps as UTC, as the SQL filters do", () => {
+    // CURRENT_TIMESTAMP writes 'YYYY-MM-DD HH:MM:SS' in UTC, and SuperWhisper
+    // imports keep its UTC time without the Z. Date would read both as local
+    // time.
+    const firstMorning = localTime('2026-07-13', 8, 30).slice(0, 19)
+    const dayAfter = localTime('2026-07-20', 8, 30).slice(0, 19)
+    expect(inRange(firstMorning, range)).toBe(true)
+    expect(inRange(firstMorning.replace('T', ' '), range)).toBe(true)
+    expect(inRange(dayAfter, range)).toBe(false)
+    expect(inRange(dayAfter.replace('T', ' '), range)).toBe(false)
+  })
+
+  it('keeps a bare date as the day it names, west of Greenwich too', () => {
+    // A date without a time is not an instant: read as UTC midnight it would be
+    // the evening before in New York.
+    pinZone('America/New_York')
+    expect(inRange('2026-07-13', range)).toBe(true)
+    expect(inRange('2026-07-20', range)).toBe(false)
+  })
+
   it('date grounding names the weekday and the resolved range', () => {
     const part = dateGroundingPart(new Date(2026, 6, 20), range)
     expect(part).toContain('Monday, July 20, 2026')
@@ -245,6 +300,34 @@ describe('structured context builders', () => {
     expect(text).toContain('this week')
   })
 
+  it('actionables: range-scoped by the local day each item was extracted', () => {
+    // created_at is ISO UTC (transcription.ts writes toISOString()). Compared by
+    // its first ten characters, an item extracted at 08:30 on the range's first
+    // day was left out in Japan and one from 08:30 the day after was let in.
+    dbInstance!.run(
+      `INSERT INTO actionables VALUES
+        ('a-first', 'action_items', 'First-morning item', NULL, 'pending', ?, 'kc-1'),
+        ('a-after', 'action_items', 'Day-after item', NULL, 'pending', ?, 'kc-1')`,
+      [localTime('2026-07-13', 8, 30), localTime('2026-07-20', 8, 30)]
+    )
+    const lastWeek = { start: '2026-07-13', end: '2026-07-19', label: 'last week' }
+    const text = buildActionablesContext(lastWeek, 15).parts.join('\n')
+    expect(text).toContain('First-morning item')
+    expect(text).not.toContain('Day-after item')
+  })
+
+  it('actionables: name the source recording by its local date', () => {
+    dbInstance!.run(`UPDATE recordings SET date_recorded = ? WHERE id = 'rec-1'`, [localTime('2026-07-15', 8, 0)])
+    const text = buildActionablesContext(null, 15).parts.join('\n')
+    expect(text).toContain('(from "Gateway cost review", 2026-07-15)')
+  })
+
+  it('actionables: a recording date that does not parse is shown as stored', () => {
+    dbInstance!.run(`UPDATE recordings SET date_recorded = 'unknown' WHERE id = 'rec-1'`)
+    const text = buildActionablesContext(null, 15).parts.join('\n')
+    expect(text).toContain('(from "Gateway cost review", unknown)')
+  })
+
   it('actionables: eligibility gate drops excluded sources', () => {
     deps.excludedSources = new Set(['kc-1'])
     const out = buildActionablesContext(null, 15)
@@ -271,6 +354,41 @@ describe('structured context builders', () => {
     expect(text).toContain('[meeting: Gateway Architecture]')
     expect(text).not.toContain('Old infra sync') // outside range
     expect(out.recordingIds.has('rec-1')).toBe(true)
+  })
+
+  it('digests: in range by the local day recorded, and dated with it', () => {
+    // date_recorded and captured_at are ISO UTC too. In Japan a meeting at
+    // 08:30 on the range's first day fell out of the range, and one at 08:30 the
+    // day after fell in, dated the day before.
+    dbInstance!.run(`INSERT INTO recordings VALUES ('rec-first', ?), ('rec-after', ?)`, [
+      localTime('2026-07-13', 8, 30),
+      localTime('2026-07-20', 8, 30),
+    ])
+    dbInstance!.run(
+      `INSERT INTO knowledge_captures VALUES
+        ('kc-first', 'First-morning sync', 'Opened the week.', ?, NULL, NULL, 'rec-first'),
+        ('kc-after', 'Day-after sync', 'After the week.', ?, NULL, NULL, 'rec-after'),
+        ('kc-note', 'Early note', 'Captured without a recording.', ?, NULL, NULL, NULL)`,
+      [localTime('2026-07-13', 8, 30), localTime('2026-07-20', 8, 30), localTime('2026-07-13', 7, 0)]
+    )
+    const lastWeek = { start: '2026-07-13', end: '2026-07-19', label: 'last week' }
+    const text = buildDigestsContext(lastWeek, 12).parts.join('\n')
+    expect(text).toContain('2026-07-13: First-morning sync')
+    expect(text).toContain('2026-07-13: Early note')
+    expect(text).not.toContain('Day-after sync')
+  })
+
+  it('builders take a bare date as the day it names, west of Greenwich too', () => {
+    // The fixtures above store bare dates. SQLite's 'localtime' reads
+    // '2026-07-15' as UTC midnight, the evening of the 14th in New York, which
+    // would drop the 15th's capture and action item from a range for the 15th.
+    pinZone('America/New_York')
+    dbInstance!.run(`UPDATE actionables SET created_at = '2026-07-15' WHERE id = 'a-1'`)
+    const the15th = { start: '2026-07-15', end: '2026-07-15', label: 'that day' }
+    expect(buildDigestsContext(the15th, 12).parts.join('\n')).toContain('2026-07-15: Gateway cost review')
+    const actions = buildActionablesContext(the15th, 15).parts.join('\n')
+    expect(actions).toContain('Update resource plan')
+    expect(actions).toContain('(from "Gateway cost review", 2026-07-15)')
   })
 
   it('digests: capture-level and recording-level exclusion both apply', () => {

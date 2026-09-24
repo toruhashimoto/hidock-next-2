@@ -138,6 +138,15 @@ export function resolveTemporalRange(message: string, now: Date = new Date()): T
 }
 
 /**
+ * The `days` local calendar days before today through today — the window used
+ * when a question names none. Local like every other range: computed from UTC,
+ * it ended yesterday until 09:00 in Japan.
+ */
+export function recentRange(days: number, label: string, now: Date = new Date()): TemporalRange {
+  return { start: localIsoDate(addDays(now, -days)), end: localIsoDate(now), label }
+}
+
+/**
  * The ALWAYS-INJECTED date line. Without it the model cannot reason about
  * "this week" at all (its training date is months/years stale).
  */
@@ -152,10 +161,39 @@ export function dateGroundingPart(now: Date = new Date(), range: TemporalRange |
   return `[DATE GROUNDING: Today is ${today}.${rangeLine} Resolve every relative date in the question against this before answering.]`
 }
 
-/** Is an ISO-ish timestamp inside the range (inclusive)? Tolerant of full ISO datetimes. */
+/**
+ * The local calendar date a STORED timestamp falls on — the frame a
+ * TemporalRange is in. Timestamps are stored as ISO UTC (`toISOString()`), so
+ * their first ten characters name the UTC date, and in Japan everything written
+ * before 09:00 would count as the day before. Zone-less values are UTC as well
+ * — SQLite's CURRENT_TIMESTAMP, and SuperWhisper imports, which keep its UTC
+ * time without the Z (5 of 24 recordings in a measured library) — but Date
+ * reads a zone-less date-time as LOCAL time, so they are pinned to UTC first:
+ * the same reading SQLite gives them in localDateSql(). A bare
+ * YYYY-MM-DD is a calendar date, not an instant, and is kept as it is; so is a
+ * value that does not parse (the integrity check reports those), as before.
+ */
+function localDateOf(timestamp: string): string {
+  if (timestamp.length === 10) return timestamp
+  const utc = /(?:Z|[+-]\d\d:\d\d)$/.test(timestamp) ? timestamp : `${timestamp.replace(' ', 'T')}Z`
+  const instant = new Date(utc)
+  return Number.isNaN(instant.getTime()) ? timestamp.slice(0, 10) : localIsoDate(instant)
+}
+
+/**
+ * localDateOf() in SQL, for the builders' range filters. `'localtime'` on a
+ * stored UTC timestamp, as note-intelligence's suggestMeetings compares days:
+ * SQLite reads a value with or without the Z as UTC and converts it to this
+ * machine's zone. A bare date is taken as is — `'localtime'` would read it as
+ * UTC midnight, the previous day west of Greenwich.
+ */
+const localDateSql = (expr: string): string =>
+  `CASE WHEN length(${expr}) = 10 THEN date(${expr}) ELSE date(${expr}, 'localtime') END`
+
+/** Is a stored timestamp inside the range (inclusive), by the local day it falls on? */
 export function inRange(timestamp: string | undefined, range: TemporalRange | null): boolean {
   if (!range || !timestamp) return false
-  const day = timestamp.slice(0, 10)
+  const day = localDateOf(timestamp)
   return day >= range.start && day <= range.end
 }
 
@@ -203,7 +241,7 @@ export function buildActionablesContext(
   const params: string[] = []
   let dateFilter = ''
   if (range && dateScoped) {
-    dateFilter = 'AND substr(a.created_at, 1, 10) BETWEEN ? AND ?'
+    dateFilter = `AND ${localDateSql('a.created_at')} BETWEEN ? AND ?`
     params.push(range.start, range.end)
   }
 
@@ -230,7 +268,7 @@ export function buildActionablesContext(
     if (r.rec_id) recordingIds.add(r.rec_id)
     if (r.kc_id) captureIds.add(r.kc_id)
     const desc = r.description ? ` — ${r.description.slice(0, 280)}` : ''
-    const where = r.kc_title ? ` (from "${r.kc_title}"${r.rec_date ? `, ${r.rec_date.slice(0, 10)}` : ''})` : ''
+    const where = r.kc_title ? ` (from "${r.kc_title}"${r.rec_date ? `, ${localDateOf(r.rec_date)}` : ''})` : ''
     const kind = r.type === 'follow_up_work' ? 'follow-up' : 'action items'
     return `- [${kind}] ${r.title}${desc}${where}`
   })
@@ -281,7 +319,7 @@ export function buildDigestsContext(range: TemporalRange, limit = 12): Structure
      LEFT JOIN meetings m ON kc.meeting_id = m.id
      WHERE kc.deleted_at IS NULL
        AND TRIM(COALESCE(kc.title, '')) != ''
-       AND substr(COALESCE(r.date_recorded, kc.captured_at, ''), 1, 10) BETWEEN ? AND ?
+       AND ${localDateSql("COALESCE(r.date_recorded, kc.captured_at, '')")} BETWEEN ? AND ?
      ORDER BY COALESCE(r.date_recorded, kc.captured_at) DESC
      LIMIT ?`,
     [range.start, range.end, String(limit * 3)]
@@ -303,7 +341,7 @@ export function buildDigestsContext(range: TemporalRange, limit = 12): Structure
   const lines = eligible.map((r) => {
     if (r.rec_id) recordingIds.add(r.rec_id)
     captureIds.add(r.id)
-    const date = (r.rec_date ?? r.captured_at ?? '').slice(0, 10)
+    const date = localDateOf(r.rec_date ?? r.captured_at ?? '')
     const summary = r.summary ? ` — ${r.summary.slice(0, 320)}` : ''
     const subject = r.subject && r.subject !== r.title ? ` [meeting: ${r.subject}]` : ''
     return `- ${date}: ${r.title}${subject}${summary}`
