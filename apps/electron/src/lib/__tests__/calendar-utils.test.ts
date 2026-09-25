@@ -383,15 +383,18 @@ describe('groupByDay', () => {
  */
 describe('groupByDay timezone independence', () => {
   const ORIGINAL_TZ = process.env.TZ
+  // The zone in effect before any case pins one — the system zone when TZ is unset.
+  const ORIGINAL_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 
   afterEach(() => {
-    // Assigning undefined would coerce to the string "undefined" (an invalid TZ),
-    // leaking a polluted zone into later tests in this worker — delete instead.
-    if (ORIGINAL_TZ === undefined) {
-      delete process.env.TZ
-    } else {
-      process.env.TZ = ORIGINAL_TZ
-    }
+    // Restore by ASSIGNING the original zone. Deleting TZ alone is not enough on
+    // Windows: Node there only switches zones when TZ is assigned, so after a
+    // delete every later test in this file kept running in the last pinned zone
+    // (New York), and a JST run failed the #58 bucketing test below. Assigning
+    // undefined would coerce to the string "undefined" (an invalid TZ), so drop
+    // the variable afterwards when it was never set.
+    process.env.TZ = ORIGINAL_TZ ?? ORIGINAL_ZONE
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ
   })
 
   it.each(['UTC', 'Asia/Tokyo', 'America/New_York'])('keys items by their local day in %s', (tz) => {
@@ -714,8 +717,10 @@ describe('#58 UNKNOWN_DATE sentinel does not leak into the Calendar', () => {
       // Bucketing: it lands in the linked meeting's day, not a 1970 bucket.
       const viewDates = [new Date(2026, 2, 2), new Date(2026, 2, 3)]
       const grouped = groupByDay(calendarRecordings, (r) => r.startTime, viewDates)
-      const meetingDayKey = new Date(meeting.start_time).toISOString().split('T')[0]
-      expect(grouped[meetingDayKey]).toHaveLength(1)
+      // The meeting is at 09:00 local on 2 March (makeMeetingEntity), so its
+      // column is 2026-03-02 in every zone. toISOString() would name the UTC
+      // date instead, which east of UTC+9 is already 1 March.
+      expect(grouped['2026-03-02']).toHaveLength(1)
       expect(grouped['1970-01-01']).toBeUndefined()
     })
 
