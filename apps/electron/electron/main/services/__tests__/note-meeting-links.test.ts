@@ -30,8 +30,19 @@ import { meetingHappeningNow, suggestMeetings } from '../note-intelligence'
 import { createNote, getNote } from '../notes'
 import { closeDatabase, getDatabase, initializeDatabase } from '../database'
 
-const DURING = '2026-09-22T10:30:00.000Z'
-const AFTER = '2026-09-22T23:00:00.000Z'
+/**
+ * A wall-clock time on 22 September in this machine's zone, stored the way the
+ * app stores it (ISO UTC). "The same day" is the person's local day, so the
+ * fixture has to be local too: written as UTC literals, 10:00Z, 15:00Z and
+ * 23:00Z only share a date in zones near UTC — in JST they are 19:00 on the
+ * 22nd and 00:00 and 08:00 on the 23rd, so the same-day list lost the first
+ * meeting.
+ */
+const localTime = (hours: number, minutes = 0, seconds = 0, ms = 0): string =>
+  new Date(2026, 8, 22, hours, minutes, seconds, ms).toISOString()
+
+const DURING = localTime(10, 30)
+const AFTER = localTime(23)
 
 beforeAll(async () => {
   await initializeDatabase()
@@ -51,8 +62,9 @@ beforeEach(() => {
   getDatabase().run('DELETE FROM meetings')
   getDatabase().run(
     `INSERT INTO meetings (id, subject, start_time, end_time) VALUES
-      ('m-now', 'Revisión de calidad', '2026-09-22T10:00:00.000Z', '2026-09-22T11:00:00.000Z'),
-      ('m-later', 'Otra reunión', '2026-09-22T15:00:00.000Z', '2026-09-22T16:00:00.000Z')`
+      ('m-now', 'Revisión de calidad', ?, ?),
+      ('m-later', 'Otra reunión', ?, ?)`,
+    [localTime(10), localTime(11), localTime(15), localTime(16)]
   )
 })
 
@@ -68,7 +80,7 @@ describe('a note written during a meeting', () => {
   })
 
   it('finds nothing at the exact moment a meeting has ended', () => {
-    expect(meetingHappeningNow('2026-09-22T11:00:00.001Z')).toBe(null)
+    expect(meetingHappeningNow(localTime(11, 0, 0, 1))).toBe(null)
   })
 })
 
