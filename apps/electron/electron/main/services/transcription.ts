@@ -131,6 +131,7 @@ import {
   failProcessingRun,
   type Transcript
 } from './database'
+import { getActiveTranscription, setActiveTranscription } from './transcription-activity'
 import { BrowserWindow } from 'electron'
 import { emitActivityLog } from './activity-log'
 import { isRecordingEligible } from './recording-eligibility'
@@ -191,8 +192,11 @@ export function startTranscriptionProcessor(): void {
     return
   }
 
-  clearStaleTranscriptionLock()
-  resetStuckTranscriptions()
+  // The repairs are for rows a crashed run left behind. A run this process
+  // already started (a new recording kicks the queue before this boot task)
+  // holds a live lock and a live 'processing' row: leave both alone.
+  if (!isProcessing) clearStaleTranscriptionLock()
+  resetStuckTranscriptions(getActiveTranscription())
 
   console.log('Starting transcription processor')
 
@@ -555,6 +559,7 @@ async function processQueue(): Promise<void> {
       if (!item) break
       processedThisRun.add(item.id)
       currentProcessingId = item.recording_id
+      setActiveTranscription(item.recording_id)
       emitQueueState()
 
       try {
@@ -641,6 +646,7 @@ async function processQueue(): Promise<void> {
       } finally {
         // This item is no longer in flight — clear before the next dequeue.
         currentProcessingId = null
+        setActiveTranscription(null)
         emitQueueState()
       }
     }
@@ -648,10 +654,14 @@ async function processQueue(): Promise<void> {
     if (cancelRequested) {
       console.log('Transcription cancelled by user')
     }
-    isProcessing = false
     // AI-11: Reset cancel flag after loop exits, not on a timer
     cancelRequested = false
   } finally {
+    // In the finally: an exception between items used to leave the queue
+    // marked busy with nothing running, and every later tick returned early.
+    isProcessing = false
+    currentProcessingId = null
+    setActiveTranscription(null)
     // spec-005: Always release mutex lock, even if an error occurred
     releaseTranscriptionLock(processId)
   }
