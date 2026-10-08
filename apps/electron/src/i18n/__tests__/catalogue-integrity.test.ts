@@ -1,5 +1,5 @@
 /**
- * Catalogue integrity — two properties catalogue-parity.test.ts does not
+ * Catalogue integrity — three properties catalogue-parity.test.ts does not
  * check, because that file only compares KEY SETS (missing/surplus keys and
  * plural-suffix shape):
  *
@@ -21,7 +21,15 @@
  *     device-copy count together with an unknown impact estimate) may not
  *     happen in manual testing at all.
  *
- * Both properties were verified clean by a one-off script during the final
+ *  3. State labels not translated as actions — an English value ending in
+ *     "queued" names a state ("Transcription queued" on a disabled menu
+ *     item) or reports a result ("Download queued" toast). A Japanese value
+ *     ending in the bare verb phrase "…キューに追加" says neither: it reads
+ *     as the action, so a disabled control tells a user whose recording is
+ *     already queued that queueing is blocked. The component tests render in
+ *     English (test/setup.ts), so none of them can notice.
+ *
+ * Properties 1 and 2 were verified clean by a one-off script during the final
  * whole-branch review of feat/i18n-ja (2026-09-22). This file makes that
  * verification permanent so a future catalogue edit that breaks either
  * property fails here instead of silently shipping broken interpolation or
@@ -185,4 +193,28 @@ describe('Library.tsx composite key existence', () => {
     const missing = COMPOSITE_KEYS.filter((k) => !(k in enLibrary))
     expect(missing).toEqual([])
   })
+})
+
+describe('state labels not translated as actions', () => {
+  // Three keys shipped this way: sourceRow.transcriptionQueuedMenuItem and
+  // the SourceCard / SourceReader transcriptionQueuedTitle tooltips, all
+  // shown only while transcriptionStatus is 'pending'. Either correct form
+  // passes — wording that names the state ("文字起こし待ち", "キュー待ち")
+  // or, for a toast, the completed one ("…をキューに追加しました"). Only the
+  // bare phrase fails.
+  //
+  // Keys are selected by their ENGLISH value. A key that really is an action
+  // ("Queue {{count}} audio sources for transcription") is correctly
+  // translated "…キューに追加" and must stay out of scope.
+  for (const ns of Object.keys(CATALOGUES)) {
+    const { en, ja } = CATALOGUES[ns]
+    const sharedKeys = Object.keys(ja).filter((k) => k in en)
+
+    it(`${ns}: no en "… queued" value is rendered in ja as the bare action "…キューに追加"`, () => {
+      const actionLike = sharedKeys
+        .filter((k) => /\bqueued$/i.test(en[k].trim()) && /キューに追加$/.test(ja[k].trim()))
+        .map((k) => `${k}: en="${en[k]}" ja="${ja[k]}"`)
+      expect(actionLike).toEqual([])
+    })
+  }
 })
